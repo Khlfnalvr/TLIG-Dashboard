@@ -1,0 +1,18 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<linker>
+  <!--
+    WinRT.Runtime uses reflection-based vtable pointer lookup
+    (GetAbiToProjectionVftblPtr). If any code in this assembly is
+    trimmed, the lookup can silently return null and cause a
+    NullReferenceException at startup during COM marshaling.
+  -->
+  <assembly fullname="WinRT.Runtime" preserve="all"/>
+
+  <!--
+    Our own assembly hosts XAML-generated type registrations
+    (XamlTypeInfo.g.cs) and CsWinRT projection helpers emitted by
+    the source generator. Preserve all so no binding registration
+    is inadvertently removed by the trimmer.
+  -->
+  <assembly fullname="TLIGDashboard" preserve="all"/>
+</linker>

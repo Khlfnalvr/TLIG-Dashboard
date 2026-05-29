@@ -1,0 +1,850 @@
+﻿<Window
+    x:Class="TLIGDashboard.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:TLIGDashboard"
+    xmlns:models="using:TLIGDashboard.Models"
+    Title="TLIG Dashboard">
+
+    <Grid x:Name="RootGrid">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>   <!-- playback bar -->
+            <RowDefinition Height="Auto"/>   <!-- status bar -->
+        </Grid.RowDefinitions>
+
+        <NavigationView
+            x:Name="NavView"
+            Grid.Row="0"
+            PaneDisplayMode="Top"
+            IsBackButtonVisible="Collapsed"
+            IsSettingsVisible="False"
+            SelectionChanged="NavView_SelectionChanged"
+            Loaded="NavView_Loaded"
+            RightTapped="TitleBar_RightTapped">
+
+            <NavigationView.Resources>
+                <!--
+                    Compact top pane (32 px) matches the AppTitleBar height
+                    exactly so the logo + nav labels sit visually centered
+                    inside the title-bar strip.
+
+                    The framework defaults position the selection underline a
+                    few pixels above the item's bottom edge (via
+                    NavigationViewItemBackgroundMargin +
+                    TopNavigationViewItemSelectionIndicatorMargin), which is
+                    what was causing the underline to overlap the text
+                    descenders. We pin both to zero so the indicator sits
+                    flush against the item bottom, freeing the full 30 px
+                    above it for a vertically centered label.
+                -->
+                <x:Double x:Key="NavigationViewTopPaneHeight">32</x:Double>
+                <x:Double x:Key="TopNavigationViewItemContentMinHeight">32</x:Double>
+                <Thickness x:Key="NavigationViewItemButtonMargin">1,2</Thickness>
+                <Thickness x:Key="TopNavigationViewItemContentOnlyContentPresenterMargin">6,0</Thickness>
+                <Thickness x:Key="TopNavigationViewItemContentPresenterMargin">4,-1,6,-1</Thickness>
+                <Thickness x:Key="NavigationViewItemBackgroundMargin">0,0,0,0</Thickness>
+                <Thickness x:Key="TopNavigationViewItemSelectionIndicatorMargin">0,0,0,0</Thickness>
+            </NavigationView.Resources>
+
+            <NavigationView.PaneHeader>
+                <Image x:Name="LogoImage"
+                       Source="logo.png"
+                       Height="22"
+                       Margin="12,0,8,0"
+                       VerticalAlignment="Center"
+                       HorizontalAlignment="Left"
+                       Stretch="Uniform"/>
+            </NavigationView.PaneHeader>
+
+            <NavigationView.MenuItems>
+                <!--
+                    Content is wrapped in an explicit TextBlock with
+                    VerticalAlignment=Center because the default item template
+                    hard-codes ContentPresenter.VerticalAlignment to Stretch,
+                    leaving the label glued to the indicator. The top-nav
+                    template does not honor item padding for label placement,
+                    so the labels are translated up slightly.
+                -->
+                <NavigationViewItem x:Name="NavDashboard"  Tag="Dashboard"  MinWidth="0" MinHeight="32" Height="32" Padding="0,0,0,2" VerticalContentAlignment="Center">
+                    <TextBlock Text="{x:Bind Lang.Nav_Dashboard, Mode=OneWay}" FontSize="12" VerticalAlignment="Center">
+                        <TextBlock.RenderTransform>
+                            <TranslateTransform Y="-3"/>
+                        </TextBlock.RenderTransform>
+                    </TextBlock>
+                </NavigationViewItem>
+                <NavigationViewItem x:Name="NavParameter"  Tag="Parameter"  MinWidth="0" MinHeight="32" Height="32" Padding="0,0,0,2" VerticalContentAlignment="Center">
+                    <TextBlock Text="{x:Bind Lang.Nav_Parameter, Mode=OneWay}" FontSize="12" VerticalAlignment="Center">
+                        <TextBlock.RenderTransform>
+                            <TranslateTransform Y="-3"/>
+                        </TextBlock.RenderTransform>
+                    </TextBlock>
+                </NavigationViewItem>
+                <NavigationViewItem x:Name="NavLiveView"   Tag="LiveView"   MinWidth="0" MinHeight="32" Height="32" Padding="0,0,0,2" VerticalContentAlignment="Center">
+                    <TextBlock Text="{x:Bind Lang.Nav_LiveView, Mode=OneWay}" FontSize="12" VerticalAlignment="Center">
+                        <TextBlock.RenderTransform>
+                            <TranslateTransform Y="-3"/>
+                        </TextBlock.RenderTransform>
+                    </TextBlock>
+                </NavigationViewItem>
+                <NavigationViewItem x:Name="NavAI"         Tag="AI"         MinWidth="0" MinHeight="32" Height="32" Padding="0,0,0,2" VerticalContentAlignment="Center">
+                    <TextBlock Text="{x:Bind Lang.Nav_AI, Mode=OneWay}" FontSize="12" VerticalAlignment="Center">
+                        <TextBlock.RenderTransform>
+                            <TranslateTransform Y="-3"/>
+                        </TextBlock.RenderTransform>
+                    </TextBlock>
+                </NavigationViewItem>
+            </NavigationView.MenuItems>
+
+            <Frame x:Name="ContentFrame" Padding="0"/>
+        </NavigationView>
+
+        <!--
+            Invisible drag region — full width, IsHitTestVisible=False so NavView
+            and the toggle below (in z-order) still receive pointer events.
+        -->
+        <Border x:Name="AppTitleBar"
+                Grid.Row="0"
+                Height="32"
+                VerticalAlignment="Top"
+                HorizontalAlignment="Stretch"
+                Background="Transparent"
+                IsHitTestVisible="False">
+            <Border.ContextFlyout>
+                <MenuFlyout x:Name="TitleBarCustomizeMenu" Placement="Bottom">
+                    <MenuFlyoutSubItem x:Name="MenuView"
+                                       FontSize="12"
+                                       Text="{x:Bind Lang.Ui_Menu_View, Mode=OneWay}">
+                        <ToggleMenuFlyoutItem x:Name="ViewNavDashboard"
+                                              FontSize="12"
+                                              Text="{x:Bind Lang.Nav_Dashboard, Mode=OneWay}"
+                                              Tag="Dashboard"
+                                              IsChecked="True"
+                                              Click="ViewNavToggle_Click"/>
+                        <ToggleMenuFlyoutItem x:Name="ViewNavParameter"
+                                              FontSize="12"
+                                              Text="{x:Bind Lang.Nav_Parameter, Mode=OneWay}"
+                                              Tag="Parameter"
+                                              IsChecked="True"
+                                              Click="ViewNavToggle_Click"/>
+                        <ToggleMenuFlyoutItem x:Name="ViewNavLiveView"
+                                              FontSize="12"
+                                              Text="{x:Bind Lang.Nav_LiveView, Mode=OneWay}"
+                                              Tag="LiveView"
+                                              IsChecked="True"
+                                              Click="ViewNavToggle_Click"/>
+                        <ToggleMenuFlyoutItem x:Name="ViewNavAI"
+                                              FontSize="12"
+                                              Text="{x:Bind Lang.Nav_AI, Mode=OneWay}"
+                                              Tag="AI"
+                                              IsChecked="True"
+                                              Click="ViewNavToggle_Click"/>
+                    </MenuFlyoutSubItem>
+                    <MenuFlyoutSubItem x:Name="MenuUnit"
+                                       FontSize="12"
+                                       Text="{x:Bind Lang.Ui_Menu_Unit, Mode=OneWay}">
+                        <MenuFlyoutSubItem x:Name="MenuUnitTemperature"
+                                           FontSize="12"
+                                           Text="{x:Bind Lang.Ui_Menu_Temperature, Mode=OneWay}">
+                            <RadioMenuFlyoutItem x:Name="UnitTempC"
+                                                 FontSize="12"
+                                                 Text="°C"
+                                                 Tag="C"
+                                                 GroupName="TemperatureUnitGroup"
+                                                 Click="UnitTemperature_Click"/>
+                            <RadioMenuFlyoutItem x:Name="UnitTempF"
+                                                 FontSize="12"
+                                                 Text="°F"
+                                                 Tag="F"
+                                                 GroupName="TemperatureUnitGroup"
+                                                 Click="UnitTemperature_Click"/>
+                        </MenuFlyoutSubItem>
+                        <MenuFlyoutSubItem x:Name="MenuUnitVoltage"
+                                           FontSize="12"
+                                           Text="{x:Bind Lang.Ui_Menu_Voltage, Mode=OneWay}">
+                            <RadioMenuFlyoutItem x:Name="UnitVoltageV"
+                                                 FontSize="12"
+                                                 Text="V"
+                                                 Tag="V"
+                                                 GroupName="VoltageUnitGroup"
+                                                 Click="UnitVoltage_Click"/>
+                            <RadioMenuFlyoutItem x:Name="UnitVoltageMv"
+                                                 FontSize="12"
+                                                 Text="mV"
+                                                 Tag="mV"
+                                                 GroupName="VoltageUnitGroup"
+                                                 Click="UnitVoltage_Click"/>
+                        </MenuFlyoutSubItem>
+                        <MenuFlyoutSubItem x:Name="MenuUnitCapacity"
+                                           FontSize="12"
+                                           Text="{x:Bind Lang.Ui_Menu_Capacity, Mode=OneWay}">
+                            <RadioMenuFlyoutItem x:Name="UnitCapacityMah"
+                                                 FontSize="12"
+                                                 Text="mAh"
+                                                 Tag="mAh"
+                                                 GroupName="CapacityUnitGroup"
+                                                 Click="UnitCapacity_Click"/>
+                            <RadioMenuFlyoutItem x:Name="UnitCapacityAh"
+                                                 FontSize="12"
+                                                 Text="Ah"
+                                                 Tag="Ah"
+                                                 GroupName="CapacityUnitGroup"
+                                                 Click="UnitCapacity_Click"/>
+                        </MenuFlyoutSubItem>
+                    </MenuFlyoutSubItem>
+                    <MenuFlyoutSubItem x:Name="MenuZoom"
+                                       FontSize="12"
+                                       Text="{x:Bind Lang.Ui_Menu_Zoom, Mode=OneWay}">
+                        <MenuFlyoutItem x:Name="ZoomActualSize"
+                                        FontSize="12"
+                                        Text="{x:Bind Lang.Ui_Menu_ActualSize, Mode=OneWay}"
+                                        KeyboardAcceleratorTextOverride="Ctrl+0"
+                                        Click="ZoomActualSize_Click">
+                            <MenuFlyoutItem.KeyboardAccelerators>
+                                <KeyboardAccelerator Modifiers="Control" Key="Number0"/>
+                                <KeyboardAccelerator Modifiers="Control" Key="NumberPad0"/>
+                            </MenuFlyoutItem.KeyboardAccelerators>
+                        </MenuFlyoutItem>
+                        <MenuFlyoutItem x:Name="ZoomIn"
+                                        FontSize="12"
+                                        Text="{x:Bind Lang.Ui_Menu_ZoomIn, Mode=OneWay}"
+                                        KeyboardAcceleratorTextOverride="Ctrl++"
+                                        Click="ZoomIn_Click">
+                            <MenuFlyoutItem.KeyboardAccelerators>
+                                <KeyboardAccelerator Modifiers="Control" Key="Add"/>
+                            </MenuFlyoutItem.KeyboardAccelerators>
+                        </MenuFlyoutItem>
+                        <MenuFlyoutItem x:Name="ZoomOut"
+                                        FontSize="12"
+                                        Text="{x:Bind Lang.Ui_Menu_ZoomOut, Mode=OneWay}"
+                                        KeyboardAcceleratorTextOverride="Ctrl+-"
+                                        Click="ZoomOut_Click">
+                            <MenuFlyoutItem.KeyboardAccelerators>
+                                <KeyboardAccelerator Modifiers="Control" Key="Subtract"/>
+                            </MenuFlyoutItem.KeyboardAccelerators>
+                        </MenuFlyoutItem>
+                    </MenuFlyoutSubItem>
+                    <MenuFlyoutSubItem x:Name="MenuAbout"
+                                       FontSize="12"
+                                       Text="{x:Bind Lang.Ui_Menu_About, Mode=OneWay}">
+                        <MenuFlyoutItem FontSize="12"
+                                        IsHitTestVisible="False"
+                                        Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+                                        Text="{x:Bind AboutProductText, Mode=OneWay}"/>
+                        <MenuFlyoutItem FontSize="12"
+                                        IsHitTestVisible="False"
+                                        Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+                                        Text="{x:Bind AboutVersionText, Mode=OneWay}"/>
+                        <MenuFlyoutItem FontSize="12"
+                                        IsHitTestVisible="False"
+                                        Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+                                        Text="{x:Bind AboutLicenseText, Mode=OneWay}"/>
+                        <MenuFlyoutItem FontSize="12"
+                                        IsHitTestVisible="False"
+                                        Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+                                        Text="{x:Bind AboutCopyrightText, Mode=OneWay}"/>
+                    </MenuFlyoutSubItem>
+                    <MenuFlyoutSubItem x:Name="MenuDeveloper"
+                                       FontSize="12"
+                                       Text="{x:Bind Lang.Ui_Menu_Developer, Mode=OneWay}">
+                        <MenuFlyoutItem x:Name="MenuGithub"
+                                        FontSize="12"
+                                        Text="Github"
+                                        Click="MenuGithub_Click">
+                            <MenuFlyoutItem.Icon>
+                                <FontIcon FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                                          Glyph="&#xE8A7;"/>
+                            </MenuFlyoutItem.Icon>
+                        </MenuFlyoutItem>
+                        <MenuFlyoutSeparator/>
+                        <MenuFlyoutItem x:Name="MenuOpenLogFolder"
+                                        FontSize="12"
+                                        Text="{x:Bind Lang.Ui_Menu_OpenLogFolder, Mode=OneWay}"
+                                        Click="MenuOpenLogFolder_Click">
+                            <MenuFlyoutItem.Icon>
+                                <FontIcon FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                                          Glyph="&#xE838;"/>
+                            </MenuFlyoutItem.Icon>
+                        </MenuFlyoutItem>
+                        <MenuFlyoutItem x:Name="MenuOpenSettings"
+                                        FontSize="12"
+                                        Text="{x:Bind Lang.Ui_Menu_OpenSettings, Mode=OneWay}"
+                                        Click="MenuOpenSettings_Click">
+                            <MenuFlyoutItem.Icon>
+                                <FontIcon FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                                          Glyph="&#xE7C3;"/>
+                            </MenuFlyoutItem.Icon>
+                        </MenuFlyoutItem>
+                        <MenuFlyoutSeparator/>
+                        <MenuFlyoutItem x:Name="MenuReportBug"
+                                        FontSize="12"
+                                        Text="{x:Bind Lang.Ui_Menu_ReportBug, Mode=OneWay}"
+                                        Click="MenuReportBug_Click">
+                            <MenuFlyoutItem.Icon>
+                                <FontIcon FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                                          Glyph="&#xEBE8;"/>
+                            </MenuFlyoutItem.Icon>
+                        </MenuFlyoutItem>
+                    </MenuFlyoutSubItem>
+                    <MenuFlyoutSeparator/>
+                    <MenuFlyoutItem x:Name="MenuTour"
+                                    FontSize="12"
+                                    Text="{x:Bind Lang.Ui_Menu_Tour, Mode=OneWay}"
+                                    Click="MenuTour_Click"/>
+                    <MenuFlyoutItem x:Name="MenuCheckUpdate"
+                                    FontSize="12"
+                                    Text="{x:Bind Lang.Ui_Menu_CheckUpdate, Mode=OneWay}"
+                                    Click="MenuCheckUpdate_Click"/>
+                    <MenuFlyoutSeparator/>
+                    <MenuFlyoutItem x:Name="MenuRefreshApp"
+                                    FontSize="12"
+                                    Text="{x:Bind Lang.Ui_Menu_RefreshApp, Mode=OneWay}"
+                                    KeyboardAcceleratorTextOverride="Ctrl+R"
+                                    Click="RefreshApp_Click">
+                        <MenuFlyoutItem.KeyboardAccelerators>
+                            <KeyboardAccelerator Modifiers="Control" Key="R"/>
+                        </MenuFlyoutItem.KeyboardAccelerators>
+                    </MenuFlyoutItem>
+                </MenuFlyout>
+            </Border.ContextFlyout>
+        </Border>
+
+        <!--
+            Caption-style icon buttons — language picker + theme toggle, sitting
+            immediately left of the minimize/maximize/close buttons (mirrors the
+            Visual Studio Installer pattern). The code-behind shrinks
+            AppTitleBar's right margin so this whole area sits outside the drag
+            region.
+        -->
+        <Border x:Name="ThemeToggleArea"
+                Grid.Row="0"
+                HorizontalAlignment="Right"
+                VerticalAlignment="Top">
+            <StackPanel Orientation="Horizontal">
+                <!-- Update-available notification button — hidden until a newer release is found -->
+                <Button x:Name="UpdateNotifyBtn"
+                        Style="{StaticResource CaptionButtonStyle}"
+                        Visibility="Collapsed"
+                        Click="UpdateNotifyBtn_Click">
+                    <FontIcon FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                              FontSize="15"
+                              Glyph="&#xE777;"
+                              Foreground="#F79022"/>
+                </Button>
+
+                <!-- Account button — shows logged-in user and logout option -->
+                <Button x:Name="AccountBtn"
+                        Style="{StaticResource CaptionButtonStyle}">
+                    <FontIcon FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                              FontSize="14"
+                              Glyph="&#xE77B;"/>
+                    <Button.Flyout>
+                        <Flyout x:Name="AccountFlyout"
+                                Placement="Bottom"
+                                Opening="AccountFlyout_Opening">
+                            <StackPanel Width="200" Spacing="12">
+                                <StackPanel Spacing="2">
+                                    <TextBlock Text="{x:Bind Lang.Account_LoggedInAs, Mode=OneWay}"
+                                               FontSize="11"
+                                               Opacity="0.6"/>
+                                    <TextBlock x:Name="AccountUsernameText"
+                                               FontSize="13"
+                                               FontWeight="SemiBold"/>
+                                </StackPanel>
+                                <Button x:Name="LogoutBtn"
+                                        HorizontalAlignment="Stretch"
+                                        FontSize="12"
+                                        Content="{x:Bind Lang.Account_Logout, Mode=OneWay}"
+                                        Click="LogoutBtn_Click"/>
+                            </StackPanel>
+                        </Flyout>
+                    </Button.Flyout>
+                </Button>
+
+                <!--
+                    Serial channel picker — sits to the left of the language /
+                    theme buttons. Opens a flyout where the user can pick the
+                    COM port + baud rate and connect to the ESP32 without
+                    leaving the current page. The small dot at the bottom-right
+                    indicates live connection state.
+                -->
+                <Button x:Name="SerialBtn"
+                        Style="{StaticResource CaptionButtonStyle}">
+                    <Grid>
+                        <FontIcon FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                                  FontSize="14"
+                                  Glyph="&#xE839;"/>
+                        <Ellipse x:Name="SerialStatusDot"
+                                 Width="6" Height="6"
+                                 HorizontalAlignment="Right"
+                                 VerticalAlignment="Bottom"
+                                 Margin="0,0,10,6"/>
+                    </Grid>
+                    <Button.Flyout>
+                        <Flyout x:Name="SerialFlyout" Placement="Bottom">
+                            <Flyout.FlyoutPresenterStyle>
+                                <!-- Tight padding + explicit theme corner radius. A bare
+                                     <Style TargetType="FlyoutPresenter"> with no Template
+                                     setter drops the platform's rounded-corner default,
+                                     so we re-state CornerRadius from OverlayCornerRadius
+                                     and add a hairline border to match the original look. -->
+                                <Style TargetType="FlyoutPresenter">
+                                    <Setter Property="Padding"         Value="12,0,12,12"/>
+                                    <Setter Property="CornerRadius"    Value="{ThemeResource OverlayCornerRadius}"/>
+                                    <Setter Property="BorderBrush"     Value="{ThemeResource SurfaceStrokeColorFlyoutBrush}"/>
+                                    <Setter Property="BorderThickness" Value="1"/>
+                                </Style>
+                            </Flyout.FlyoutPresenterStyle>
+                            <StackPanel Width="300" Spacing="5">
+
+                                <!-- Tab selector: Serial / Bluetooth. Index 0
+                                     shows the original serial picker; index 1
+                                     reveals the BLE device list. -->
+                                <SelectorBar x:Name="ConnTabs"
+                                             SelectionChanged="ConnTabs_SelectionChanged">
+                                    <SelectorBarItem x:Name="ConnTabSerial"
+                                                     FontSize="12"
+                                                     Padding="12,4,12,4"
+                                                     Text="{x:Bind Lang.Ui_TabSerial, Mode=OneWay}"/>
+                                    <SelectorBarItem x:Name="ConnTabBluetooth"
+                                                     FontSize="12"
+                                                     Padding="12,4,12,4"
+                                                     Text="{x:Bind Lang.Ui_TabBluetooth, Mode=OneWay}"/>
+                                </SelectorBar>
+
+                                <!-- ───── SERIAL TAB ───────────────────────── -->
+                                <StackPanel x:Name="CapSerialPanel" Spacing="10">
+                                    <TextBlock Text="{x:Bind Lang.Ui_SerialConnection, Mode=OneWay}"
+                                               FontWeight="SemiBold" FontSize="12"/>
+
+                                    <!-- Channel row + refresh -->
+                                    <Grid ColumnSpacing="6">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <ComboBox Grid.Column="0"
+                                                  x:Name="CapSerialPort"
+                                                  FontSize="12"
+                                                  HorizontalAlignment="Stretch"
+                                                  PlaceholderText="{x:Bind Lang.Ctrl_PhScanning, Mode=OneWay}"/>
+                                        <Button Grid.Column="1"
+                                                x:Name="CapRefreshBtn"
+                                                Padding="8,6"
+                                                ToolTipService.ToolTip="{x:Bind Lang.Ctrl_Refresh, Mode=OneWay}"
+                                                Click="CapRefresh_Click">
+                                            <FontIcon FontFamily="Segoe MDL2 Assets" Glyph="&#xE72C;" FontSize="12"/>
+                                        </Button>
+                                    </Grid>
+
+                                    <!-- Bitrate row -->
+                                    <ComboBox x:Name="CapSerialBaud"
+                                              FontSize="12"
+                                              HorizontalAlignment="Stretch"/>
+
+                                    <!-- Connect / Disconnect -->
+                                    <Button x:Name="CapConnectBtn"
+                                            FontSize="12"
+                                            HorizontalAlignment="Stretch"
+                                            Style="{ThemeResource AccentButtonStyle}"
+                                            Click="CapConnectBtn_Click"
+                                            Content="{x:Bind Lang.Ctrl_Connect, Mode=OneWay}"/>
+
+                                    <!-- Status -->
+                                    <TextBlock x:Name="CapConnStatus"
+                                               FontSize="11" Opacity="0.7"
+                                               TextWrapping="Wrap"
+                                               Text="{x:Bind Lang.Ctrl_NotConnected, Mode=OneWay}"/>
+                                </StackPanel>
+
+                                <!-- ───── BLUETOOTH TAB ────────────────────── -->
+                                <StackPanel x:Name="CapBtPanel" Spacing="10" Visibility="Collapsed">
+                                    <TextBlock Text="{x:Bind Lang.Ui_BluetoothConnection, Mode=OneWay}"
+                                               FontWeight="SemiBold" FontSize="12"/>
+
+                                    <!-- Device row + scan toggle -->
+                                    <Grid ColumnSpacing="6">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <ComboBox Grid.Column="0"
+                                                  x:Name="CapBtDevice"
+                                                  FontSize="12"
+                                                  HorizontalAlignment="Stretch"
+                                                  PlaceholderText="{x:Bind Lang.Ctrl_BtPhNoDevices, Mode=OneWay}"/>
+                                        <Button Grid.Column="1"
+                                                x:Name="CapBtScanBtn"
+                                                Padding="8,6"
+                                                ToolTipService.ToolTip="{x:Bind Lang.Ctrl_BtScan, Mode=OneWay}"
+                                                Click="CapBtScanBtn_Click">
+                                            <FontIcon FontFamily="Segoe MDL2 Assets" Glyph="&#xE895;" FontSize="12"/>
+                                        </Button>
+                                    </Grid>
+
+                                    <!-- Connect / Disconnect -->
+                                    <Button x:Name="CapBtConnectBtn"
+                                            FontSize="12"
+                                            HorizontalAlignment="Stretch"
+                                            Style="{ThemeResource AccentButtonStyle}"
+                                            Click="CapBtConnectBtn_Click"
+                                            Content="{x:Bind Lang.Ctrl_BtConnect, Mode=OneWay}"/>
+
+                                    <!-- Status -->
+                                    <TextBlock x:Name="CapBtStatus"
+                                               FontSize="11" Opacity="0.7"
+                                               TextWrapping="Wrap"
+                                               Text="{x:Bind Lang.Ctrl_NotConnected, Mode=OneWay}"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Flyout>
+                    </Button.Flyout>
+                </Button>
+
+                <Button x:Name="LangBtn"
+                        Style="{StaticResource CaptionButtonStyle}">
+                    <FontIcon FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                              FontSize="14"
+                              Glyph="&#xE12B;"/>
+                    <Button.Flyout>
+                        <MenuFlyout Placement="Bottom">
+                            <RadioMenuFlyoutItem x:Name="LangItemId" FontSize="12" Text="Indonesia" Tag="id" GroupName="LangGroup" Click="LangItem_Click"/>
+                            <RadioMenuFlyoutItem x:Name="LangItemEn" FontSize="12" Text="English"   Tag="en" GroupName="LangGroup" Click="LangItem_Click"/>
+                        </MenuFlyout>
+                    </Button.Flyout>
+                </Button>
+                <Button x:Name="ThemeBtn"
+                        Style="{StaticResource CaptionButtonStyle}"
+                        Click="ThemeBtn_Click">
+                    <FontIcon x:Name="ThemeIcon"
+                              FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                              FontSize="14"
+                              Glyph="&#xE706;"/>
+                </Button>
+            </StackPanel>
+        </Border>
+
+        <!-- ── Playback bar (Row 1, hidden when no file is loaded) ─────── -->
+        <Border x:Name="PlaybackBar"
+                Grid.Row="1"
+                Padding="12,6,12,6"
+                BorderThickness="0,1,0,0"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                Background="{ThemeResource LayerFillColorDefaultBrush}"
+                Visibility="Collapsed">
+            <Grid ColumnSpacing="10">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>   <!-- transport buttons -->
+                    <ColumnDefinition Width="*"/>       <!-- slider + labels -->
+                    <ColumnDefinition Width="Auto"/>   <!-- close button -->
+                </Grid.ColumnDefinitions>
+
+                <!-- Transport buttons -->
+                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="2"
+                            VerticalAlignment="Center">
+                    <Button x:Name="PbFirstBtn" Padding="8,6"
+                            ToolTipService.ToolTip="First frame"
+                            Click="PbFirst_Click">
+                        <FontIcon FontFamily="Segoe MDL2 Assets" Glyph="&#xE892;" FontSize="14"/>
+                    </Button>
+                    <Button x:Name="PbPlayPauseBtn" Padding="10,6"
+                            Style="{ThemeResource AccentButtonStyle}"
+                            ToolTipService.ToolTip="Play / Pause"
+                            Click="PbPlayPause_Click">
+                        <FontIcon x:Name="PbPlayPauseIcon"
+                                  FontFamily="Segoe MDL2 Assets" Glyph="&#xE768;" FontSize="14"/>
+                    </Button>
+                    <Button x:Name="PbLastBtn" Padding="8,6"
+                            ToolTipService.ToolTip="Last frame"
+                            Click="PbLast_Click">
+                        <FontIcon FontFamily="Segoe MDL2 Assets" Glyph="&#xE893;" FontSize="14"/>
+                    </Button>
+                </StackPanel>
+
+                <!-- Scrub area: file name + frame counter + slider -->
+                <StackPanel Grid.Column="1" Spacing="0" VerticalAlignment="Center">
+                    <Grid>
+                        <TextBlock x:Name="PbFileText"
+                                   FontSize="10" FontWeight="SemiBold" Opacity="0.7"
+                                   HorizontalAlignment="Left" VerticalAlignment="Center"/>
+                        <TextBlock x:Name="PbFrameText"
+                                   FontSize="10" Opacity="0.5" FontFamily="Consolas"
+                                   HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                    </Grid>
+                    <Slider x:Name="PbSlider"
+                            Minimum="0" Maximum="100" Value="0"
+                            HorizontalAlignment="Stretch"
+                            Margin="0,-4,0,-6"
+                            ValueChanged="PbSlider_ValueChanged"/>
+                </StackPanel>
+
+                <!-- Unload (close) button -->
+                <Button Grid.Column="2" Padding="8,6"
+                        VerticalAlignment="Center"
+                        ToolTipService.ToolTip="Unload file and return to live mode"
+                        Click="PbClose_Click">
+                    <FontIcon FontFamily="Segoe MDL2 Assets" Glyph="&#xE8BB;" FontSize="12"/>
+                </Button>
+            </Grid>
+        </Border>
+
+        <!-- ── Status bar (Row 2) ─────────────────────────────────────── -->
+        <Border x:Name="StatusBar"
+                Grid.Row="2"
+                Padding="16,5"
+                BorderThickness="0,1,0,0"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0"
+                           Text="{x:Bind ViewModel.DataSourceText, Mode=OneWay}"
+                           FontSize="11" FontWeight="SemiBold"
+                           Opacity="0.55" CharacterSpacing="80"
+                           VerticalAlignment="Center"
+                           Margin="0,0,16,0"/>
+                <TextBlock Grid.Column="1"
+                           Text="{x:Bind ViewModel.ConnectionStatus, Mode=OneWay}"
+                           FontSize="12" Opacity="0.65"
+                           VerticalAlignment="Center"/>
+                <TextBlock Grid.Column="2" x:Name="ClockText"
+                           FontSize="12" Opacity="0.45"
+                           VerticalAlignment="Center"/>
+            </Grid>
+        </Border>
+
+        <!--  Update dialog overlay  -->
+        <Grid x:Name="UpdateOverlay"
+              Grid.RowSpan="3"
+              Visibility="Collapsed"
+              Canvas.ZIndex="19">
+            <Grid.Background>
+                <AcrylicBrush TintColor="Black"
+                              TintOpacity="0.55"
+                              TintLuminosityOpacity="0.0"
+                              AlwaysUseFallback="True"
+                              FallbackColor="#8D000000"/>
+            </Grid.Background>
+            <Border x:Name="UpdateDialogCard"
+                    Width="480"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1"
+                    CornerRadius="8">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <TextBlock x:Name="UpdateDialogTitle"
+                               Grid.Row="0"
+                               FontSize="20"
+                               FontWeight="SemiBold"
+                               TextWrapping="Wrap"
+                               Margin="28,24,28,0"/>
+                    <ContentControl x:Name="UpdateContentHost"
+                                    Grid.Row="1"
+                                    Margin="28,16,28,0"
+                                    HorizontalContentAlignment="Stretch"
+                                    HorizontalAlignment="Stretch"/>
+                    <Border Grid.Row="2"
+                            Padding="28,16"
+                            Margin="0,16,0,0"
+                            BorderThickness="0,1,0,0"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}">
+                        <Grid ColumnSpacing="10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <Button x:Name="UpdatePrimaryButton"
+                                    Grid.Column="0"
+                                    HorizontalAlignment="Stretch"
+                                    Style="{ThemeResource AccentButtonStyle}"
+                                    Visibility="Collapsed"
+                                    Click="UpdatePrimary_Click"/>
+                            <Button x:Name="UpdateCloseButton"
+                                    Grid.Column="1"
+                                    MinWidth="90"
+                                    Click="UpdateClose_Click"/>
+                        </Grid>
+                    </Border>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <Grid x:Name="TourOverlay"
+              Grid.RowSpan="3"
+              Visibility="Collapsed"
+              Canvas.ZIndex="20">
+            <Grid.Background>
+                <AcrylicBrush TintColor="Black"
+                              TintOpacity="0.55"
+                              TintLuminosityOpacity="0.0"
+                              AlwaysUseFallback="True"
+                              FallbackColor="#8D000000"/>
+            </Grid.Background>
+            <Border x:Name="TourDialogCard"
+                    Width="620"
+                    MaxHeight="760"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1"
+                    CornerRadius="8">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <StackPanel Grid.Row="0"
+                                Orientation="Horizontal"
+                                Margin="30,28,30,12"
+                                Spacing="12"
+                                VerticalAlignment="Center">
+                        <Image x:Name="TourLogoImage"
+                               Height="30"
+                               VerticalAlignment="Center"
+                               Stretch="Uniform"/>
+                        <TextBlock x:Name="TourDialogTitle"
+                                   FontSize="24"
+                                   FontWeight="SemiBold"
+                                   TextWrapping="Wrap"
+                                   VerticalAlignment="Center"/>
+                    </StackPanel>
+
+                    <ContentControl x:Name="TourContentHost"
+                                    Grid.Row="1"
+                                    Margin="30,0,30,0"
+                                    HorizontalContentAlignment="Center"/>
+
+                    <Border Grid.Row="2"
+                            Padding="30,18"
+                            BorderThickness="0,1,0,0"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                            Background="{ThemeResource SolidBackgroundFillColorBaseBrush}">
+                        <Grid ColumnSpacing="10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Button x:Name="TourOpenControlPanelButton"
+                                    Grid.Column="0"
+                                    HorizontalAlignment="Stretch"
+                                    Style="{ThemeResource AccentButtonStyle}"
+                                    Click="TourOpenControlPanel_Click"/>
+                            <Button x:Name="TourCloseButton"
+                                    Grid.Column="1"
+                                    HorizontalAlignment="Stretch"
+                                    Click="TourClose_Click"/>
+                        </Grid>
+                    </Border>
+                </Grid>
+            </Border>
+        </Grid>
+        <!-- ── Login overlay (shown on startup, ZIndex above all others) ── -->
+        <Grid x:Name="LoginOverlay"
+              Grid.RowSpan="3"
+              Canvas.ZIndex="30">
+            <Grid.Background>
+                <AcrylicBrush TintColor="Black"
+                              TintOpacity="0.65"
+                              TintLuminosityOpacity="0.0"
+                              AlwaysUseFallback="True"
+                              FallbackColor="#A6000000"/>
+            </Grid.Background>
+            <Border x:Name="LoginDialogCard"
+                    Width="360"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1"
+                    CornerRadius="8">
+                <Grid>
+
+                    <!-- Close button — floats over the top-right corner -->
+                    <Button HorizontalAlignment="Right"
+                            VerticalAlignment="Top"
+                            Width="28" Height="28"
+                            Padding="0"
+                            Margin="0,8,8,0"
+                            Style="{StaticResource CaptionButtonStyle}"
+                            Canvas.ZIndex="1"
+                            Click="LoginClose_Click">
+                        <FontIcon FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                                  FontSize="11"
+                                  Glyph="&#xE711;"/>
+                    </Button>
+
+                    <StackPanel>
+
+                        <!-- Header: logo + title -->
+                        <StackPanel Padding="28,24,28,4" Spacing="6">
+                            <Image x:Name="LoginLogoImage"
+                                   Height="22"
+                                   HorizontalAlignment="Left"
+                                   Stretch="Uniform"/>
+                            <TextBlock Text="{x:Bind Lang.Login_Title, Mode=OneWay}"
+                                       FontSize="22"
+                                       FontWeight="SemiBold"/>
+                            <TextBlock Text="TLIG Dashboard"
+                                       FontSize="12"
+                                       Opacity="0.55"/>
+                        </StackPanel>
+
+                        <!-- Form fields -->
+                        <StackPanel Padding="28,16,28,0" Spacing="14">
+                            <StackPanel Spacing="6">
+                                <TextBlock Text="{x:Bind Lang.Login_Username, Mode=OneWay}"
+                                           FontSize="12" FontWeight="SemiBold"/>
+                                <TextBox x:Name="LoginUsernameBox"
+                                         FontSize="12"
+                                         PlaceholderText="{x:Bind Lang.Login_UsernameHint, Mode=OneWay}"
+                                         KeyDown="LoginUsername_KeyDown"/>
+                            </StackPanel>
+                            <StackPanel Spacing="6">
+                                <TextBlock Text="{x:Bind Lang.Login_Password, Mode=OneWay}"
+                                           FontSize="12" FontWeight="SemiBold"/>
+                                <PasswordBox x:Name="LoginPasswordBox"
+                                             FontSize="12"
+                                             PlaceholderText="{x:Bind Lang.Login_PasswordHint, Mode=OneWay}"
+                                             KeyDown="LoginPassword_KeyDown"/>
+                            </StackPanel>
+                            <TextBlock x:Name="LoginErrorText"
+                                       FontSize="11"
+                                       Foreground="#FFDC3545"
+                                       Visibility="Collapsed"
+                                       TextWrapping="Wrap"/>
+                        </StackPanel>
+
+                        <!-- Footer: submit button -->
+                        <Border Padding="28,16"
+                                Margin="0,16,0,0"
+                                BorderThickness="0,1,0,0"
+                                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}">
+                            <Button x:Name="LoginSubmitBtn"
+                                    HorizontalAlignment="Stretch"
+                                    Style="{ThemeResource AccentButtonStyle}"
+                                    FontSize="12"
+                                    Content="{x:Bind Lang.Login_Submit, Mode=OneWay}"
+                                    Click="LoginSubmit_Click"/>
+                        </Border>
+
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </Grid>
+
+    </Grid>
+</Window>

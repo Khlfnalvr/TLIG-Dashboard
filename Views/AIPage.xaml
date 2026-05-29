@@ -1,0 +1,60 @@
+<Page
+    x:Class="TLIGDashboard.Views.AIPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Chat history -->
+        <ScrollViewer x:Name="ChatScroll"
+                      Grid.Row="0"
+                      VerticalScrollBarVisibility="Auto"
+                      HorizontalScrollBarVisibility="Disabled"
+                      Padding="20,14,20,14">
+            <StackPanel x:Name="ChatPanel" Spacing="8" MaxWidth="760">
+                <TextBlock Text="{x:Bind Lang.Ai_Title, Mode=OneWay}"
+                           FontSize="11" FontWeight="SemiBold"
+                           CharacterSpacing="80" Opacity="0.55"
+                           Margin="2,0,0,4"/>
+            </StackPanel>
+        </ScrollViewer>
+
+        <!-- Input bar -->
+        <Border Grid.Row="1"
+                BorderThickness="0,1,0,0"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                Background="{ThemeResource LayerFillColorDefaultBrush}"
+                Padding="20,12,20,12">
+            <Grid ColumnSpacing="10" MaxWidth="760">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBox x:Name="ChatInput"
+                         Grid.Column="0"
+                         FontSize="13"
+                         PlaceholderText="{x:Bind Lang.Ai_InputHintFull, Mode=OneWay}"
+                         MaxHeight="120"
+                         VerticalAlignment="Center"
+                         KeyDown="ChatInput_KeyDown"/>
+                <Button x:Name="ChatSendBtn"
+                        Grid.Column="1"
+                        Width="42" Height="42"
+                        Padding="0"
+                        VerticalAlignment="Bottom"
+                        Style="{ThemeResource AccentButtonStyle}"
+                        Click="ChatSend_Click">
+                    <FontIcon FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                              FontSize="15" Glyph="&#xE725;"/>
+                </Button>
+            </Grid>
+        </Border>
+
+    </Grid>
+
+</Page>

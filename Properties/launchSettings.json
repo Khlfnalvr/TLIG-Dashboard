@@ -1,0 +1,8 @@
+﻿{
+  "profiles": {
+    "TLIGDashboard": {
+      "commandName": "Executable",
+      "executablePath": "$(TargetDir)TLIGDashboard.exe"
+    }
+  }
+}

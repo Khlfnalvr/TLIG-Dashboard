@@ -1,0 +1,271 @@
+<Page
+    x:Class="TLIGDashboard.Views.DashboardPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+
+    <Grid x:Name="RootGrid" SizeChanged="RootGrid_SizeChanged">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition x:Name="LeftColumn"/>
+            <ColumnDefinition Width="4"/>
+            <ColumnDefinition x:Name="CenterColumn"/>
+            <ColumnDefinition Width="4"/>
+            <ColumnDefinition x:Name="RightColumn"/>
+        </Grid.ColumnDefinitions>
+
+        <!-- Left Panel -->
+        <Grid x:Name="LeftPanel" Grid.Column="0">
+
+            <ScrollViewer VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Disabled"
+                          Padding="10,8,10,10">
+                <StackPanel Spacing="6">
+
+                    <!-- Section title -->
+                    <TextBlock Text="{x:Bind Lang.Panel_ModelSistem, Mode=OneWay}"
+                               FontSize="11"
+                               FontWeight="SemiBold"
+                               CharacterSpacing="80"
+                               Opacity="0.55"
+                               Margin="2,0,0,2"/>
+
+                    <!-- Diagram Blok -->
+                    <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                            BorderThickness="1"
+                            CornerRadius="8"
+                            Padding="12,10,12,12">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="{x:Bind Lang.Panel_DiagramBlok, Mode=OneWay}"
+                                       FontSize="10" FontWeight="SemiBold"
+                                       CharacterSpacing="60" Opacity="0.55"/>
+                            <Border Height="90" CornerRadius="4"
+                                    Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Parameter PID -->
+                    <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                            BorderThickness="1"
+                            CornerRadius="8"
+                            Padding="12,10,12,12">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="{x:Bind Lang.Panel_ParameterPid, Mode=OneWay}"
+                                       FontSize="10" FontWeight="SemiBold"
+                                       CharacterSpacing="60" Opacity="0.55"/>
+                            <Border Height="80" CornerRadius="4"
+                                    Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Respon Sistem -->
+                    <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                            BorderThickness="1"
+                            CornerRadius="8"
+                            Padding="12,10,12,12">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="{x:Bind Lang.Panel_ResponSistem, Mode=OneWay}"
+                                       FontSize="10" FontWeight="SemiBold"
+                                       CharacterSpacing="60" Opacity="0.55"/>
+                            <Border x:Name="ResponSistemChart"
+                                    Height="120" CornerRadius="4"
+                                    Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Metrics 2×2 -->
+                    <Grid ColumnSpacing="6" RowSpacing="6">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <Border Grid.Row="0" Grid.Column="0"
+                                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                BorderThickness="1" CornerRadius="8"
+                                Padding="12,10,12,12">
+                            <StackPanel Spacing="4">
+                                <TextBlock Text="{x:Bind Lang.Panel_RiseTime, Mode=OneWay}"
+                                           FontSize="10" FontWeight="SemiBold"
+                                           CharacterSpacing="60" Opacity="0.55"/>
+                                <TextBlock x:Name="RiseTimeValue"
+                                           Text="--" FontSize="16" FontWeight="SemiBold"/>
+                            </StackPanel>
+                        </Border>
+
+                        <Border Grid.Row="0" Grid.Column="1"
+                                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                BorderThickness="1" CornerRadius="8"
+                                Padding="12,10,12,12">
+                            <StackPanel Spacing="4">
+                                <TextBlock Text="{x:Bind Lang.Panel_Overshoot, Mode=OneWay}"
+                                           FontSize="10" FontWeight="SemiBold"
+                                           CharacterSpacing="60" Opacity="0.55"/>
+                                <TextBlock x:Name="OvershootValue"
+                                           Text="--" FontSize="16" FontWeight="SemiBold"/>
+                            </StackPanel>
+                        </Border>
+
+                        <Border Grid.Row="1" Grid.Column="0"
+                                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                BorderThickness="1" CornerRadius="8"
+                                Padding="12,10,12,12">
+                            <StackPanel Spacing="4">
+                                <TextBlock Text="{x:Bind Lang.Panel_Settling, Mode=OneWay}"
+                                           FontSize="10" FontWeight="SemiBold"
+                                           CharacterSpacing="60" Opacity="0.55"/>
+                                <TextBlock x:Name="SettlingValue"
+                                           Text="--" FontSize="16" FontWeight="SemiBold"/>
+                            </StackPanel>
+                        </Border>
+
+                        <Border Grid.Row="1" Grid.Column="1"
+                                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                BorderThickness="1" CornerRadius="8"
+                                Padding="12,10,12,12">
+                            <StackPanel Spacing="4">
+                                <TextBlock Text="{x:Bind Lang.Panel_SteadyErr, Mode=OneWay}"
+                                           FontSize="10" FontWeight="SemiBold"
+                                           CharacterSpacing="60" Opacity="0.55"/>
+                                <TextBlock x:Name="SteadyErrValue"
+                                           Text="--" FontSize="16" FontWeight="SemiBold"/>
+                            </StackPanel>
+                        </Border>
+                    </Grid>
+
+                    <!-- Transfer Function -->
+                    <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                            BorderThickness="1" CornerRadius="8"
+                            Padding="12">
+                        <TextBlock Text="{x:Bind Lang.Panel_TransferFunction, Mode=OneWay}"
+                                   FontSize="10" FontWeight="SemiBold"
+                                   CharacterSpacing="60" Opacity="0.55"
+                                   HorizontalAlignment="Center"/>
+                    </Border>
+
+                </StackPanel>
+            </ScrollViewer>
+
+            <Button x:Name="LeftFullscreenBtn"
+                    Width="16" Height="16"
+                    HorizontalAlignment="Right"
+                    VerticalAlignment="Top"
+                    Padding="0"
+                    Margin="0,4,4,0"
+                    Canvas.ZIndex="10"
+                    Click="LeftFullscreen_Click">
+                <FontIcon FontFamily="Segoe MDL2 Assets" Glyph="&#xE740;" FontSize="9"/>
+            </Button>
+
+        </Grid>
+
+        <!-- Splitter 1 -->
+        <Border x:Name="Splitter1"
+                Grid.Column="1"
+                Background="{ThemeResource CardStrokeColorDefaultBrush}"
+                PointerPressed="Splitter1_PointerPressed"
+                PointerMoved="Splitter1_PointerMoved"
+                PointerReleased="Splitter1_PointerReleased"
+                PointerCaptureLost="Splitter1_PointerCaptureLost"/>
+
+        <!-- Center Panel -->
+        <Grid x:Name="CenterPanel" Grid.Column="2">
+            <Button x:Name="CenterFullscreenBtn"
+                    Width="16" Height="16"
+                    HorizontalAlignment="Right"
+                    VerticalAlignment="Top"
+                    Padding="0"
+                    Margin="0,4,4,0"
+                    Canvas.ZIndex="10"
+                    Click="CenterFullscreen_Click">
+                <FontIcon FontFamily="Segoe MDL2 Assets" Glyph="&#xE740;" FontSize="9"/>
+            </Button>
+        </Grid>
+
+        <!-- Splitter 2 -->
+        <Border x:Name="Splitter2"
+                Grid.Column="3"
+                Background="{ThemeResource CardStrokeColorDefaultBrush}"
+                PointerPressed="Splitter2_PointerPressed"
+                PointerMoved="Splitter2_PointerMoved"
+                PointerReleased="Splitter2_PointerReleased"
+                PointerCaptureLost="Splitter2_PointerCaptureLost"/>
+
+        <!-- Right Panel -->
+        <Grid x:Name="RightPanel" Grid.Column="4">
+
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <!-- Chat history -->
+                <ScrollViewer x:Name="ChatScroll"
+                              Grid.Row="0"
+                              VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled"
+                              Padding="10,8,10,8">
+                    <StackPanel x:Name="ChatPanel" Spacing="6">
+                        <TextBlock Text="{x:Bind Lang.Ai_Title, Mode=OneWay}"
+                                   FontSize="11" FontWeight="SemiBold"
+                                   CharacterSpacing="80" Opacity="0.55"
+                                   Margin="2,0,0,4"/>
+                    </StackPanel>
+                </ScrollViewer>
+
+                <!-- Input bar -->
+                <Border Grid.Row="1"
+                        BorderThickness="0,1,0,0"
+                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                        Padding="8,8,8,8">
+                    <Grid ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBox x:Name="ChatInput"
+                                 Grid.Column="0"
+                                 FontSize="12"
+                                 PlaceholderText="{x:Bind Lang.Ai_InputHint, Mode=OneWay}"
+                                 VerticalAlignment="Center"
+                                 KeyDown="ChatInput_KeyDown"/>
+                        <Button x:Name="ChatSendBtn"
+                                Grid.Column="1"
+                                Width="36" Height="36"
+                                Padding="0"
+                                VerticalAlignment="Center"
+                                Style="{ThemeResource AccentButtonStyle}"
+                                Click="ChatSend_Click">
+                            <FontIcon FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                                      FontSize="13" Glyph="&#xE725;"/>
+                        </Button>
+                    </Grid>
+                </Border>
+            </Grid>
+
+            <Button x:Name="RightFullscreenBtn"
+                    Width="16" Height="16"
+                    HorizontalAlignment="Right"
+                    VerticalAlignment="Top"
+                    Padding="0"
+                    Margin="0,4,4,0"
+                    Canvas.ZIndex="10"
+                    Click="RightFullscreen_Click">
+                <FontIcon FontFamily="Segoe MDL2 Assets" Glyph="&#xE740;" FontSize="9"/>
+            </Button>
+
+        </Grid>
+    </Grid>
+</Page>

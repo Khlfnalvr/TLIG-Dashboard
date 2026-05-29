@@ -1,0 +1,15 @@
+﻿TLIG Dashboard — Software Lisensi
+Copyright (C) 2026 ICO Laboratory. Seluruh hak dilindungi undang-undang.
+
+Software ini dikembangkan oleh ICO Laboratory untuk keperluan pemantauan
+Battery Management System (BMS) secara real-time.
+
+KETENTUAN PENGGUNAAN:
+1. Software ini hanya boleh digunakan untuk keperluan yang sah dan sesuai
+   dengan peraturan yang berlaku.
+2. Dilarang mendistribusikan ulang, menjual, atau memodifikasi software ini
+   tanpa izin tertulis dari ICO Laboratory.
+3. ICO Laboratory tidak bertanggung jawab atas kerusakan yang timbul akibat
+   penggunaan software ini di luar ketentuan yang ditetapkan.
+
+Untuk informasi lebih lanjut, hubungi ICO Laboratory.
