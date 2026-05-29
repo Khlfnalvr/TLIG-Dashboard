@@ -10,7 +10,12 @@ public partial class App : Application
     public static MainWindow? CurrentWindow { get; private set; }
     public static MainViewModel ViewModel { get; private set; } = null!;
     public static LocalizationManager Lang { get; } = LocalizationManager.Instance;
-    public static NotificationService Notifications { get; } = new();
+
+    /// <summary>
+    /// Shared AI service — single instance used by both AIPage and DashboardPage
+    /// so conversation history persists across navigation.
+    /// </summary>
+    public static Services.AiService Ai { get; } = new();
 
     public App()
     {
@@ -22,11 +27,6 @@ public partial class App : Application
     {
         try
         {
-            // Register BEFORE creating the window so the AUMID + Start-menu
-            // shortcut exist by the time the first data frame fires a toast.
-            // Without this, the very first critical alert can be dropped.
-            Notifications.Register();
-
             CurrentWindow = new MainWindow();
             ViewModel = CurrentWindow.ViewModel;
             CurrentWindow.Activate();

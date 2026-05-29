@@ -15,9 +15,9 @@
     <DefineConstants>DISABLE_XAML_GENERATED_MAIN</DefineConstants>
     <EnableMsixTooling>true</EnableMsixTooling>
     <ApplicationIcon>Assets\logo.ico</ApplicationIcon>
-    <AssemblyTitle>Software BMS ICO</AssemblyTitle>
-    <Product>Software BMS ICO</Product>
-    <Description>TLIG Dashboard — Cell voltages, SOC, temperatures &amp; balancing</Description>
+    <AssemblyTitle>TLIG Dashboard</AssemblyTitle>
+    <Product>TLIG Dashboard</Product>
+    <Description>TLIG Dashboard — HMI Dashboard &amp; AI Connector</Description>
     <Version>2.1.1</Version>
     <AssemblyVersion>2.1.1.0</AssemblyVersion>
     <FileVersion>2.1.1.0</FileVersion>
@@ -66,7 +66,7 @@
 
   <ItemGroup Condition="'$(Configuration)' == 'Release'">
     <!-- Protect WinRT.Runtime + main assembly from trimmer (see comments above) -->
-    <TrimmerRootDescriptor Include="TrimmerRoots.xml"/>
+    <TrimmerRootDescriptor Include="TrimmerRoots.xml" />
   </ItemGroup>
 
   <ItemGroup>
@@ -74,8 +74,8 @@
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.6.250205002" />
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.26100.1742" />
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.3.2" />
-    <!-- USB-serial bridge to the ESP master of the BMS -->
-    <PackageReference Include="System.IO.Ports" Version="9.0.0" />
+    <!-- OPC UA client stack for server connectivity -->
+    <PackageReference Include="OPCFoundation.NetStandard.Opc.Ua" Version="1.5.378.145" />
   </ItemGroup>
 
   <ItemGroup>

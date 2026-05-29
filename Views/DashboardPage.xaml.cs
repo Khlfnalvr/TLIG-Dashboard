@@ -1,16 +1,23 @@
 using System.Reflection;
+using Microsoft.UI.Dispatching;
 using Microsoft.UI.Input;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
+using TLIGDashboard.Services;
 using Windows.UI;
 
 namespace TLIGDashboard.Views;
 
 public sealed partial class DashboardPage : Page
 {
-    private Services.LocalizationManager Lang => App.Lang;
+    private LocalizationManager Lang => App.Lang;
+
+    // Shared AI service — same instance as AIPage
+    private AiService _ai => App.Ai;
+    private CancellationTokenSource? _chatCts;
+
     private bool _dragging1, _dragging2;
     private double _dragStartX;
     private double _leftStartW, _centerStartW, _rightStartW;
@@ -20,8 +27,14 @@ public sealed partial class DashboardPage : Page
     public DashboardPage()
     {
         InitializeComponent();
+        // Keep page cached so layout & chat bubbles survive navigation
+        NavigationCacheMode = Microsoft.UI.Xaml.Navigation.NavigationCacheMode.Required;
         Loaded += OnLoaded;
     }
+
+    // How many history entries are already rendered in ChatPanel
+    // (index 0 is the title TextBlock, so chat bubbles start at index 1)
+    private int _renderedCount;
 
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
@@ -36,6 +49,37 @@ public sealed partial class DashboardPage : Page
             double third = Math.Floor(total / 3.0);
             SetColumnWidths(third, third, total - third * 2);
         }
+    }
+
+    protected override void OnNavigatedTo(
+        Microsoft.UI.Xaml.Navigation.NavigationEventArgs e)
+    {
+        base.OnNavigatedTo(e);
+        SyncBubblesWithHistory();
+    }
+
+    /// <summary>Appends any history not yet shown in the Dashboard chat panel.</summary>
+    private void SyncBubblesWithHistory()
+    {
+        var history = App.Ai.History;
+        for (int i = _renderedCount; i < history.Count; i++)
+        {
+            var msg = history[i];
+            if (msg.Role == "user")
+                AddChatBubble("user", msg.Content);
+            else if (msg.Role == "assistant")
+                AddChatBubble("ai", msg.Content);
+        }
+        _renderedCount = history.Count;
+    }
+
+    /// <summary>Called by AIPage clear button to reset this panel too.</summary>
+    public void ClearChatPanel()
+    {
+        // Keep the title TextBlock (index 0), remove everything after it
+        while (ChatPanel.Children.Count > 1)
+            ChatPanel.Children.RemoveAt(ChatPanel.Children.Count - 1);
+        _renderedCount = 0;
     }
 
     private void RootGrid_SizeChanged(object sender, SizeChangedEventArgs e)
@@ -210,40 +254,90 @@ public sealed partial class DashboardPage : Page
     }
 
     // ── Chat (right panel) ───────────────────────────────────────────────
-    private void ChatSend_Click(object sender, RoutedEventArgs e) => SendChatMessage();
+    private void ChatSend_Click(object sender, RoutedEventArgs e) => _ = SendChatAsync();
 
     private void ChatInput_KeyDown(object sender, KeyRoutedEventArgs e)
     {
         if (e.Key == Windows.System.VirtualKey.Enter)
         {
-            SendChatMessage();
+            _ = SendChatAsync();
             e.Handled = true;
         }
     }
 
-    private void SendChatMessage()
+    private async Task SendChatAsync()
     {
         string text = ChatInput.Text.Trim();
         if (string.IsNullOrEmpty(text)) return;
-        ChatInput.Text = "";
-        AddChatMessage("user", text);
-        AddChatMessage("ai", "...");
+
+        // Reload settings from disk (same as AIPage does)
+        var s = AppSettingsService.Load();
+        _ai.ApiUrl       = s.AiApiUrl;
+        _ai.ApiKey       = s.AiApiKey;
+        _ai.Model        = s.AiModel;
+        _ai.SystemPrompt = s.AiSystemPrompt;
+
+        if (string.IsNullOrEmpty(_ai.ApiKey))
+        {
+            AddChatBubble("ai", Lang.Ai_ErrorNoKey);
+            return;
+        }
+
+        ChatInput.Text        = "";
+        ChatSendBtn.IsEnabled = false;
+
+        AddChatBubble("user", text);
+        var aiBubble = AddChatBubble("ai", Lang.Ai_Thinking);
+
+        _chatCts = new CancellationTokenSource();
+        bool hasContent = false;
+        string? errorMsg = null;
+
+        try
+        {
+            await Task.Run(async () =>
+            {
+                await _ai.StreamChatAsync(text, token =>
+                {
+                    DispatcherQueue.TryEnqueue(() =>
+                    {
+                        if (!hasContent) { aiBubble.Text = ""; hasContent = true; }
+                        aiBubble.Text += token;
+                        ScrollChat();
+                    });
+                }, _chatCts.Token);
+            }, _chatCts.Token);
+        }
+        catch (OperationCanceledException) { errorMsg = "[Dihentikan]"; }
+        catch (Exception ex)               { errorMsg = $"⚠ {ex.Message}"; }
+
+        if (errorMsg != null)        aiBubble.Text = errorMsg;
+        else if (!hasContent)        aiBubble.Text = "⚠ Tidak ada konten — periksa model & API key.";
+
+        _chatCts?.Dispose();
+        _chatCts = null;
+        ChatSendBtn.IsEnabled = true;
+        ScrollChat();
+
+        // Keep rendered count in sync with history
+        _renderedCount = App.Ai.History.Count;
     }
 
-    private void AddChatMessage(string role, string text)
+    // Returns the TextBlock inside the bubble so streaming can update it
+    private TextBlock AddChatBubble(string role, string text)
     {
         bool isUser = role == "user";
         bool isDark = ActualTheme == ElementTheme.Dark;
 
         var label = new TextBlock
         {
-            Text = isUser ? App.Lang.Get("Ai_UserLabel") : App.Lang.Get("Ai_AiLabel"),
-            FontSize = 10,
-            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            Text             = isUser ? Lang.Get("Ai_UserLabel") : Lang.Get("Ai_AiLabel"),
+            FontSize         = 10,
+            FontWeight       = Microsoft.UI.Text.FontWeights.SemiBold,
             CharacterSpacing = 60,
-            Opacity = 0.55,
+            Opacity          = 0.55,
             HorizontalAlignment = isUser ? HorizontalAlignment.Right : HorizontalAlignment.Left,
-            Margin = new Thickness(2, 0, 2, 2)
+            Margin           = new Thickness(2, 0, 2, 2)
         };
 
         var bg = isUser
@@ -251,40 +345,42 @@ public sealed partial class DashboardPage : Page
                 ? Color.FromArgb(0xFF, 0x00, 0x4E, 0x9B)
                 : Color.FromArgb(0xFF, 0xCC, 0xE4, 0xFF))
             : new SolidColorBrush(isDark
-                ? Color.FromArgb(0xFF, 0x32, 0x32, 0x32)
+                ? Color.FromArgb(0xFF, 0x2C, 0x2C, 0x2C)
                 : Color.FromArgb(0xFF, 0xF0, 0xF0, 0xF0));
+
+        var tb = new TextBlock
+        {
+            Text                   = text,
+            FontSize               = 12,
+            TextWrapping           = TextWrapping.Wrap,
+            IsTextSelectionEnabled = true
+        };
 
         var bubble = new Border
         {
-            Background = bg,
-            CornerRadius = isUser
-                ? new CornerRadius(10, 10, 2, 10)
-                : new CornerRadius(10, 10, 10, 2),
-            Padding = new Thickness(10, 7, 10, 7),
+            Background          = bg,
+            CornerRadius        = isUser ? new CornerRadius(10,10,2,10) : new CornerRadius(10,10,10,2),
+            Padding             = new Thickness(10, 7, 10, 7),
             HorizontalAlignment = isUser ? HorizontalAlignment.Right : HorizontalAlignment.Left,
-            MaxWidth = 220,
-            Child = new TextBlock
-            {
-                Text = text,
-                FontSize = 12,
-                TextWrapping = TextWrapping.Wrap,
-                IsTextSelectionEnabled = true
-            }
+            MaxWidth            = 240,
+            Child               = tb
         };
 
         var container = new StackPanel
         {
-            Spacing = 3,
+            Spacing             = 3,
             HorizontalAlignment = isUser ? HorizontalAlignment.Right : HorizontalAlignment.Left
         };
         container.Children.Add(label);
         container.Children.Add(bubble);
         ChatPanel.Children.Add(container);
-
-        DispatcherQueue.TryEnqueue(
-            Microsoft.UI.Dispatching.DispatcherQueuePriority.Low,
-            () => ChatScroll.ChangeView(null, double.MaxValue, null, true));
+        ScrollChat();
+        return tb;
     }
+
+    private void ScrollChat() =>
+        DispatcherQueue.TryEnqueue(DispatcherQueuePriority.Low,
+            () => ChatScroll.ChangeView(null, double.MaxValue, null, true));
 
     // ── Fullscreen buttons ───────────────────────────────────────────────
     private void LeftFullscreen_Click(object sender, RoutedEventArgs e)

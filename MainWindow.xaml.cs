@@ -26,7 +26,7 @@ public sealed partial class MainWindow : Window
 
     private static string AppProductName =>
         typeof(App).Assembly.GetCustomAttribute<AssemblyProductAttribute>()?.Product
-        ?? "Software BMS ICO";
+        ?? "TLIG Dashboard";
 
     private static string AppVersion =>
         typeof(App).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
@@ -47,10 +47,8 @@ public sealed partial class MainWindow : Window
         { "AI",        typeof(AIPage) }
     };
 
-    private bool _pbSeeking; // suppress slider feedback loop
     private string _loggedInUser = "";
 
-    private readonly Microsoft.UI.Dispatching.DispatcherQueueTimer _clock;
     private bool _initializing;
     private IntPtr _hwnd;
     private IntPtr _oldWndProc;
@@ -74,14 +72,6 @@ public sealed partial class MainWindow : Window
         InitializeTheme();
         InitializeZoom();
 
-        _clock = DispatcherQueue.CreateTimer();
-        _clock.Interval = TimeSpan.FromSeconds(1);
-        _clock.Tick += (_, _) => ClockText.Text = DateTime.Now.ToString("HH:mm:ss");
-        _clock.Start();
-
-        // Playback bar — subscribe so it appears/updates whenever the service fires
-        ViewModel.Playback.StateChanged += OnPlaybackStateChanged;
-
         // Shrink the drag region whenever window size or toggle size changes.
         SizeChanged += (_, _) => UpdateTitleBarLayout();
         ThemeToggleArea.SizeChanged += (_, _) => UpdateTitleBarLayout();
@@ -94,21 +84,21 @@ public sealed partial class MainWindow : Window
             ViewModel.RefreshLocalizedText();
             RefreshThemeButtonTooltip();
             UpdateLangMenuState();
-            RefreshSerialButtonTooltip();
-            SyncCapConnectButton();
             UpdateUnitMenuState();
             if (TourOverlay.Visibility == Visibility.Visible)
                 ShowTourOverlay();
-            OnPlaybackStateChanged();
             Bindings.Update();
         };
         UpdateLangMenuState();
         UpdateUnitMenuState();
 
-        InitSerialFlyout();
+        InitOpcUaFlyout();
 
         _ = StartupUpdateCheckAsync();
     }
+
+    /// <summary>Exposes ContentFrame so pages can inspect what is currently loaded.</summary>
+    public Frame? GetContentFrame() => ContentFrame;
 
     public void MaximizeOnLaunch()
     {
@@ -400,8 +390,6 @@ public sealed partial class MainWindow : Window
     {
         if (ContentFrame?.Content is FrameworkElement page)
             ScaleFontsInTree(page, _zoomLevel);
-        if (PlaybackBar is not null)
-            ScaleFontsInTree(PlaybackBar, _zoomLevel);
         if (StatusBar is not null)
             ScaleFontsInTree(StatusBar, _zoomLevel);
     }
@@ -1301,11 +1289,11 @@ public sealed partial class MainWindow : Window
         var panel = new StackPanel { Spacing = 10 };
         panel.Children.Add(BuildTourSectionHeader(TourText("ALUR DISARANKAN", "RECOMMENDED FLOW")));
         panel.Children.Add(BuildTourFlowStep("1", TourText(
-            "Hubungkan ESP32 lewat tombol Serial atau halaman Control Panel.",
-            "Connect ESP32 from the Serial button or Control Panel."), panelWidth));
+            "Hubungkan ke server lewat tombol Serial atau halaman Control Panel.",
+            "Connect to server from the Serial button or Control Panel."), panelWidth));
         panel.Children.Add(BuildTourFlowStep("2", TourText(
-            "Pantau kondisi pack di Dashboard, lalu buka Cell View untuk detail tiap sel.",
-            "Watch pack condition on Dashboard, then open Cell View for per-cell detail."), panelWidth));
+            "Pantau kondisi di Dashboard, lalu buka Channel View untuk detail tiap kanal.",
+            "Watch system status on Dashboard, then open Channel View for per-channel detail."), panelWidth));
         panel.Children.Add(BuildTourFlowStep("3", TourText(
             "Gunakan Logging untuk merekam sesi pengujian dan Playback untuk analisis ulang.",
             "Use Logging to record test sessions and Playback for later analysis."), panelWidth));
@@ -1485,56 +1473,48 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private static readonly Dictionary<string, (string Ms, string Nl, string Zh)> TourTranslations = new()
+    private static readonly Dictionary<string, string> TourTranslations = new()
     {
-        ["TLIG Dashboard Tour"] = ("Tour TLIG Dashboard", "TLIG Dashboard rondleiding", "TLIG Dashboard 导览"),
-        ["Open Control Panel"] = ("Buka Panel Kawalan", "Configuratiescherm openen", "打开控制面板"),
-        ["Close"] = ("Tutup", "Sluiten", "关闭"),
-        ["MAIN PAGES"] = ("HALAMAN UTAMA", "HOOFDPAGINA'S", "主要页面"),
-        ["Monitor pack voltage, SOC, current, pack status, cell summaries, and the main history charts."] = ("Pantau voltan pek, SOC, arus, status pek, ringkasan sel, dan carta sejarah utama.", "Bewaak pakketspanning, SOC, stroom, pakketstatus, celoverzichten en de belangrijkste geschiedenisgrafieken.", "监控电池组电压、SOC、电流、电池组状态、电芯摘要和主要历史图表。"),
-        ["Inspect 20 cells and 10 NTC sensors. Click a cell or sensor to open its history chart."] = ("Periksa 20 sel dan 10 sensor NTC. Klik sel atau sensor untuk membuka carta sejarahnya.", "Inspecteer 20 cellen en 10 NTC-sensoren. Klik op een cel of sensor om de geschiedenisgrafiek te openen.", "查看 20 个电芯和 10 个 NTC 传感器。点击电芯或传感器可打开其历史图表。"),
-        ["Configure COM port, baud rate, auto-connect, battery capacity, protection thresholds, current limits, and balancing."] = ("Konfigurasikan port COM, kadar baud, auto-sambung, kapasiti bateri, ambang perlindungan, had arus, dan pengimbangan.", "Configureer COM-poort, baudrate, automatisch verbinden, batterijcapaciteit, beveiligingsdrempels, stroomlimieten en balanceren.", "配置 COM 端口、波特率、自动连接、电池容量、保护阈值、电流限制和均衡。"),
-        ["Record live data to CSV, TSV, Excel, or JSON, choose the output folder, and watch the latest 20 frames."] = ("Rakam data langsung ke CSV, TSV, Excel, atau JSON, pilih folder output, dan pantau 20 bingkai terkini.", "Neem live data op naar CSV, TSV, Excel of JSON, kies de uitvoermap en bekijk de nieuwste 20 frames.", "将实时数据记录为 CSV、TSV、Excel 或 JSON，选择输出文件夹，并查看最新 20 帧。"),
-        ["Load a CSV log and replay it. Every page updates as if live data were coming in."] = ("Muat log CSV dan mainkan semula. Semua halaman dikemas kini seolah-olah data langsung sedang masuk.", "Laad een CSV-log en speel deze af. Elke pagina werkt bij alsof er live data binnenkomt.", "加载 CSV 日志并回放。所有页面都会像接收实时数据一样更新。"),
-        ["TITLE BAR QUICK BUTTONS"] = ("BUTANG PANTAS BAR TAJUK", "SNELKNOPPEN IN TITELBALK", "标题栏快捷按钮"),
-        ["Alerts"] = ("Amaran", "Meldingen", "警报"),
-        ["The bell opens alert history, and the red badge shows the number of unread alerts."] = ("Ikon loceng membuka sejarah amaran, dan lencana merah menunjukkan bilangan amaran belum dibaca.", "De bel opent de meldingengeschiedenis en de rode badge toont het aantal ongelezen meldingen.", "铃铛会打开警报历史，红色徽标显示未读警报数量。"),
-        ["Serial"] = ("Siri", "Serieel", "串口"),
-        ["Quick access to refresh ports, choose COM and baud rate, then connect or disconnect without changing pages."] = ("Akses pantas untuk menyegar semula port, memilih COM dan kadar baud, kemudian sambung atau putuskan tanpa menukar halaman.", "Snelle toegang om poorten te vernieuwen, COM en baudrate te kiezen en te verbinden of los te koppelen zonder van pagina te wisselen.", "快速刷新端口、选择 COM 和波特率，然后无需切换页面即可连接或断开。"),
-        ["Language"] = ("Bahasa", "Taal", "语言"),
-        ["Switch the application language directly from the title bar."] = ("Tukar bahasa aplikasi terus dari bar tajuk.", "Wijzig de applicatietaal direct vanuit de titelbalk.", "直接从标题栏切换应用语言。"),
-        ["Theme"] = ("Tema", "Thema", "主题"),
-        ["Switch between light and dark mode for the current workspace."] = ("Beralih antara mod cerah dan gelap untuk ruang kerja semasa.", "Schakel tussen lichte en donkere modus voor de huidige werkruimte.", "为当前工作区切换浅色和深色模式。"),
-        ["MENUS, PLAYBACK, AND STATUS"] = ("MENU, MAIN BALIK, DAN STATUS", "MENU'S, AFSPELEN EN STATUS", "菜单、回放和状态"),
-        ["Show or hide pages in the navigation bar to keep the workspace focused."] = ("Tunjuk atau sembunyikan halaman dalam bar navigasi supaya ruang kerja kekal ringkas.", "Toon of verberg pagina's in de navigatiebalk om de werkruimte overzichtelijk te houden.", "在导航栏中显示或隐藏页面，让工作区更聚焦。"),
-        ["Choose the temperature, voltage, and capacity units that are easiest to read."] = ("Pilih unit suhu, voltan, dan kapasiti yang paling mudah dibaca.", "Kies de temperatuur-, spannings- en capaciteitseenheden die het prettigst leesbaar zijn.", "选择最便于读取的温度、电压和容量单位。"),
-        ["View product name, app version, license, and other basic information."] = ("Lihat nama produk, versi aplikasi, lesen, dan maklumat asas lain.", "Bekijk productnaam, appversie, licentie en andere basisinformatie.", "查看产品名称、应用版本、许可证和其他基本信息。"),
-        ["Open this feature guide anytime from the title bar menu."] = ("Buka panduan fitur ini bila-bila masa dari menu bar tajuk.", "Open deze functiegids op elk moment vanuit het titelbalkmenu.", "可随时从标题栏菜单打开此功能指南。"),
-        ["Reload the active page when charts, dropdowns, or visual state need a refresh."] = ("Muat semula halaman aktif apabila carta, senarai dropdown, atau keadaan visual perlu disegarkan.", "Herlaad de actieve pagina wanneer grafieken, keuzelijsten of visuele status moeten worden vernieuwd.", "当图表、下拉框或视觉状态需要刷新时，重新加载当前页面。"),
-        ["Playback bar"] = ("Bar main balik", "Afspeelbalk", "回放栏"),
-        ["When a log is loaded, use first, play or pause, last, the frame slider, and unload to return to live mode."] = ("Apabila log dimuat, gunakan pertama, main atau jeda, terakhir, slider bingkai, dan nyahmuat untuk kembali ke mod langsung.", "Wanneer een log is geladen, gebruik je eerste, afspelen of pauzeren, laatste, de frameschuif en ontladen om terug te keren naar live modus.", "加载日志后，可使用首帧、播放或暂停、末帧、帧滑块和卸载返回实时模式。"),
-        ["Status bar"] = ("Bar status", "Statusbalk", "状态栏"),
-        ["The bottom bar shows data source, connection status, and the app clock."] = ("Bar bawah memaparkan sumber data, status sambungan, dan jam aplikasi.", "De onderste balk toont gegevensbron, verbindingsstatus en de appklok.", "底部栏显示数据源、连接状态和应用时钟。"),
-        ["Get familiar with the workspace"] = ("Kenali ruang kerja utama", "Maak kennis met de werkruimte", "熟悉工作区"),
-        ["This guide summarizes pages, buttons, menus, playback, and the status bar so new users know where to start."] = ("Panduan ini merangkum halaman, butang, menu, main balik, dan bar status supaya pengguna baharu tahu tempat untuk bermula.", "Deze gids vat pagina's, knoppen, menu's, afspelen en de statusbalk samen zodat nieuwe gebruikers weten waar ze moeten beginnen.", "本指南概述页面、按钮、菜单、回放和状态栏，帮助新用户快速上手。"),
-        ["RECOMMENDED FLOW"] = ("ALIRAN DISARANKAN", "AANBEVOLEN WERKWIJZE", "推荐流程"),
-        ["Connect ESP32 from the Serial button or Control Panel."] = ("Sambungkan ESP32 melalui butang Siri atau Panel Kawalan.", "Verbind de ESP32 via de knop Serieel of het Configuratiescherm.", "通过串口按钮或控制面板连接 ESP32。"),
-        ["Watch pack condition on Dashboard, then open Cell View for per-cell detail."] = ("Pantau keadaan pek pada Dashboard, kemudian buka Paparan Sel untuk butiran setiap sel.", "Bekijk de pakketconditie op het Dashboard en open daarna Celweergave voor details per cel.", "在仪表盘查看电池组状态，然后打开电芯视图查看每个电芯的详情。"),
-        ["Use Logging to record test sessions and Playback for later analysis."] = ("Gunakan Logging untuk merakam sesi ujian dan Main Balik untuk analisis kemudian.", "Gebruik Logging om testsessies op te nemen en Afspelen voor latere analyse.", "使用日志记录测试会话，并通过回放进行后续分析。")
+        ["TLIG Dashboard Tour"] = "Tour TLIG Dashboard",
+        ["Open Control Panel"] = "Buka Panel Kontrol",
+        ["Close"] = "Tutup",
+        ["MAIN PAGES"] = "HALAMAN UTAMA",
+        ["Monitor main values, levels, currents, system status, channel summaries, and main history charts."] = "Pantau nilai utama, level, arus, status sistem, ringkasan kanal, dan grafik riwayat utama.",
+        ["Inspect 20 channels and 10 sensors. Click a channel or sensor to open its history chart."] = "Periksa 20 kanal dan 10 sensor. Klik kanal atau sensor untuk membuka grafik riwayatnya.",
+        ["Configure OPC UA connection, node IDs, thresholds, and display settings."] = "Konfigurasi koneksi OPC UA, node ID, ambang batas, dan pengaturan tampilan.",
+        ["Record live data to CSV, TSV, Excel, or JSON, choose the output folder, and watch the latest 20 frames."] = "Rekam data langsung ke CSV, TSV, Excel, atau JSON, pilih folder output, dan pantau 20 frame terbaru.",
+        ["Load a CSV log and replay it. Every page updates as if live data were coming in."] = "Muat log CSV dan putar ulang. Setiap halaman diperbarui seolah data langsung masuk.",
+        ["TITLE BAR QUICK BUTTONS"] = "TOMBOL CEPAT TITLE BAR",
+        ["Alerts"] = "Peringatan",
+        ["The bell opens alert history, and the red badge shows the number of unread alerts."] = "Ikon bel membuka riwayat peringatan, dan lencana merah menunjukkan jumlah peringatan yang belum dibaca.",
+        ["Serial"] = "Serial",
+        ["Quick access to refresh ports, choose COM and baud rate, then connect or disconnect without changing pages."] = "Akses cepat untuk menyegarkan port, memilih COM dan baud rate, lalu connect atau disconnect tanpa berpindah halaman.",
+        ["Language"] = "Bahasa",
+        ["Switch the application language directly from the title bar."] = "Ganti bahasa aplikasi langsung dari title bar.",
+        ["Theme"] = "Tema",
+        ["Switch between light and dark mode for the current workspace."] = "Beralih antara mode terang dan gelap untuk workspace saat ini.",
+        ["MENUS, PLAYBACK, AND STATUS"] = "MENU, PLAYBACK, DAN STATUS",
+        ["Show or hide pages in the navigation bar to keep the workspace focused."] = "Tampilkan atau sembunyikan halaman di navigation bar agar workspace tetap fokus.",
+        ["Choose the temperature, voltage, and capacity units that are easiest to read."] = "Pilih unit suhu, tegangan, dan kapasitas yang paling mudah dibaca.",
+        ["View product name, app version, license, and other basic information."] = "Lihat nama produk, versi aplikasi, lisensi, dan informasi dasar lainnya.",
+        ["Open this feature guide anytime from the title bar menu."] = "Buka panduan fitur ini kapan saja dari menu title bar.",
+        ["Reload the active page when charts, dropdowns, or visual state need a refresh."] = "Muat ulang halaman aktif saat grafik, dropdown, atau tampilan perlu disegarkan.",
+        ["Playback bar"] = "Bar Playback",
+        ["When a log is loaded, use first, play or pause, last, the frame slider, and unload to return to live mode."] = "Saat log dimuat, gunakan tombol pertama, play atau pause, terakhir, slider frame, dan unload untuk kembali ke mode live.",
+        ["Status bar"] = "Bar Status",
+        ["The bottom bar shows data source and connection status."] = "Bar bawah menampilkan sumber data dan status koneksi.",
+        ["Get familiar with the workspace"] = "Kenali ruang kerja utama",
+        ["This guide summarizes pages, buttons, menus, playback, and the status bar so new users know where to start."] = "Panduan ini merangkum halaman, tombol, menu, playback, dan bar status agar pengguna baru tahu harus mulai dari mana.",
+        ["RECOMMENDED FLOW"] = "ALUR YANG DISARANKAN",
+        ["Connect to server from the Serial button or Control Panel."] = "Hubungkan ke server lewat tombol Serial atau halaman Control Panel.",
+        ["Watch system status on Dashboard, then open Channel View for per-channel detail."] = "Pantau kondisi di Dashboard, lalu buka Channel View untuk detail tiap kanal.",
+        ["Use Logging to record test sessions and Playback for later analysis."] = "Gunakan Logging untuk merekam sesi pengujian dan Playback untuk analisis ulang."
     };
 
     private string TourText(string id, string en)
     {
         if (Lang.CurrentLanguage == "id") return id;
-        if (!TourTranslations.TryGetValue(en, out var translated)) return en;
-
-        return Lang.CurrentLanguage switch
-        {
-            "ms" => translated.Ms,
-            "nl" => translated.Nl,
-            "zh" => translated.Zh,
-            _    => en
-        };
+        return en;
     }
 
     private bool IsDarkTheme()
@@ -1560,305 +1540,180 @@ public sealed partial class MainWindow : Window
             ? Color.FromArgb(0xFF, 0x45, 0x45, 0x45)
             : Color.FromArgb(0xFF, 0xDD, 0xDD, 0xDD));
 
-    // ── Playback bar ──────────────────────────────────────────────────────
-    private void OnPlaybackStateChanged()
+    // ── Caption-bar OPC UA picker ─────────────────────────────────────────
+    private void InitOpcUaFlyout()
     {
-        DispatcherQueue.TryEnqueue(() =>
+        var saved = AppSettingsService.Load();
+        OpcEndpointBox.Text = saved.OpcUaEndpointUrl;
+
+        // Security combo
+        OpcSecNone.Content    = Lang.Ui_OpcUaSecNone;
+        OpcSecSign.Content    = Lang.Ui_OpcUaSecSign;
+        OpcSecSignEnc.Content = Lang.Ui_OpcUaSecSignEnc;
+        OpcSecurityCombo.SelectedIndex = saved.OpcUaSecurityMode switch
         {
-            var pb = ViewModel.Playback;
-            PlaybackBar.Visibility = pb.IsLoaded
-                ? Microsoft.UI.Xaml.Visibility.Visible
-                : Microsoft.UI.Xaml.Visibility.Collapsed;
-
-            if (!pb.IsLoaded) return;
-
-            PbFileText.Text    = pb.FileName;
-            PbFrameText.Text   = $"{pb.CurrentFrame + 1} / {pb.TotalFrames}  ·  {pb.CurrentTimestamp}";
-            // E769 = Play, E103 = Pause  (Segoe MDL2 Assets)
-            PbPlayPauseIcon.Glyph = pb.IsPlaying ? "" : "";
-
-            _pbSeeking = true;
-            PbSlider.Maximum = Math.Max(1, pb.TotalFrames - 1);
-            PbSlider.Value   = pb.CurrentFrame;
-            _pbSeeking = false;
-        });
-    }
-
-    private void PbPlayPause_Click(object sender, RoutedEventArgs e)
-    {
-        if (ViewModel.Playback.IsPlaying) ViewModel.Playback.Pause();
-        else                              ViewModel.Playback.Play();
-    }
-
-    private void PbFirst_Click(object sender, RoutedEventArgs e)
-        => ViewModel.Playback.SeekTo(0);
-
-    private void PbLast_Click(object sender, RoutedEventArgs e)
-        => ViewModel.Playback.SeekTo(ViewModel.Playback.TotalFrames - 1);
-
-    private void PbClose_Click(object sender, RoutedEventArgs e)
-        => ViewModel.Playback.Unload();
-
-    private void PbSlider_ValueChanged(object sender,
-        Microsoft.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventArgs e)
-    {
-        if (_pbSeeking) return;
-        ViewModel.Playback.SeekTo((int)Math.Round(e.NewValue));
-    }
-
-    // ── Caption-bar serial picker ────────────────────────────────────────
-    private void InitSerialFlyout()
-    {
-        PopulateCapBauds();
-        RefreshCapChannels();
-        RefreshSerialButtonTooltip();
-        UpdateSerialStatusDot();
-
-        // Default tab: Serial. SelectorBar.SelectedItem must be assigned
-        // explicitly — leaving it null fires no SelectionChanged on open.
-        ConnTabs.SelectedItem = ConnTabSerial;
-        ApplyConnTab();
-
-        // Mirror connection status into the flyout text + the status dot.
-        ViewModel.Serial.StatusChanged += msg => DispatcherQueue.TryEnqueue(() =>
-        {
-            CapConnStatus.Text = msg;
-            SyncCapConnectButton();
-            UpdateSerialStatusDot();
-        });
-
-        // Bluetooth-tab live wiring.
-        ViewModel.Bluetooth.StatusChanged += msg => DispatcherQueue.TryEnqueue(() =>
-        {
-            CapBtStatus.Text = msg;
-            SyncCapBtConnectButton();
-            UpdateSerialStatusDot();
-        });
-        ViewModel.Bluetooth.DevicesChanged += () => DispatcherQueue.TryEnqueue(RefreshCapBtDevices);
-
-        // Re-sync whenever the flyout opens so the dropdowns reflect live
-        // state even if the user toggled connection from the Control Panel.
-        SerialFlyout.Opening += (_, _) =>
-        {
-            RefreshCapChannels();
-            RefreshCapBtDevices();
-            SyncCapConnectButton();
-            SyncCapBtConnectButton();
+            "Sign"           => 1,
+            "SignAndEncrypt" => 2,
+            _                => 0
         };
-    }
 
-    private void ConnTabs_SelectionChanged(SelectorBar sender, SelectorBarSelectionChangedEventArgs args)
-    {
-        ApplyConnTab();
-    }
+        // Auth combo
+        OpcAuthAnon.Content = Lang.Ui_OpcUaAnonymous;
+        OpcAuthUser.Content = Lang.Ui_OpcUaUsernameAuth;
+        OpcAuthCombo.SelectedIndex = saved.OpcUaUseAnonymous ? 0 : 1;
+        OpcCredPanel.Visibility    = saved.OpcUaUseAnonymous
+            ? Visibility.Collapsed : Visibility.Visible;
 
-    private void ApplyConnTab()
-    {
-        if (CapSerialPanel is null || CapBtPanel is null) return;
-        bool serial = ConnTabs.SelectedItem == ConnTabSerial || ConnTabs.SelectedItem is null;
-        CapSerialPanel.Visibility = serial ? Visibility.Visible : Visibility.Collapsed;
-        CapBtPanel.Visibility     = serial ? Visibility.Collapsed : Visibility.Visible;
-    }
+        UpdateOpcStatusDot();
+        SyncOpcConnectButton();
 
-    private void RefreshCapBtDevices()
-    {
-        if (CapBtDevice is null) return;
-        var previous = (CapBtDevice.SelectedItem as ComboBoxItem)?.Tag as BluetoothDeviceInfo;
-        CapBtDevice.Items.Clear();
-        foreach (var d in ViewModel.Bluetooth.Devices)
-            CapBtDevice.Items.Add(new ComboBoxItem { Content = d.DisplayName, Tag = d, FontSize = 12 });
+        // Init AI panel values
+        InitAiPanel();
 
-        // Prefer the live device, then the previous selection, then the
-        // last paired device from settings.
-        string preferredId = ViewModel.Bluetooth.IsConnected
-            ? ViewModel.Bluetooth.DeviceId
-            : previous?.DeviceId ?? AppSettingsService.Load().LastBluetoothDeviceId;
+        // Default tab = OPC UA
+        ConnAiTabs.SelectedItem = TabOpcUa;
 
-        if (!string.IsNullOrWhiteSpace(preferredId))
+        ViewModel.OpcUa.StatusChanged += _ => DispatcherQueue.TryEnqueue(() =>
         {
-            for (int i = 0; i < CapBtDevice.Items.Count; i++)
-            {
-                if (CapBtDevice.Items[i] is ComboBoxItem it &&
-                    it.Tag is BluetoothDeviceInfo c &&
-                    c.DeviceId == preferredId)
-                {
-                    CapBtDevice.SelectedIndex = i;
-                    return;
-                }
-            }
-        }
-        if (CapBtDevice.SelectedIndex < 0 && CapBtDevice.Items.Count > 0)
-            CapBtDevice.SelectedIndex = 0;
+            SyncOpcConnectButton();
+            UpdateOpcStatusDot();
+        });
     }
 
-    private void SyncCapBtConnectButton()
+    private void OpcUaFlyout_Opened(object sender, object e)
     {
-        if (CapBtConnectBtn is null) return;
-        bool connected = ViewModel.Bluetooth.IsConnected;
-        bool scanning  = ViewModel.Bluetooth.IsScanning;
-        CapBtConnectBtn.Content = connected ? Lang.Ctrl_BtDisconnect : Lang.Ctrl_BtConnect;
-        CapBtDevice.IsEnabled   = !connected;
-        ToolTipService.SetToolTip(CapBtScanBtn,
-            scanning ? Lang.Ctrl_BtStopScan : Lang.Ctrl_BtScan);
-        CapBtStatus.Text = connected
-            ? Lang.Format("Bt_StatusConnected", ViewModel.Bluetooth.DeviceName)
-            : Lang.Ctrl_NotConnected;
+        SyncOpcConnectButton();
+        UpdateOpcStatusDot();
+        InitAiPanel();
     }
 
-    private void CapBtScanBtn_Click(object sender, RoutedEventArgs e)
+    private void OpcAuthCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (ViewModel.Bluetooth.IsScanning) ViewModel.Bluetooth.StopScan();
-        else                                ViewModel.Bluetooth.StartScan();
-        SyncCapBtConnectButton();
+        if (OpcCredPanel == null) return;
+        OpcCredPanel.Visibility = OpcAuthCombo.SelectedIndex == 1
+            ? Visibility.Visible : Visibility.Collapsed;
     }
 
-    private async void CapBtConnectBtn_Click(object sender, RoutedEventArgs e)
+    private void OpcSecurityCombo_SelectionChanged(object sender, SelectionChangedEventArgs e) { }
+
+    private void SyncOpcConnectButton()
     {
-        if (ViewModel.Bluetooth.IsConnected)
+        bool connected = ViewModel.OpcUa.IsConnected;
+        OpcConnectBtn.Content = connected
+            ? Lang.Ctrl_Disconnect
+            : Lang.Ctrl_Connect;
+        OpcEndpointBox.IsEnabled  = !connected;
+        OpcSecurityCombo.IsEnabled = !connected;
+        OpcAuthCombo.IsEnabled    = !connected;
+        OpcCredPanel.IsHitTestVisible = !connected;
+
+        OpcStatusText.Text = connected
+            ? LocalizationManager.Instance.Format("OpcUa_StatusConnected", ViewModel.OpcUa.EndpointUrl)
+            : LocalizationManager.Instance.Get("Ctrl_NotConnected");
+    }
+
+    private async void OpcConnectBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (ViewModel.OpcUa.IsConnected)
         {
-            ViewModel.Bluetooth.Disconnect();
+            ViewModel.OpcUa.Disconnect();
+            SyncOpcConnectButton();
+            UpdateOpcStatusDot();
             return;
         }
 
-        if (CapBtDevice.SelectedItem is not ComboBoxItem item ||
-            item.Tag is not BluetoothDeviceInfo device)
+        var endpointUrl = OpcEndpointBox.Text.Trim();
+        if (string.IsNullOrEmpty(endpointUrl)) return;
+
+        var secMode = (OpcSecurityCombo.SelectedItem as ComboBoxItem)?.Tag?.ToString() switch
         {
-            CapBtStatus.Text = Lang.Get("Bt_FbSelectMsg");
-            return;
-        }
+            "Sign"           => OpcUaSecurityMode.Sign,
+            "SignAndEncrypt" => OpcUaSecurityMode.SignAndEncrypt,
+            _                => OpcUaSecurityMode.None
+        };
+        var authMode = OpcAuthCombo.SelectedIndex == 1
+            ? OpcUaAuthMode.UsernamePassword
+            : OpcUaAuthMode.Anonymous;
 
-        // Hand-off from USB: drop the existing serial link and freeze the
-        // scanner so the source label stays honest while BT is the source.
-        ViewModel.AutoConnect.SuspendReconnect();
-        if (ViewModel.Serial.IsConnected) ViewModel.Serial.Disconnect();
+        OpcConnectBtn.IsEnabled = false;
+        OpcStatusText.Text      = LocalizationManager.Instance.Get("OpcUa_StatusConnecting");
 
-        bool ok = await ViewModel.Bluetooth.ConnectAsync(device);
+        bool ok = await ViewModel.OpcUa.ConnectAsync(
+            endpointUrl, authMode,
+            OpcUsernameBox.Text,
+            OpcPasswordBox.Password,
+            secMode);
+
+        // Persist settings on successful connect
         if (ok)
         {
             var s = AppSettingsService.Load();
-            s.LastBluetoothDeviceId   = device.DeviceId;
-            s.LastBluetoothDeviceName = device.DisplayName;
+            s.OpcUaEndpointUrl  = endpointUrl;
+            s.OpcUaSecurityMode = secMode.ToString();
+            s.OpcUaUseAnonymous = authMode == OpcUaAuthMode.Anonymous;
+            s.OpcUaUsername     = OpcUsernameBox.Text;
             AppSettingsService.Save(s);
         }
-        SyncCapBtConnectButton();
+
+        OpcConnectBtn.IsEnabled = true;
+        SyncOpcConnectButton();
+        UpdateOpcStatusDot();
     }
 
-    private void RefreshSerialButtonTooltip()
+    private void UpdateOpcStatusDot()
     {
-        if (SerialBtn is null) return;
-        ToolTipService.SetToolTip(SerialBtn, Lang.Ui_SerialQuickAccess);
+        bool connected = ViewModel.OpcUa.IsConnected;
+        OpcStatusDot.Fill = connected
+            ? new SolidColorBrush(Color.FromArgb(0xFF, 0x25, 0xC6, 0x85))
+            : new SolidColorBrush(Color.FromArgb(0x00, 0x00, 0x00, 0x00));
     }
 
-    private void UpdateSerialStatusDot()
+    // ── Tab switching (OPC UA ↔ AI API) ──────────────────────────────────────
+
+    private void ConnAiTabs_SelectionChanged(SelectorBar sender, SelectorBarSelectionChangedEventArgs args)
     {
-        if (SerialStatusDot is null) return;
-        // Green for serial, blue for Bluetooth, dimmed when idle. Picking
-        // distinct hues makes it obvious at a glance which transport is live.
-        bool serial = ViewModel.Serial.IsConnected;
-        bool bt     = ViewModel.Bluetooth.IsConnected;
-        SerialStatusDot.Fill = serial
-            ? new SolidColorBrush(Color.FromArgb(0xFF, 0x25, 0xC6, 0x85))     // green
-            : bt
-                ? new SolidColorBrush(Color.FromArgb(0xFF, 0x3D, 0x9C, 0xFD))  // sky blue
-                : new SolidColorBrush(Color.FromArgb(0xCC, 0x9E, 0x9E, 0x9E));   // grey
+        bool isAi = ReferenceEquals(ConnAiTabs.SelectedItem, TabAiApi);
+        PanelOpcUa.Visibility  = isAi ? Visibility.Collapsed : Visibility.Visible;
+        PanelAiApi.Visibility  = isAi ? Visibility.Visible   : Visibility.Collapsed;
     }
 
-    private void PopulateCapBauds()
-    {
-        CapSerialBaud.Items.Clear();
-        foreach (var b in ViewModel.Serial.Bitrates)
-            CapSerialBaud.Items.Add(new ComboBoxItem { Content = b.DisplayName, Tag = b });
+    // ── AI API settings ───────────────────────────────────────────────────────
 
-        int defBaud = ViewModel.Serial.DefaultBitrate;
-        for (int i = 0; i < CapSerialBaud.Items.Count; i++)
-        {
-            if (CapSerialBaud.Items[i] is ComboBoxItem item &&
-                item.Tag is SerialBaud br &&
-                br.Baud == defBaud)
-            {
-                CapSerialBaud.SelectedIndex = i;
-                return;
-            }
-        }
-        if (CapSerialBaud.SelectedIndex < 0 && CapSerialBaud.Items.Count > 0)
-            CapSerialBaud.SelectedIndex = 0;
+    private void InitAiPanel()
+    {
+        var s = AppSettingsService.Load();
+        AiApiUrlBox.Text     = s.AiApiUrl;
+        AiApiKeyBox.Password = s.AiApiKey;
+        AiModelBox.Text      = s.AiModel;
+        AiSysPromptBox.Text  = s.AiSystemPrompt;
+        RefreshAiStatus(s.AiApiKey);
     }
 
-    private void RefreshCapChannels()
+    private void RefreshAiStatus(string key)
     {
-        var previous = (CapSerialPort.SelectedItem as ComboBoxItem)?.Tag as SerialPortInfo;
-        CapSerialPort.Items.Clear();
-
-        if (!ViewModel.Serial.IsDriverAvailable)
-        {
-            CapSerialPort.PlaceholderText = Lang.Ctrl_PhNoPorts;
-            return;
-        }
-
-        foreach (var ch in ViewModel.Serial.Channels)
-            CapSerialPort.Items.Add(new ComboBoxItem { Content = ch.DisplayName, Tag = ch });
-
-        CapSerialPort.PlaceholderText = Lang.Ctrl_PhScanning;
-
-        // Prefer the live channel — fall back to whatever the user picked last,
-        // then default to the first entry.
-        string live = ViewModel.Serial.Channel;     // "" when not connected
-        for (int i = 0; i < CapSerialPort.Items.Count; i++)
-        {
-            if (CapSerialPort.Items[i] is ComboBoxItem it &&
-                it.Tag is SerialPortInfo c &&
-                (string.Equals(c.PortName, live, StringComparison.OrdinalIgnoreCase)
-                 || (string.IsNullOrEmpty(live) && previous != null
-                     && string.Equals(c.PortName, previous.PortName, StringComparison.OrdinalIgnoreCase))))
-            {
-                CapSerialPort.SelectedIndex = i;
-                return;
-            }
-        }
-        if (CapSerialPort.Items.Count > 0)
-            CapSerialPort.SelectedIndex = 0;
+        bool configured = !string.IsNullOrWhiteSpace(key);
+        AiStatusText.Text      = configured
+            ? $"✓  {LocalizationManager.Instance.Format("Ai_ModelLabel", AppSettingsService.Load().AiModel)}"
+            : LocalizationManager.Instance.Get("Ai_ErrorNoKey");
+        AiStatusText.Foreground = configured
+            ? new SolidColorBrush(Color.FromArgb(0xFF, 0x25, 0xC6, 0x85))
+            : new SolidColorBrush(Color.FromArgb(0xFF, 0xCC, 0x6E, 0x00));
     }
 
-    private void SyncCapConnectButton()
+    private void AiSaveBtn_Click(object sender, RoutedEventArgs e)
     {
-        if (CapConnectBtn is null) return;
-        bool connected = ViewModel.Serial.IsConnected;
-        CapConnectBtn.Content   = connected ? Lang.Ctrl_Disconnect : Lang.Ctrl_Connect;
-        CapSerialPort.IsEnabled = !connected;
-        CapSerialBaud.IsEnabled = !connected;
-        CapConnStatus.Text = connected
-            ? Lang.Format("Serial_StatusConnected", ViewModel.Serial.ChannelName, ViewModel.Serial.Bitrate)
-            : Lang.Ctrl_NotConnected;
-    }
+        var s = AppSettingsService.Load();
+        s.AiApiUrl       = AiApiUrlBox.Text.Trim();
+        s.AiApiKey       = AiApiKeyBox.Password.Trim();
+        s.AiModel        = AiModelBox.Text.Trim();
+        s.AiSystemPrompt = AiSysPromptBox.Text.Trim();
+        AppSettingsService.Save(s);
 
-    private void CapRefresh_Click(object sender, RoutedEventArgs e) => RefreshCapChannels();
+        RefreshAiStatus(s.AiApiKey);
 
-    private void CapConnectBtn_Click(object sender, RoutedEventArgs e)
-    {
-        if (ViewModel.Serial.IsConnected)
-        {
-            ViewModel.AutoConnect.SuspendReconnect();
-            ViewModel.Serial.Disconnect();
-            return;
-        }
-
-        if (CapSerialPort.SelectedItem is not ComboBoxItem chItem ||
-            chItem.Tag is not SerialPortInfo channel)
-        {
-            CapConnStatus.Text = Lang.Fb_SelectChannelMsg;
-            return;
-        }
-
-        if (CapSerialBaud.SelectedItem is not ComboBoxItem brItem ||
-            brItem.Tag is not SerialBaud bitrate)
-        {
-            CapConnStatus.Text = Lang.Fb_SelectChannelMsg;
-            return;
-        }
-
-        ViewModel.AutoConnect.Baud = bitrate.Baud;
-        ViewModel.AutoConnect.ResumeReconnect();
-        ViewModel.Serial.Connect(channel, bitrate);
+        // Notify AIPage if it's currently loaded so it picks up new settings immediately
+        if (ContentFrame?.Content is Views.AIPage aiPage)
+            aiPage.ReloadSettings();
     }
 
     // Flash the taskbar button (and caption when foreground) until the user

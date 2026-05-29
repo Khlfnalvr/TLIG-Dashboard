@@ -5,30 +5,19 @@ namespace TLIGDashboard.Services;
 
 public class AppSettings
 {
-    // BmsConfig thresholds
-    public double NominalCapacityAh      { get; set; } = 20.0;
-    public double MaxDod                 { get; set; } = 80;
-    public double MaxChargeCurrent       { get; set; } = 20;
-    public double MaxDischargeCurrent    { get; set; } = 40;
-    public double OvervoltageThreshold   { get; set; } = 4.20;
-    public double HighVoltageWarning     { get; set; } = 4.10;
-    public double UndervoltageThreshold  { get; set; } = 2.80;
-    public double LowVoltageWarning      { get; set; } = 3.00;
-    public double OverTempWarning        { get; set; } = 60;
-    public double OverTempCutoff         { get; set; } = 70;
-    public double BalancingStartDeltaMv  { get; set; } = 20;
-    public double BalancingStopDeltaMv   { get; set; } = 5;
+    // OPC UA server connection settings
+    public string OpcUaEndpointUrl        { get; set; } = "opc.tcp://localhost:4840";
+    public string OpcUaSecurityMode       { get; set; } = "None";   // None | Sign | SignAndEncrypt
+    public bool   OpcUaUseAnonymous       { get; set; } = true;
+    public string OpcUaUsername           { get; set; } = "";
+    public int    OpcUaPublishingIntervalMs { get; set; } = 1000;
+    public OpcUaNodeConfig OpcUaNodeConfig { get; set; } = new();
 
-    // UART baud rate to the ESP32 master.
-    public int    SerialBaud             { get; set; } = 115200;
-    public int    ReconnectIntervalSec   { get; set; } = 2;
-    public int    ProbeTimeoutMs         { get; set; } = 3000;
-    public bool   AutoConnectEnabled     { get; set; } = true;
-
-    // Last paired BLE device id — restored into the Bluetooth dropdown so the
-    // user can reconnect to "their" pack with one click after relaunch.
-    public string LastBluetoothDeviceId   { get; set; } = "";
-    public string LastBluetoothDeviceName { get; set; } = "";
+    // AI service settings
+    public string AiApiUrl       { get; set; } = "https://api.deepseek.com";
+    public string AiApiKey       { get; set; } = "";
+    public string AiModel        { get; set; } = "deepseek-v4-flash";
+    public string AiSystemPrompt { get; set; } = "You are a helpful assistant integrated in TLIG Dashboard, an industrial HMI dashboard and AI connector.";
 
     // Display units selected from the title-bar customize menu.
     public string TemperatureUnit         { get; set; } = "C";
@@ -55,7 +44,7 @@ public class AppSettings
 
 public static class AppSettingsService
 {
-    private static readonly string[] _supportedLanguages = ["id", "ms", "en", "nl", "zh"];
+    private static readonly string[] _supportedLanguages = ["id", "en"];
     private static readonly string _path = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "TLIGDashboard", "settings.json");
@@ -78,6 +67,15 @@ public static class AppSettingsService
             {
                 settings = JsonSerializer.Deserialize(File.ReadAllText(_path), AppJsonContext.Default.AppSettings) ?? new();
                 loadedSettingsFile = true;
+
+                // Migration: fix old incorrect URL that had /v1 appended.
+                // DeepSeek endpoint is https://api.deepseek.com/chat/completions
+                // (no /v1 in the base URL).
+                if (settings.AiApiUrl.EndsWith("/v1", StringComparison.OrdinalIgnoreCase))
+                {
+                    settings.AiApiUrl = settings.AiApiUrl[..^3]; // strip trailing /v1
+                    Save(settings);
+                }
             }
         }
         catch { }

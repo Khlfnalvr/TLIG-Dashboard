@@ -361,33 +361,26 @@
                     </Button.Flyout>
                 </Button>
 
-                <!--
-                    Serial channel picker — sits to the left of the language /
-                    theme buttons. Opens a flyout where the user can pick the
-                    COM port + baud rate and connect to the ESP32 without
-                    leaving the current page. The small dot at the bottom-right
-                    indicates live connection state.
-                -->
-                <Button x:Name="SerialBtn"
+                <!-- OPC UA connection button — opens a flyout with endpoint URL,
+                     security mode, and credentials. The status dot reflects live
+                     connection state (green = connected, grey = disconnected). -->
+                <Button x:Name="OpcUaBtn"
                         Style="{StaticResource CaptionButtonStyle}">
                     <Grid>
                         <FontIcon FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
                                   FontSize="14"
-                                  Glyph="&#xE839;"/>
-                        <Ellipse x:Name="SerialStatusDot"
+                                  Glyph="&#xE968;"/>
+                        <Ellipse x:Name="OpcStatusDot"
                                  Width="6" Height="6"
                                  HorizontalAlignment="Right"
                                  VerticalAlignment="Bottom"
                                  Margin="0,0,10,6"/>
                     </Grid>
                     <Button.Flyout>
-                        <Flyout x:Name="SerialFlyout" Placement="Bottom">
+                        <Flyout x:Name="OpcUaFlyout"
+                                Placement="Bottom"
+                                Opened="OpcUaFlyout_Opened">
                             <Flyout.FlyoutPresenterStyle>
-                                <!-- Tight padding + explicit theme corner radius. A bare
-                                     <Style TargetType="FlyoutPresenter"> with no Template
-                                     setter drops the platform's rounded-corner default,
-                                     so we re-state CornerRadius from OverlayCornerRadius
-                                     and add a hairline border to match the original look. -->
                                 <Style TargetType="FlyoutPresenter">
                                     <Setter Property="Padding"         Value="12,0,12,12"/>
                                     <Setter Property="CornerRadius"    Value="{ThemeResource OverlayCornerRadius}"/>
@@ -395,107 +388,145 @@
                                     <Setter Property="BorderThickness" Value="1"/>
                                 </Style>
                             </Flyout.FlyoutPresenterStyle>
-                            <StackPanel Width="300" Spacing="5">
 
-                                <!-- Tab selector: Serial / Bluetooth. Index 0
-                                     shows the original serial picker; index 1
-                                     reveals the BLE device list. -->
-                                <SelectorBar x:Name="ConnTabs"
-                                             SelectionChanged="ConnTabs_SelectionChanged">
-                                    <SelectorBarItem x:Name="ConnTabSerial"
-                                                     FontSize="12"
-                                                     Padding="12,4,12,4"
-                                                     Text="{x:Bind Lang.Ui_TabSerial, Mode=OneWay}"/>
-                                    <SelectorBarItem x:Name="ConnTabBluetooth"
-                                                     FontSize="12"
-                                                     Padding="12,4,12,4"
-                                                     Text="{x:Bind Lang.Ui_TabBluetooth, Mode=OneWay}"/>
+                            <StackPanel Width="300" Spacing="8" Padding="0,4,0,0">
+
+                                <!-- ── Tab selector ──────────────────────── -->
+                                <SelectorBar x:Name="ConnAiTabs"
+                                             SelectionChanged="ConnAiTabs_SelectionChanged">
+                                    <SelectorBarItem x:Name="TabOpcUa"
+                                                     FontSize="12" Padding="12,4,12,4"
+                                                     Text="{x:Bind Lang.Ui_OpcUaConnection, Mode=OneWay}"/>
+                                    <SelectorBarItem x:Name="TabAiApi"
+                                                     FontSize="12" Padding="12,4,12,4"
+                                                     Text="{x:Bind Lang.Ai_Settings, Mode=OneWay}"/>
                                 </SelectorBar>
 
-                                <!-- ───── SERIAL TAB ───────────────────────── -->
-                                <StackPanel x:Name="CapSerialPanel" Spacing="10">
-                                    <TextBlock Text="{x:Bind Lang.Ui_SerialConnection, Mode=OneWay}"
-                                               FontWeight="SemiBold" FontSize="12"/>
+                                <!-- ══ OPC UA PANEL ══════════════════════════ -->
+                                <StackPanel x:Name="PanelOpcUa" Spacing="10">
 
-                                    <!-- Channel row + refresh -->
-                                    <Grid ColumnSpacing="6">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="Auto"/>
-                                        </Grid.ColumnDefinitions>
-                                        <ComboBox Grid.Column="0"
-                                                  x:Name="CapSerialPort"
+                                    <!-- Endpoint URL -->
+                                    <StackPanel Spacing="3">
+                                        <TextBlock Text="{x:Bind Lang.Ui_OpcUaEndpoint, Mode=OneWay}"
+                                                   FontSize="11" Opacity="0.65"/>
+                                        <TextBox x:Name="OpcEndpointBox"
+                                                 FontSize="12"
+                                                 PlaceholderText="opc.tcp://host:4840"/>
+                                    </StackPanel>
+
+                                    <!-- Security Mode -->
+                                    <StackPanel Spacing="3">
+                                        <TextBlock Text="{x:Bind Lang.Ui_OpcUaSecurity, Mode=OneWay}"
+                                                   FontSize="11" Opacity="0.65"/>
+                                        <ComboBox x:Name="OpcSecurityCombo"
                                                   FontSize="12"
                                                   HorizontalAlignment="Stretch"
-                                                  PlaceholderText="{x:Bind Lang.Ctrl_PhScanning, Mode=OneWay}"/>
-                                        <Button Grid.Column="1"
-                                                x:Name="CapRefreshBtn"
-                                                Padding="8,6"
-                                                ToolTipService.ToolTip="{x:Bind Lang.Ctrl_Refresh, Mode=OneWay}"
-                                                Click="CapRefresh_Click">
-                                            <FontIcon FontFamily="Segoe MDL2 Assets" Glyph="&#xE72C;" FontSize="12"/>
-                                        </Button>
-                                    </Grid>
+                                                  SelectionChanged="OpcSecurityCombo_SelectionChanged">
+                                            <ComboBoxItem x:Name="OpcSecNone"    Tag="None"/>
+                                            <ComboBoxItem x:Name="OpcSecSign"    Tag="Sign"/>
+                                            <ComboBoxItem x:Name="OpcSecSignEnc" Tag="SignAndEncrypt"/>
+                                        </ComboBox>
+                                    </StackPanel>
 
-                                    <!-- Bitrate row -->
-                                    <ComboBox x:Name="CapSerialBaud"
-                                              FontSize="12"
-                                              HorizontalAlignment="Stretch"/>
+                                    <!-- Authentication -->
+                                    <StackPanel Spacing="3">
+                                        <TextBlock Text="{x:Bind Lang.Ui_OpcUaAuth, Mode=OneWay}"
+                                                   FontSize="11" Opacity="0.65"/>
+                                        <ComboBox x:Name="OpcAuthCombo"
+                                                  FontSize="12"
+                                                  HorizontalAlignment="Stretch"
+                                                  SelectionChanged="OpcAuthCombo_SelectionChanged">
+                                            <ComboBoxItem x:Name="OpcAuthAnon" Tag="Anonymous"/>
+                                            <ComboBoxItem x:Name="OpcAuthUser" Tag="Username"/>
+                                        </ComboBox>
+                                    </StackPanel>
+
+                                    <!-- Username / Password -->
+                                    <StackPanel x:Name="OpcCredPanel"
+                                                Spacing="6"
+                                                Visibility="Collapsed">
+                                        <TextBox x:Name="OpcUsernameBox"
+                                                 FontSize="12"
+                                                 PlaceholderText="{x:Bind Lang.Ui_OpcUaUsername, Mode=OneWay}"/>
+                                        <PasswordBox x:Name="OpcPasswordBox"
+                                                     FontSize="12"
+                                                     PlaceholderText="{x:Bind Lang.Ui_OpcUaPassword, Mode=OneWay}"/>
+                                    </StackPanel>
 
                                     <!-- Connect / Disconnect -->
-                                    <Button x:Name="CapConnectBtn"
+                                    <Button x:Name="OpcConnectBtn"
                                             FontSize="12"
                                             HorizontalAlignment="Stretch"
                                             Style="{ThemeResource AccentButtonStyle}"
-                                            Click="CapConnectBtn_Click"
+                                            Click="OpcConnectBtn_Click"
                                             Content="{x:Bind Lang.Ctrl_Connect, Mode=OneWay}"/>
 
                                     <!-- Status -->
-                                    <TextBlock x:Name="CapConnStatus"
+                                    <TextBlock x:Name="OpcStatusText"
                                                FontSize="11" Opacity="0.7"
                                                TextWrapping="Wrap"
                                                Text="{x:Bind Lang.Ctrl_NotConnected, Mode=OneWay}"/>
+
                                 </StackPanel>
 
-                                <!-- ───── BLUETOOTH TAB ────────────────────── -->
-                                <StackPanel x:Name="CapBtPanel" Spacing="10" Visibility="Collapsed">
-                                    <TextBlock Text="{x:Bind Lang.Ui_BluetoothConnection, Mode=OneWay}"
-                                               FontWeight="SemiBold" FontSize="12"/>
+                                <!-- ══ AI API PANEL ══════════════════════════ -->
+                                <StackPanel x:Name="PanelAiApi"
+                                            Spacing="10"
+                                            Visibility="Collapsed">
 
-                                    <!-- Device row + scan toggle -->
-                                    <Grid ColumnSpacing="6">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="Auto"/>
-                                        </Grid.ColumnDefinitions>
-                                        <ComboBox Grid.Column="0"
-                                                  x:Name="CapBtDevice"
-                                                  FontSize="12"
-                                                  HorizontalAlignment="Stretch"
-                                                  PlaceholderText="{x:Bind Lang.Ctrl_BtPhNoDevices, Mode=OneWay}"/>
-                                        <Button Grid.Column="1"
-                                                x:Name="CapBtScanBtn"
-                                                Padding="8,6"
-                                                ToolTipService.ToolTip="{x:Bind Lang.Ctrl_BtScan, Mode=OneWay}"
-                                                Click="CapBtScanBtn_Click">
-                                            <FontIcon FontFamily="Segoe MDL2 Assets" Glyph="&#xE895;" FontSize="12"/>
-                                        </Button>
-                                    </Grid>
+                                    <!-- Server URL -->
+                                    <StackPanel Spacing="3">
+                                        <TextBlock Text="{x:Bind Lang.Ai_ApiUrl, Mode=OneWay}"
+                                                   FontSize="11" Opacity="0.65"/>
+                                        <TextBox x:Name="AiApiUrlBox"
+                                                 FontSize="12"
+                                                 PlaceholderText="https://api.deepseek.com"/>
+                                    </StackPanel>
 
-                                    <!-- Connect / Disconnect -->
-                                    <Button x:Name="CapBtConnectBtn"
+                                    <!-- API Key -->
+                                    <StackPanel Spacing="3">
+                                        <TextBlock Text="{x:Bind Lang.Ai_ApiKey, Mode=OneWay}"
+                                                   FontSize="11" Opacity="0.65"/>
+                                        <PasswordBox x:Name="AiApiKeyBox"
+                                                     FontSize="12"
+                                                     PlaceholderText="sk-..."/>
+                                    </StackPanel>
+
+                                    <!-- Model -->
+                                    <StackPanel Spacing="3">
+                                        <TextBlock Text="{x:Bind Lang.Ai_Model, Mode=OneWay}"
+                                                   FontSize="11" Opacity="0.65"/>
+                                        <TextBox x:Name="AiModelBox"
+                                                 FontSize="12"
+                                                 PlaceholderText="deepseek-chat"/>
+                                    </StackPanel>
+
+                                    <!-- System Prompt -->
+                                    <StackPanel Spacing="3">
+                                        <TextBlock Text="{x:Bind Lang.Ai_SystemPrompt, Mode=OneWay}"
+                                                   FontSize="11" Opacity="0.65"/>
+                                        <TextBox x:Name="AiSysPromptBox"
+                                                 FontSize="12"
+                                                 AcceptsReturn="True"
+                                                 TextWrapping="Wrap"
+                                                 MaxHeight="80"/>
+                                    </StackPanel>
+
+                                    <!-- Save AI Settings -->
+                                    <Button x:Name="AiSaveBtn"
                                             FontSize="12"
                                             HorizontalAlignment="Stretch"
                                             Style="{ThemeResource AccentButtonStyle}"
-                                            Click="CapBtConnectBtn_Click"
-                                            Content="{x:Bind Lang.Ctrl_BtConnect, Mode=OneWay}"/>
+                                            Click="AiSaveBtn_Click"
+                                            Content="{x:Bind Lang.Ai_SaveSettings, Mode=OneWay}"/>
 
-                                    <!-- Status -->
-                                    <TextBlock x:Name="CapBtStatus"
+                                    <!-- AI status indicator -->
+                                    <TextBlock x:Name="AiStatusText"
                                                FontSize="11" Opacity="0.7"
-                                               TextWrapping="Wrap"
-                                               Text="{x:Bind Lang.Ctrl_NotConnected, Mode=OneWay}"/>
+                                               TextWrapping="Wrap"/>
+
                                 </StackPanel>
+
                             </StackPanel>
                         </Flyout>
                     </Button.Flyout>
@@ -524,97 +555,32 @@
             </StackPanel>
         </Border>
 
-        <!-- ── Playback bar (Row 1, hidden when no file is loaded) ─────── -->
-        <Border x:Name="PlaybackBar"
-                Grid.Row="1"
-                Padding="12,6,12,6"
-                BorderThickness="0,1,0,0"
-                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                Background="{ThemeResource LayerFillColorDefaultBrush}"
-                Visibility="Collapsed">
-            <Grid ColumnSpacing="10">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto"/>   <!-- transport buttons -->
-                    <ColumnDefinition Width="*"/>       <!-- slider + labels -->
-                    <ColumnDefinition Width="Auto"/>   <!-- close button -->
-                </Grid.ColumnDefinitions>
-
-                <!-- Transport buttons -->
-                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="2"
-                            VerticalAlignment="Center">
-                    <Button x:Name="PbFirstBtn" Padding="8,6"
-                            ToolTipService.ToolTip="First frame"
-                            Click="PbFirst_Click">
-                        <FontIcon FontFamily="Segoe MDL2 Assets" Glyph="&#xE892;" FontSize="14"/>
-                    </Button>
-                    <Button x:Name="PbPlayPauseBtn" Padding="10,6"
-                            Style="{ThemeResource AccentButtonStyle}"
-                            ToolTipService.ToolTip="Play / Pause"
-                            Click="PbPlayPause_Click">
-                        <FontIcon x:Name="PbPlayPauseIcon"
-                                  FontFamily="Segoe MDL2 Assets" Glyph="&#xE768;" FontSize="14"/>
-                    </Button>
-                    <Button x:Name="PbLastBtn" Padding="8,6"
-                            ToolTipService.ToolTip="Last frame"
-                            Click="PbLast_Click">
-                        <FontIcon FontFamily="Segoe MDL2 Assets" Glyph="&#xE893;" FontSize="14"/>
-                    </Button>
-                </StackPanel>
-
-                <!-- Scrub area: file name + frame counter + slider -->
-                <StackPanel Grid.Column="1" Spacing="0" VerticalAlignment="Center">
-                    <Grid>
-                        <TextBlock x:Name="PbFileText"
-                                   FontSize="10" FontWeight="SemiBold" Opacity="0.7"
-                                   HorizontalAlignment="Left" VerticalAlignment="Center"/>
-                        <TextBlock x:Name="PbFrameText"
-                                   FontSize="10" Opacity="0.5" FontFamily="Consolas"
-                                   HorizontalAlignment="Right" VerticalAlignment="Center"/>
-                    </Grid>
-                    <Slider x:Name="PbSlider"
-                            Minimum="0" Maximum="100" Value="0"
-                            HorizontalAlignment="Stretch"
-                            Margin="0,-4,0,-6"
-                            ValueChanged="PbSlider_ValueChanged"/>
-                </StackPanel>
-
-                <!-- Unload (close) button -->
-                <Button Grid.Column="2" Padding="8,6"
-                        VerticalAlignment="Center"
-                        ToolTipService.ToolTip="Unload file and return to live mode"
-                        Click="PbClose_Click">
-                    <FontIcon FontFamily="Segoe MDL2 Assets" Glyph="&#xE8BB;" FontSize="12"/>
-                </Button>
-            </Grid>
-        </Border>
-
-        <!-- ── Status bar (Row 2) ─────────────────────────────────────── -->
+        <!-- ── Status bar (Row 2) — shown only when NOT connected ──────── -->
         <Border x:Name="StatusBar"
                 Grid.Row="2"
-                Padding="16,5"
+                Padding="14,6"
                 BorderThickness="0,1,0,0"
-                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
-                <TextBlock Grid.Column="0"
-                           Text="{x:Bind ViewModel.DataSourceText, Mode=OneWay}"
+                BorderBrush="#E6A817"
+                Background="#FFF4CE"
+                Visibility="{x:Bind ViewModel.StatusBarVisibility, Mode=OneWay}">
+            <StackPanel Orientation="Horizontal"
+                        VerticalAlignment="Center"
+                        Spacing="10">
+                <FontIcon FontFamily="Segoe Fluent Icons"
+                          Glyph="&#xE7BA;"
+                          FontSize="14"
+                          Foreground="#9D5700"
+                          VerticalAlignment="Center"/>
+                <TextBlock Text="{x:Bind ViewModel.DataSourceText, Mode=OneWay}"
                            FontSize="11" FontWeight="SemiBold"
-                           Opacity="0.55" CharacterSpacing="80"
-                           VerticalAlignment="Center"
-                           Margin="0,0,16,0"/>
-                <TextBlock Grid.Column="1"
-                           Text="{x:Bind ViewModel.ConnectionStatus, Mode=OneWay}"
-                           FontSize="12" Opacity="0.65"
+                           Foreground="#9D5700"
+                           CharacterSpacing="80"
                            VerticalAlignment="Center"/>
-                <TextBlock Grid.Column="2" x:Name="ClockText"
-                           FontSize="12" Opacity="0.45"
+                <TextBlock Text="{x:Bind ViewModel.ConnectionStatus, Mode=OneWay}"
+                           FontSize="12"
+                           Foreground="#7A4200"
                            VerticalAlignment="Center"/>
-            </Grid>
+            </StackPanel>
         </Border>
 
         <!--  Update dialog overlay  -->
