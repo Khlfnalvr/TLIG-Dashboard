@@ -10,7 +10,6 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>   <!-- playback bar -->
-            <RowDefinition Height="Auto"/>   <!-- status bar -->
         </Grid.RowDefinitions>
 
         <NavigationView
@@ -87,6 +86,13 @@
                         </TextBlock.RenderTransform>
                     </TextBlock>
                 </NavigationViewItem>
+                <NavigationViewItem x:Name="NavLearningAnalytic" Tag="LearningAnalytic" MinWidth="0" MinHeight="32" Height="32" Padding="0,0,0,2" VerticalContentAlignment="Center">
+                    <TextBlock Text="{x:Bind Lang.Nav_LearningAnalytic, Mode=OneWay}" FontSize="12" VerticalAlignment="Center">
+                        <TextBlock.RenderTransform>
+                            <TranslateTransform Y="-3"/>
+                        </TextBlock.RenderTransform>
+                    </TextBlock>
+                </NavigationViewItem>
                 <NavigationViewItem x:Name="NavAI"         Tag="AI"         MinWidth="0" MinHeight="32" Height="32" Padding="0,0,0,2" VerticalContentAlignment="Center">
                     <TextBlock Text="{x:Bind Lang.Nav_AI, Mode=OneWay}" FontSize="12" VerticalAlignment="Center">
                         <TextBlock.RenderTransform>
@@ -133,6 +139,12 @@
                                               Tag="LiveView"
                                               IsChecked="True"
                                               Click="ViewNavToggle_Click"/>
+                        <ToggleMenuFlyoutItem x:Name="ViewNavLearningAnalytic"
+                                              FontSize="12"
+                                              Text="{x:Bind Lang.Nav_LearningAnalytic, Mode=OneWay}"
+                                              Tag="LearningAnalytic"
+                                              IsChecked="True"
+                                              Click="ViewNavToggle_Click"/>
                         <ToggleMenuFlyoutItem x:Name="ViewNavAI"
                                               FontSize="12"
                                               Text="{x:Bind Lang.Nav_AI, Mode=OneWay}"
@@ -140,58 +152,7 @@
                                               IsChecked="True"
                                               Click="ViewNavToggle_Click"/>
                     </MenuFlyoutSubItem>
-                    <MenuFlyoutSubItem x:Name="MenuUnit"
-                                       FontSize="12"
-                                       Text="{x:Bind Lang.Ui_Menu_Unit, Mode=OneWay}">
-                        <MenuFlyoutSubItem x:Name="MenuUnitTemperature"
-                                           FontSize="12"
-                                           Text="{x:Bind Lang.Ui_Menu_Temperature, Mode=OneWay}">
-                            <RadioMenuFlyoutItem x:Name="UnitTempC"
-                                                 FontSize="12"
-                                                 Text="°C"
-                                                 Tag="C"
-                                                 GroupName="TemperatureUnitGroup"
-                                                 Click="UnitTemperature_Click"/>
-                            <RadioMenuFlyoutItem x:Name="UnitTempF"
-                                                 FontSize="12"
-                                                 Text="°F"
-                                                 Tag="F"
-                                                 GroupName="TemperatureUnitGroup"
-                                                 Click="UnitTemperature_Click"/>
-                        </MenuFlyoutSubItem>
-                        <MenuFlyoutSubItem x:Name="MenuUnitVoltage"
-                                           FontSize="12"
-                                           Text="{x:Bind Lang.Ui_Menu_Voltage, Mode=OneWay}">
-                            <RadioMenuFlyoutItem x:Name="UnitVoltageV"
-                                                 FontSize="12"
-                                                 Text="V"
-                                                 Tag="V"
-                                                 GroupName="VoltageUnitGroup"
-                                                 Click="UnitVoltage_Click"/>
-                            <RadioMenuFlyoutItem x:Name="UnitVoltageMv"
-                                                 FontSize="12"
-                                                 Text="mV"
-                                                 Tag="mV"
-                                                 GroupName="VoltageUnitGroup"
-                                                 Click="UnitVoltage_Click"/>
-                        </MenuFlyoutSubItem>
-                        <MenuFlyoutSubItem x:Name="MenuUnitCapacity"
-                                           FontSize="12"
-                                           Text="{x:Bind Lang.Ui_Menu_Capacity, Mode=OneWay}">
-                            <RadioMenuFlyoutItem x:Name="UnitCapacityMah"
-                                                 FontSize="12"
-                                                 Text="mAh"
-                                                 Tag="mAh"
-                                                 GroupName="CapacityUnitGroup"
-                                                 Click="UnitCapacity_Click"/>
-                            <RadioMenuFlyoutItem x:Name="UnitCapacityAh"
-                                                 FontSize="12"
-                                                 Text="Ah"
-                                                 Tag="Ah"
-                                                 GroupName="CapacityUnitGroup"
-                                                 Click="UnitCapacity_Click"/>
-                        </MenuFlyoutSubItem>
-                    </MenuFlyoutSubItem>
+
                     <MenuFlyoutSubItem x:Name="MenuZoom"
                                        FontSize="12"
                                        Text="{x:Bind Lang.Ui_Menu_Zoom, Mode=OneWay}">
@@ -400,6 +361,8 @@
                                     <SelectorBarItem x:Name="TabAiApi"
                                                      FontSize="12" Padding="12,4,12,4"
                                                      Text="{x:Bind Lang.Ai_Settings, Mode=OneWay}"/>
+                                    <SelectorBarItem x:Name="TabShare"
+                                                     FontSize="12" Padding="12,4,12,4"/>
                                 </SelectorBar>
 
                                 <!-- ══ OPC UA PANEL ══════════════════════════ -->
@@ -527,6 +490,84 @@
 
                                 </StackPanel>
 
+                                <!-- ══ BROADCAST PANEL (server flavor) ══════════ -->
+                                <StackPanel x:Name="PanelBroadcast"
+                                            Spacing="10"
+                                            Visibility="Collapsed">
+                                    <Grid ColumnSpacing="8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" Spacing="3">
+                                            <TextBlock Text="{x:Bind Lang.Share_Port, Mode=OneWay}"
+                                                       FontSize="11" Opacity="0.65"/>
+                                            <TextBox x:Name="SharePortBox" FontSize="12" Text="8088"/>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="1" Spacing="3">
+                                            <TextBlock Text="{x:Bind Lang.Share_Token, Mode=OneWay}"
+                                                       FontSize="11" Opacity="0.65"/>
+                                            <TextBox x:Name="ShareTokenBox" FontSize="12"/>
+                                        </StackPanel>
+                                    </Grid>
+
+                                    <CheckBox x:Name="ShareCameraCheck"
+                                              FontSize="12" IsChecked="True"
+                                              Content="{x:Bind Lang.Share_ShareCamera, Mode=OneWay}"/>
+                                    <CheckBox x:Name="ShareHmiCheck"
+                                              FontSize="12" IsChecked="True"
+                                              Content="{x:Bind Lang.Share_ShareHmi, Mode=OneWay}"/>
+
+                                    <Button x:Name="ShareStartBtn"
+                                            FontSize="12"
+                                            HorizontalAlignment="Stretch"
+                                            Style="{ThemeResource AccentButtonStyle}"
+                                            Click="ShareStartBtn_Click"/>
+
+                                    <TextBlock x:Name="ShareServerStatusText"
+                                               FontSize="11" Opacity="0.7"
+                                               TextWrapping="Wrap"/>
+
+                                    <!-- Address info: LAN + Public IP -->
+                                    <StackPanel Spacing="2">
+                                        <TextBlock x:Name="ShareLocalAddrText"
+                                                   FontSize="11" Opacity="0.55"
+                                                   TextWrapping="Wrap"/>
+                                        <TextBlock x:Name="SharePublicAddrText"
+                                                   FontSize="11" Opacity="0.55"
+                                                   TextWrapping="Wrap"
+                                                   Visibility="Collapsed"/>
+                                    </StackPanel>
+                                </StackPanel>
+
+                                <!-- ══ CONNECT PANEL (client flavor) ════════════ -->
+                                <StackPanel x:Name="PanelConnect"
+                                            Spacing="10"
+                                            Visibility="Collapsed">
+                                    <StackPanel Spacing="3">
+                                        <TextBlock Text="{x:Bind Lang.Share_ServerHost, Mode=OneWay}"
+                                                   FontSize="11" Opacity="0.65"/>
+                                        <TextBox x:Name="ServerHostBox"
+                                                 FontSize="12"
+                                                 PlaceholderText="192.168.1.10:8088"/>
+                                    </StackPanel>
+                                    <StackPanel Spacing="3">
+                                        <TextBlock Text="{x:Bind Lang.Share_Token, Mode=OneWay}"
+                                                   FontSize="11" Opacity="0.65"/>
+                                        <TextBox x:Name="ServerTokenBox" FontSize="12"/>
+                                    </StackPanel>
+
+                                    <Button x:Name="ConnectServerBtn"
+                                            FontSize="12"
+                                            HorizontalAlignment="Stretch"
+                                            Style="{ThemeResource AccentButtonStyle}"
+                                            Click="ConnectServerBtn_Click"/>
+
+                                    <TextBlock x:Name="ClientStatusText"
+                                               FontSize="11" Opacity="0.7"
+                                               TextWrapping="Wrap"/>
+                                </StackPanel>
+
                             </StackPanel>
                         </Flyout>
                     </Button.Flyout>
@@ -555,33 +596,32 @@
             </StackPanel>
         </Border>
 
-        <!-- ── Status bar (Row 2) — shown only when NOT connected ──────── -->
-        <Border x:Name="StatusBar"
-                Grid.Row="2"
-                Padding="14,6"
-                BorderThickness="0,1,0,0"
-                BorderBrush="#E6A817"
-                Background="#FFF4CE"
-                Visibility="{x:Bind ViewModel.StatusBarVisibility, Mode=OneWay}">
-            <StackPanel Orientation="Horizontal"
-                        VerticalAlignment="Center"
-                        Spacing="10">
-                <FontIcon FontFamily="Segoe Fluent Icons"
-                          Glyph="&#xE7BA;"
-                          FontSize="14"
-                          Foreground="#9D5700"
-                          VerticalAlignment="Center"/>
-                <TextBlock Text="{x:Bind ViewModel.DataSourceText, Mode=OneWay}"
-                           FontSize="11" FontWeight="SemiBold"
-                           Foreground="#9D5700"
-                           CharacterSpacing="80"
-                           VerticalAlignment="Center"/>
-                <TextBlock Text="{x:Bind ViewModel.ConnectionStatus, Mode=OneWay}"
-                           FontSize="12"
-                           Foreground="#7A4200"
-                           VerticalAlignment="Center"/>
-            </StackPanel>
-        </Border>
+        <!-- Standard WinUI InfoBar: inline, themed by Severity, and not docked as a bottom status bar. -->
+        <InfoBar x:Name="StatusInfoBar"
+                 Grid.Row="0"
+                 HorizontalAlignment="Center"
+                 VerticalAlignment="Top"
+                 MinWidth="320"
+                 MaxWidth="600"
+                 Margin="16,44,16,0"
+                 IsOpen="{x:Bind ViewModel.StatusInfoBarIsOpen, Mode=OneWay}"
+                 IsClosable="True"
+                 Severity="Warning"
+                 Title="{x:Bind ViewModel.DataSourceText, Mode=OneWay}"
+                 Message="{x:Bind ViewModel.ConnectionStatus, Mode=OneWay}">
+            <InfoBar.Resources>
+                <!-- Override InfoBar internal text styles to match the compact UI -->
+                <Style x:Key="InfoBarTitleStyle" TargetType="TextBlock">
+                    <Setter Property="FontSize" Value="11"/>
+                    <Setter Property="FontWeight" Value="SemiBold"/>
+                    <Setter Property="TextWrapping" Value="Wrap"/>
+                </Style>
+                <Style x:Key="InfoBarBodyStyle" TargetType="TextBlock">
+                    <Setter Property="FontSize" Value="11"/>
+                    <Setter Property="TextWrapping" Value="Wrap"/>
+                </Style>
+            </InfoBar.Resources>
+        </InfoBar>
 
         <!--  Update dialog overlay  -->
         <Grid x:Name="UpdateOverlay"

@@ -13,6 +13,19 @@ public class AppSettings
     public int    OpcUaPublishingIntervalMs { get; set; } = 1000;
     public OpcUaNodeConfig OpcUaNodeConfig { get; set; } = new();
 
+    // ── Sharing: server side ──────────────────────────────────────────────
+    // The server broadcasts its camera + HMI screen and proxies AI chat.
+    public int    SharePort   { get; set; } = 8088;   // TCP port the share server listens on
+    public string ShareToken  { get; set; } = "";     // access token clients must present (auto-generated if empty)
+    public bool   ShareCamera { get; set; } = true;    // broadcast the live camera
+    public bool   ShareHmi    { get; set; } = true;    // broadcast the HMI screen share
+    public bool   ShareAutoStart { get; set; } = false; // start the server automatically on launch
+
+    // ── Sharing: client side ──────────────────────────────────────────────
+    // The client connects to a server to receive its stream + AI proxy.
+    public string ServerHost  { get; set; } = "";      // e.g. "192.168.1.10:8088"
+    public string ServerToken { get; set; } = "";      // token issued by the server
+
     // AI service settings
     public string AiApiUrl       { get; set; } = "https://api.deepseek.com";
     public string AiApiKey       { get; set; } = "";
@@ -32,6 +45,7 @@ public class AppSettings
     public bool   ShowNav_Playback       { get; set; } = true;
     public bool   ShowNav_Parameter      { get; set; } = true;
     public bool   ShowNav_LiveView       { get; set; } = true;
+    public bool   ShowNav_LearningAnalytic { get; set; } = true;
     public bool   ShowNav_AI             { get; set; } = true;
 
     // UI zoom level (1.0 = 100%). Adjusted via the Zoom menu / Ctrl +/-/0.

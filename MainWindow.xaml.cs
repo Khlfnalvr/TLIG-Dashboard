@@ -44,6 +44,7 @@ public sealed partial class MainWindow : Window
         { "Dashboard", typeof(DashboardPage) },
         { "Parameter", typeof(ParameterPage) },
         { "LiveView",  typeof(LiveViewPage) },
+        { "LearningAnalytic", typeof(LearningAnalyticPage) },
         { "AI",        typeof(AIPage) }
     };
 
@@ -63,7 +64,7 @@ public sealed partial class MainWindow : Window
     {
         ViewModel = new MainViewModel(DispatcherQueue);
         InitializeComponent();
-        Title = "TLIG Dashboard";
+        Title = AppProductName;
 
         ApplyMicaBackdrop();
         InitializeTitleBar();
@@ -84,13 +85,12 @@ public sealed partial class MainWindow : Window
             ViewModel.RefreshLocalizedText();
             RefreshThemeButtonTooltip();
             UpdateLangMenuState();
-            UpdateUnitMenuState();
+            UpdateAccountFlyoutText();
             if (TourOverlay.Visibility == Visibility.Visible)
                 ShowTourOverlay();
             Bindings.Update();
         };
         UpdateLangMenuState();
-        UpdateUnitMenuState();
 
         InitOpcUaFlyout();
 
@@ -390,8 +390,8 @@ public sealed partial class MainWindow : Window
     {
         if (ContentFrame?.Content is FrameworkElement page)
             ScaleFontsInTree(page, _zoomLevel);
-        if (StatusBar is not null)
-            ScaleFontsInTree(StatusBar, _zoomLevel);
+        if (StatusInfoBar is not null)
+            ScaleFontsInTree(StatusInfoBar, _zoomLevel);
     }
 
     private void ScaleFontsInTree(DependencyObject? node, double scale)
@@ -460,44 +460,6 @@ public sealed partial class MainWindow : Window
             Lang.CurrentLanguage = tag;
     }
 
-    // ── Unit menu ─────────────────────────────────────────────────────────
-    private void UpdateUnitMenuState()
-    {
-        UnitTempC.IsChecked = ViewModel.TemperatureUnit == "C";
-        UnitTempF.IsChecked = ViewModel.TemperatureUnit == "F";
-        UnitVoltageV.IsChecked = ViewModel.VoltageUnit == "V";
-        UnitVoltageMv.IsChecked = ViewModel.VoltageUnit == "mV";
-        UnitCapacityMah.IsChecked = ViewModel.CapacityUnit == "mAh";
-        UnitCapacityAh.IsChecked = ViewModel.CapacityUnit == "Ah";
-    }
-
-    private void UnitTemperature_Click(object sender, RoutedEventArgs e)
-    {
-        if (sender is not RadioMenuFlyoutItem item || item.Tag is not string unit)
-            return;
-
-        ViewModel.SetTemperatureUnit(unit);
-        UpdateUnitMenuState();
-    }
-
-    private void UnitVoltage_Click(object sender, RoutedEventArgs e)
-    {
-        if (sender is not RadioMenuFlyoutItem item || item.Tag is not string unit)
-            return;
-
-        ViewModel.SetVoltageUnit(unit);
-        UpdateUnitMenuState();
-    }
-
-    private void UnitCapacity_Click(object sender, RoutedEventArgs e)
-    {
-        if (sender is not RadioMenuFlyoutItem item || item.Tag is not string unit)
-            return;
-
-        ViewModel.SetCapacityUnit(unit);
-        UpdateUnitMenuState();
-    }
-
     // ── Navigation ────────────────────────────────────────────────────────
     private void NavView_Loaded(object sender, RoutedEventArgs e)
     {
@@ -536,6 +498,7 @@ public sealed partial class MainWindow : Window
         (NavDashboard, ViewNavDashboard),
         (NavParameter, ViewNavParameter),
         (NavLiveView,  ViewNavLiveView),
+        (NavLearningAnalytic, ViewNavLearningAnalytic),
         (NavAI,        ViewNavAI),
     ];
 
@@ -545,6 +508,7 @@ public sealed partial class MainWindow : Window
         ApplyNavVisibility(NavDashboard, ViewNavDashboard, s.ShowNav_Dashboard);
         ApplyNavVisibility(NavParameter, ViewNavParameter, s.ShowNav_Parameter);
         ApplyNavVisibility(NavLiveView,  ViewNavLiveView,  s.ShowNav_LiveView);
+        ApplyNavVisibility(NavLearningAnalytic, ViewNavLearningAnalytic, s.ShowNav_LearningAnalytic);
         ApplyNavVisibility(NavAI,        ViewNavAI,        s.ShowNav_AI);
     }
 
@@ -593,6 +557,7 @@ public sealed partial class MainWindow : Window
         s.ShowNav_Dashboard = ViewNavDashboard.IsChecked;
         s.ShowNav_Parameter = ViewNavParameter.IsChecked;
         s.ShowNav_LiveView  = ViewNavLiveView.IsChecked;
+        s.ShowNav_LearningAnalytic = ViewNavLearningAnalytic.IsChecked;
         s.ShowNav_AI        = ViewNavAI.IsChecked;
         s.Language          = Lang.CurrentLanguage;
         AppSettingsService.Save(s);
@@ -627,6 +592,7 @@ public sealed partial class MainWindow : Window
         if (user == "admin" && pass == "admin")
         {
             _loggedInUser = user;
+            UpdateAccountFlyoutText();
             LoginOverlay.Visibility = Visibility.Collapsed;
             LoginErrorText.Visibility = Visibility.Collapsed;
         }
@@ -663,13 +629,23 @@ public sealed partial class MainWindow : Window
 
     private void AccountFlyout_Opening(object sender, object e)
     {
-        AccountUsernameText.Text = _loggedInUser;
+        UpdateAccountFlyoutText();
+    }
+
+    private void UpdateAccountFlyoutText()
+    {
+        bool isLoggedIn = !string.IsNullOrWhiteSpace(_loggedInUser);
+        AccountUsernameText.Text = isLoggedIn
+            ? _loggedInUser
+            : Lang.Account_NotLoggedInYet;
+        LogoutBtn.IsEnabled = isLoggedIn;
     }
 
     private void LogoutBtn_Click(object sender, RoutedEventArgs e)
     {
         AccountFlyout.Hide();
         _loggedInUser = "";
+        UpdateAccountFlyoutText();
         LoginUsernameBox.Text     = "";
         LoginPasswordBox.Password = "";
         LoginErrorText.Visibility = Visibility.Collapsed;
@@ -1567,8 +1543,14 @@ public sealed partial class MainWindow : Window
         UpdateOpcStatusDot();
         SyncOpcConnectButton();
 
-        // Init AI panel values
-        InitAiPanel();
+        // Init AI panel values (server only — client routes through server proxy)
+        if (Services.BuildInfo.IsServer)
+            InitAiPanel();
+        else
+            TabAiApi.Visibility = Visibility.Collapsed;
+
+        // Init sharing panel (broadcast on server, connect on client)
+        InitSharePanel();
 
         // Default tab = OPC UA
         ConnAiTabs.SelectedItem = TabOpcUa;
@@ -1577,6 +1559,11 @@ public sealed partial class MainWindow : Window
         {
             SyncOpcConnectButton();
             UpdateOpcStatusDot();
+            // PLC and field sensors are read over the OPC UA session — drive the
+            // Status System panel (green when connected, red otherwise).
+            bool connected = ViewModel.OpcUa.IsConnected;
+            App.Status.PlcConnected    = connected;
+            App.Status.SensorConnected = connected;
         });
     }
 
@@ -1584,7 +1571,11 @@ public sealed partial class MainWindow : Window
     {
         SyncOpcConnectButton();
         UpdateOpcStatusDot();
-        InitAiPanel();
+        if (Services.BuildInfo.IsServer)
+        {
+            InitAiPanel();
+            RefreshShareLocalAddress();   // IP can change (DHCP/VPN) — refresh on every open
+        }
     }
 
     private void OpcAuthCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -1672,9 +1663,233 @@ public sealed partial class MainWindow : Window
 
     private void ConnAiTabs_SelectionChanged(SelectorBar sender, SelectorBarSelectionChangedEventArgs args)
     {
-        bool isAi = ReferenceEquals(ConnAiTabs.SelectedItem, TabAiApi);
-        PanelOpcUa.Visibility  = isAi ? Visibility.Collapsed : Visibility.Visible;
-        PanelAiApi.Visibility  = isAi ? Visibility.Visible   : Visibility.Collapsed;
+        bool isAi    = ReferenceEquals(ConnAiTabs.SelectedItem, TabAiApi);
+        bool isShare = ReferenceEquals(ConnAiTabs.SelectedItem, TabShare);
+
+        PanelOpcUa.Visibility = (!isAi && !isShare) ? Visibility.Visible : Visibility.Collapsed;
+        PanelAiApi.Visibility = isAi ? Visibility.Visible : Visibility.Collapsed;
+
+        // The share tab shows the broadcast panel on the server flavor and the
+        // connect panel on the client flavor.
+        PanelBroadcast.Visibility = (isShare && Services.BuildInfo.IsServer)
+            ? Visibility.Visible : Visibility.Collapsed;
+        PanelConnect.Visibility   = (isShare && Services.BuildInfo.IsClient)
+            ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    // ── Sharing: server broadcast / client connect ────────────────────────────
+
+    private void InitSharePanel()
+    {
+        TabShare.Text = Services.BuildInfo.IsServer ? Lang.Share_TabBroadcast : Lang.Share_TabConnect;
+
+        var s = AppSettingsService.Load();
+        if (Services.BuildInfo.IsServer)
+        {
+            SharePortBox.Text       = s.SharePort.ToString();
+            ShareTokenBox.Text      = string.IsNullOrWhiteSpace(s.ShareToken)
+                ? ShareProtocol.NewToken() : s.ShareToken;
+            ShareCameraCheck.IsChecked = s.ShareCamera;
+            ShareHmiCheck.IsChecked    = s.ShareHmi;
+            RefreshShareLocalAddress();
+            RefreshServerStatus();
+            ShareServer.Instance.StateChanged += () =>
+                DispatcherQueue.TryEnqueue(RefreshServerStatus);
+        }
+        else
+        {
+            ServerHostBox.Text  = s.ServerHost;
+            ServerTokenBox.Text = s.ServerToken;
+            RefreshClientStatus();
+            ShareClient.Instance.ConnectionChanged += (ok, info) =>
+                DispatcherQueue.TryEnqueue(() => RefreshClientStatus(ok, info));
+        }
+    }
+
+    private void RefreshServerStatus()
+    {
+        bool running = ShareServer.Instance.IsRunning;
+        ShareStartBtn.Content = running ? Lang.Share_Stop : Lang.Share_Start;
+        ShareServerStatusText.Text = running
+            ? $"{Lang.Format(nameof(Lang.Share_Running), ShareServer.Instance.Port)} · " +
+              Lang.Format(nameof(Lang.Share_Clients), ShareServer.Instance.ClientCount)
+            : Lang.Share_Stopped;
+        SharePortBox.IsEnabled  = !running;
+        ShareTokenBox.IsEnabled = !running;
+        RefreshShareLocalAddress();
+    }
+
+    private void ShareStartBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (ShareServer.Instance.IsRunning)
+        {
+            ShareServer.Instance.Stop();
+            RefreshServerStatus();
+            return;
+        }
+
+        if (!int.TryParse(SharePortBox.Text.Trim(), out var port) || port < 1 || port > 65535)
+            port = 8088;
+        var token = string.IsNullOrWhiteSpace(ShareTokenBox.Text)
+            ? ShareProtocol.NewToken() : ShareTokenBox.Text.Trim();
+        bool shareCam = ShareCameraCheck.IsChecked == true;
+        bool shareHmi = ShareHmiCheck.IsChecked == true;
+
+        ShareServer.Instance.Start(port, token, shareCam, shareHmi);
+        ShareTokenBox.Text = ShareServer.Instance.Token;
+
+        var s = AppSettingsService.Load();
+        s.SharePort   = port;
+        s.ShareToken  = ShareServer.Instance.Token;
+        s.ShareCamera = shareCam;
+        s.ShareHmi    = shareHmi;
+        AppSettingsService.Save(s);
+
+        RefreshServerStatus();
+    }
+
+    private void RefreshClientStatus(bool? ok = null, string? info = null)
+    {
+        bool connected = ShareClient.Instance.IsConnected;
+        ConnectServerBtn.Content = connected ? Lang.Share_Disconnect : Lang.Share_Connect;
+        if (ok == false && info is not null)
+            ClientStatusText.Text = Lang.Format(nameof(Lang.Share_ConnError), info);
+        else
+            ClientStatusText.Text = connected
+                ? Lang.Format(nameof(Lang.Share_Connected), ServerHostBox.Text.Trim())
+                : Lang.Share_Disconnected;
+
+        // The AI assistant is "active" on the client when connected to the server.
+        App.Status.AiConnected = connected;
+    }
+
+    private async void ConnectServerBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (ShareClient.Instance.IsConnected)
+        {
+            ShareClient.Instance.Disconnect();
+            RefreshClientStatus();
+            return;
+        }
+
+        var host  = ServerHostBox.Text.Trim();
+        var token = ServerTokenBox.Text.Trim();
+        if (string.IsNullOrEmpty(host)) return;
+
+        // Persist first so the AI proxy URL is available to AIPage.
+        var s = AppSettingsService.Load();
+        s.ServerHost  = host;
+        s.ServerToken = token;
+        AppSettingsService.Save(s);
+
+        ConnectServerBtn.IsEnabled = false;
+        bool ok = await ShareClient.Instance.ConnectAsync(host, token);
+        ConnectServerBtn.IsEnabled = true;
+
+        RefreshClientStatus(ok, ok ? null : Lang.Share_Disconnected);
+
+        // Point the shared AI service at the server proxy.
+        if (ContentFrame?.Content is Views.AIPage aiPage)
+            aiPage.ReloadSettings();
+    }
+
+    /// <summary>
+    /// Returns all active IPv4 addresses on this machine (excluding loopback).
+    /// Uses NetworkInterface instead of DNS to reliably enumerate every adapter,
+    /// even when the hostname does not resolve to all of them.
+    /// </summary>
+    private static string[] LocalIPv4Addresses()
+    {
+        try
+        {
+            return System.Net.NetworkInformation.NetworkInterface
+                .GetAllNetworkInterfaces()
+                .Where(nic =>
+                    nic.OperationalStatus == System.Net.NetworkInformation.OperationalStatus.Up &&
+                    nic.NetworkInterfaceType != System.Net.NetworkInformation.NetworkInterfaceType.Loopback)
+                .SelectMany(nic => nic.GetIPProperties().UnicastAddresses)
+                .Where(ua => ua.Address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork)
+                .Select(ua => ua.Address.ToString())
+                .ToArray();
+        }
+        catch { }
+        return ["127.0.0.1"];
+    }
+
+    private void RefreshShareLocalAddress()
+    {
+        var ips = LocalIPv4Addresses();
+        int displayPort = ShareServer.Instance.IsRunning
+            ? ShareServer.Instance.Port
+            : (int.TryParse(SharePortBox?.Text, out var p) ? p : 8088);
+
+        ShareLocalAddrText.Text = ips.Length switch
+        {
+            0 => Lang.Format(nameof(Lang.Share_LocalAddress), $"127.0.0.1:{displayPort}"),
+            1 => Lang.Format(nameof(Lang.Share_LocalAddress), $"{ips[0]}:{displayPort}"),
+            _ => Lang.Format(nameof(Lang.Share_LocalAddress),
+                     string.Join("  /  ", ips.Select(ip => $"{ip}:{displayPort}")))
+        };
+
+        // Fetch public IP asynchronously — show a placeholder immediately.
+        SharePublicAddrText.Visibility = Visibility.Visible;
+        SharePublicAddrText.Text = Lang.Share_PublicFetching;
+        _ = FetchAndShowPublicIpAsync(displayPort);
+    }
+
+    // Cache the last-fetched public IP so repeated flyout-opens don't hammer the API.
+    private string? _cachedPublicIp;
+    private DateTime _publicIpFetchedAt = DateTime.MinValue;
+
+    private async Task FetchAndShowPublicIpAsync(int port)
+    {
+        // Re-use the cached value for 5 minutes.
+        if (_cachedPublicIp is not null &&
+            (DateTime.UtcNow - _publicIpFetchedAt).TotalMinutes < 5)
+        {
+            DispatcherQueue.TryEnqueue(() =>
+                SharePublicAddrText.Text =
+                    Lang.Format(nameof(Lang.Share_PublicAddress), $"{_cachedPublicIp}:{port}"));
+            return;
+        }
+
+        string? ip = null;
+        // Try two well-known plain-text public-IP APIs (returns just the IP, no JSON).
+        string[] endpoints =
+        [
+            "https://api.ipify.org",
+            "https://checkip.amazonaws.com",
+        ];
+
+        using var http = new System.Net.Http.HttpClient
+            { Timeout = TimeSpan.FromSeconds(6) };
+
+        foreach (var url in endpoints)
+        {
+            try
+            {
+                ip = (await http.GetStringAsync(url)).Trim();
+                if (System.Net.IPAddress.TryParse(ip, out _)) break;
+                ip = null;
+            }
+            catch { ip = null; }
+        }
+
+        _cachedPublicIp    = ip;
+        _publicIpFetchedAt = DateTime.UtcNow;
+
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            if (ip is null)
+            {
+                SharePublicAddrText.Text = Lang.Share_PublicFailed;
+            }
+            else
+            {
+                SharePublicAddrText.Text =
+                    Lang.Format(nameof(Lang.Share_PublicAddress), $"{ip}:{port}");
+            }
+        });
     }
 
     // ── AI API settings ───────────────────────────────────────────────────────
@@ -1692,6 +1907,8 @@ public sealed partial class MainWindow : Window
     private void RefreshAiStatus(string key)
     {
         bool configured = !string.IsNullOrWhiteSpace(key);
+        // AI Assistant counts as "active" in the Status System panel once a key is set.
+        App.Status.AiConnected = configured;
         AiStatusText.Text      = configured
             ? $"✓  {LocalizationManager.Instance.Format("Ai_ModelLabel", AppSettingsService.Load().AiModel)}"
             : LocalizationManager.Instance.Get("Ai_ErrorNoKey");

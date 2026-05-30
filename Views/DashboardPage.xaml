@@ -2,7 +2,136 @@
     x:Class="TLIGDashboard.Views.DashboardPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:TLIGDashboard.Controls"
     Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+
+    <Page.Resources>
+
+        <!-- Compact RadioButton — 10px circle, 11px font.
+             Uses only guaranteed WinUI 3 system brush tokens to avoid runtime crashes. -->
+        <Style x:Key="CompactRadioButtonStyle" TargetType="RadioButton">
+            <Setter Property="MinWidth"  Value="0"/>
+            <Setter Property="MinHeight" Value="0"/>
+            <Setter Property="FontSize"  Value="11"/>
+            <Setter Property="Padding"   Value="5,0,0,0"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <Grid Background="Transparent" Padding="{TemplateBinding Padding}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid Width="10" Height="10" VerticalAlignment="Center">
+                                <Ellipse x:Name="OuterEllipse"
+                                         Width="10" Height="10"
+                                         Fill="Transparent"
+                                         Stroke="{ThemeResource ControlStrongStrokeColorDefaultBrush}"
+                                         StrokeThickness="1.5"
+                                         UseLayoutRounding="False"/>
+                                <Ellipse x:Name="CheckGlyph"
+                                         Width="5" Height="5"
+                                         Fill="{ThemeResource TextOnAccentFillColorPrimaryBrush}"
+                                         Opacity="0"
+                                         UseLayoutRounding="False"/>
+                            </Grid>
+                            <ContentPresenter x:Name="ContentPresenter"
+                                              Grid.Column="1"
+                                              Margin="5,0,0,0"
+                                              Content="{TemplateBinding Content}"
+                                              FontSize="{TemplateBinding FontSize}"
+                                              Foreground="{TemplateBinding Foreground}"
+                                              VerticalAlignment="Center"/>
+                            <VisualStateManager.VisualStateGroups>
+                                <VisualStateGroup x:Name="CommonStates">
+                                    <VisualState x:Name="Normal"/>
+                                    <VisualState x:Name="PointerOver">
+                                        <VisualState.Setters>
+                                            <Setter Target="OuterEllipse.Fill" Value="{ThemeResource ControlFillColorSecondaryBrush}"/>
+                                        </VisualState.Setters>
+                                    </VisualState>
+                                    <VisualState x:Name="Pressed">
+                                        <VisualState.Setters>
+                                            <Setter Target="OuterEllipse.Fill" Value="{ThemeResource ControlFillColorTertiaryBrush}"/>
+                                        </VisualState.Setters>
+                                    </VisualState>
+                                    <VisualState x:Name="Disabled">
+                                        <VisualState.Setters>
+                                            <Setter Target="OuterEllipse.Opacity"      Value="0.4"/>
+                                            <Setter Target="ContentPresenter.Opacity"  Value="0.4"/>
+                                        </VisualState.Setters>
+                                    </VisualState>
+                                </VisualStateGroup>
+                                <VisualStateGroup x:Name="CheckStates">
+                                    <VisualState x:Name="Checked">
+                                        <VisualState.Setters>
+                                            <Setter Target="OuterEllipse.Fill"   Value="{ThemeResource AccentFillColorDefaultBrush}"/>
+                                            <Setter Target="OuterEllipse.Stroke" Value="{ThemeResource AccentFillColorDefaultBrush}"/>
+                                            <Setter Target="CheckGlyph.Opacity"  Value="1"/>
+                                        </VisualState.Setters>
+                                    </VisualState>
+                                    <VisualState x:Name="Unchecked"/>
+                                    <VisualState x:Name="Indeterminate"/>
+                                </VisualStateGroup>
+                            </VisualStateManager.VisualStateGroups>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- ── Card / label helpers ─────────────────────────────────── -->
+        <Style x:Key="DashCardStyle" TargetType="Border">
+            <Setter Property="Background"       Value="{ThemeResource CardBackgroundFillColorDefaultBrush}"/>
+            <Setter Property="BorderBrush"      Value="{ThemeResource CardStrokeColorDefaultBrush}"/>
+            <Setter Property="BorderThickness"  Value="1"/>
+            <Setter Property="CornerRadius"     Value="8"/>
+            <Setter Property="Padding"          Value="10"/>
+        </Style>
+
+        <Style x:Key="DashPanelHeaderStyle" TargetType="TextBlock">
+            <Setter Property="FontSize"    Value="11"/>
+            <Setter Property="FontWeight"  Value="SemiBold"/>
+            <Setter Property="Opacity"     Value="0.78"/>
+            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+        </Style>
+
+        <Style x:Key="DashCardTitleStyle" TargetType="TextBlock">
+            <Setter Property="FontSize"    Value="10"/>
+            <Setter Property="FontWeight"  Value="SemiBold"/>
+            <Setter Property="Opacity"     Value="0.8"/>
+            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+        </Style>
+
+        <Style x:Key="DashTinyLabelStyle" TargetType="TextBlock">
+            <Setter Property="FontSize"    Value="10"/>
+            <Setter Property="Opacity"     Value="0.72"/>
+            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+        </Style>
+
+        <Style x:Key="DashInputBoxStyle" TargetType="Border">
+            <Setter Property="Background"      Value="{ThemeResource CardBackgroundFillColorSecondaryBrush}"/>
+            <Setter Property="BorderBrush"     Value="{ThemeResource CardStrokeColorDefaultBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius"    Value="4"/>
+            <Setter Property="MinHeight"       Value="26"/>
+            <Setter Property="Padding"         Value="8,3"/>
+        </Style>
+
+        <x:Double x:Key="NumberBoxMinWidth">0</x:Double>
+
+        <Style x:Key="DashNumberBoxStyle" TargetType="NumberBox">
+            <Setter Property="MinWidth" Value="0"/>
+            <Setter Property="MinHeight" Value="32"/>
+            <Setter Property="Height" Value="32"/>
+            <Setter Property="HorizontalAlignment" Value="Stretch"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="CornerRadius" Value="4"/>
+            <Setter Property="Padding" Value="10,7,6,3"/>
+        </Style>
+
+    </Page.Resources>
 
     <Grid x:Name="RootGrid" SizeChanged="RootGrid_SizeChanged">
         <Grid.ColumnDefinitions>
@@ -13,70 +142,125 @@
             <ColumnDefinition x:Name="RightColumn"/>
         </Grid.ColumnDefinitions>
 
-        <!-- Left Panel -->
+        <!-- ═══════════════════════════════════════════════════════════════
+             LEFT PANEL — System Model + PID + Response + Control/Status/Alarm
+             ═══════════════════════════════════════════════════════════════ -->
         <Grid x:Name="LeftPanel" Grid.Column="0">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="30"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
 
-            <ScrollViewer VerticalScrollBarVisibility="Auto"
+            <Border Grid.Row="0"
+                    BorderThickness="0,0,0,1"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    Padding="10,0,6,0">
+                <Grid>
+                    <TextBlock Text="{x:Bind Lang.Panel_ModelSistem, Mode=OneWay}"
+                               Style="{StaticResource DashPanelHeaderStyle}"
+                               VerticalAlignment="Center"/>
+                    <Button x:Name="LeftFullscreenBtn"
+                            Width="18" Height="18"
+                            HorizontalAlignment="Right"
+                            VerticalAlignment="Center"
+                            Padding="0"
+                            Click="LeftFullscreen_Click">
+                        <FontIcon FontFamily="Segoe MDL2 Assets" Glyph="&#xE740;" FontSize="9"/>
+                    </Button>
+                </Grid>
+            </Border>
+
+            <ScrollViewer Grid.Row="1"
+                          VerticalScrollBarVisibility="Auto"
                           HorizontalScrollBarVisibility="Disabled"
                           Padding="10,8,10,10">
-                <StackPanel Spacing="6">
+                <StackPanel Spacing="8">
 
-                    <!-- Section title -->
-                    <TextBlock Text="{x:Bind Lang.Panel_ModelSistem, Mode=OneWay}"
-                               FontSize="11"
-                               FontWeight="SemiBold"
-                               CharacterSpacing="80"
-                               Opacity="0.55"
-                               Margin="2,0,0,2"/>
-
-                    <!-- Diagram Blok -->
-                    <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                            BorderThickness="1"
-                            CornerRadius="8"
-                            Padding="12,10,12,12">
-                        <StackPanel Spacing="8">
-                            <TextBlock Text="{x:Bind Lang.Panel_DiagramBlok, Mode=OneWay}"
-                                       FontSize="10" FontWeight="SemiBold"
-                                       CharacterSpacing="60" Opacity="0.55"/>
-                            <Border Height="90" CornerRadius="4"
-                                    Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}"/>
-                        </StackPanel>
+                    <!-- Block Diagram -->
+                    <Border Style="{StaticResource DashCardStyle}" Height="124">
+                        <Grid RowSpacing="8">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+                            <TextBlock Grid.Row="0"
+                                       Text="{x:Bind Lang.Panel_DiagramBlok, Mode=OneWay}"
+                                       Style="{StaticResource DashCardTitleStyle}"/>
+                            <Border Grid.Row="1"
+                                    Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}"
+                                    CornerRadius="5"
+                                    Padding="10">
+                                <Grid ColumnSpacing="6" VerticalAlignment="Center">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="1.1*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="1*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="1.1*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Border Grid.Column="0" Style="{StaticResource DashInputBoxStyle}" MinHeight="34" HorizontalAlignment="Stretch">
+                                        <TextBlock Text="{x:Bind Lang.Blk_Setpoint, Mode=OneWay}" Style="{StaticResource DashTinyLabelStyle}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    </Border>
+                                    <TextBlock Grid.Column="1" Text=">" Opacity="0.55" VerticalAlignment="Center"/>
+                                    <Border Grid.Column="2" Style="{StaticResource DashInputBoxStyle}" MinHeight="34" HorizontalAlignment="Stretch">
+                                        <TextBlock Text="{x:Bind Lang.Blk_Pid, Mode=OneWay}" Style="{StaticResource DashTinyLabelStyle}" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    </Border>
+                                    <TextBlock Grid.Column="3" Text=">" Opacity="0.55" VerticalAlignment="Center"/>
+                                    <Border Grid.Column="4" Style="{StaticResource DashInputBoxStyle}" MinHeight="34" HorizontalAlignment="Stretch">
+                                        <TextBlock Text="{x:Bind Lang.Blk_Plant, Mode=OneWay}" Style="{StaticResource DashTinyLabelStyle}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    </Border>
+                                </Grid>
+                            </Border>
+                        </Grid>
                     </Border>
 
-                    <!-- Parameter PID -->
-                    <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                            BorderThickness="1"
-                            CornerRadius="8"
-                            Padding="12,10,12,12">
+                    <!-- PID Parameters — horizontal (Kp · Ki · Kd inline) -->
+                    <Border Style="{StaticResource DashCardStyle}">
                         <StackPanel Spacing="8">
                             <TextBlock Text="{x:Bind Lang.Panel_ParameterPid, Mode=OneWay}"
-                                       FontSize="10" FontWeight="SemiBold"
-                                       CharacterSpacing="60" Opacity="0.55"/>
-                            <Border Height="80" CornerRadius="4"
-                                    Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}"/>
+                                       Style="{StaticResource DashCardTitleStyle}"/>
+                            <Grid ColumnSpacing="10">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="Kp" Style="{StaticResource DashTinyLabelStyle}" VerticalAlignment="Center"/>
+                                <NumberBox Grid.Column="1" Value="10" Minimum="0" SmallChange="1" SpinButtonPlacementMode="Compact" FontSize="11" Style="{StaticResource DashNumberBoxStyle}"/>
+                                <TextBlock Grid.Column="2" Text="Ki" Style="{StaticResource DashTinyLabelStyle}" VerticalAlignment="Center"/>
+                                <NumberBox Grid.Column="3" Value="10" Minimum="0" SmallChange="1" SpinButtonPlacementMode="Compact" FontSize="11" Style="{StaticResource DashNumberBoxStyle}"/>
+                                <TextBlock Grid.Column="4" Text="Kd" Style="{StaticResource DashTinyLabelStyle}" VerticalAlignment="Center"/>
+                                <NumberBox Grid.Column="5" Value="10" Minimum="0" SmallChange="1" SpinButtonPlacementMode="Compact" FontSize="11" Style="{StaticResource DashNumberBoxStyle}"/>
+                            </Grid>
                         </StackPanel>
                     </Border>
 
-                    <!-- Respon Sistem -->
-                    <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                            BorderThickness="1"
-                            CornerRadius="8"
-                            Padding="12,10,12,12">
-                        <StackPanel Spacing="8">
-                            <TextBlock Text="{x:Bind Lang.Panel_ResponSistem, Mode=OneWay}"
-                                       FontSize="10" FontWeight="SemiBold"
-                                       CharacterSpacing="60" Opacity="0.55"/>
-                            <Border x:Name="ResponSistemChart"
-                                    Height="120" CornerRadius="4"
-                                    Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}"/>
-                        </StackPanel>
+                    <!-- System Response -->
+                    <Border Style="{StaticResource DashCardStyle}" Height="142">
+                        <Grid RowSpacing="8">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+                            <TextBlock Grid.Row="0"
+                                       Text="{x:Bind Lang.Panel_ResponSistem, Mode=OneWay}"
+                                       Style="{StaticResource DashCardTitleStyle}"/>
+                            <Border Grid.Row="1"
+                                    x:Name="ResponSistemChart"
+                                    Style="{StaticResource DashInputBoxStyle}"
+                                    Padding="10">
+                                <TextBlock Text="{x:Bind Lang.Resp_Step, Mode=OneWay}"
+                                           Style="{StaticResource DashTinyLabelStyle}"
+                                           VerticalAlignment="Top"/>
+                            </Border>
+                        </Grid>
                     </Border>
 
-                    <!-- Metrics 2×2 -->
-                    <Grid ColumnSpacing="6" RowSpacing="6">
+                    <!-- Rise/Overshoot/Settling/SteadyErr metrics -->
+                    <Grid ColumnSpacing="8" RowSpacing="8">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="*"/>
@@ -86,91 +270,298 @@
                             <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
 
-                        <Border Grid.Row="0" Grid.Column="0"
-                                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                                BorderThickness="1" CornerRadius="8"
-                                Padding="12,10,12,12">
-                            <StackPanel Spacing="4">
-                                <TextBlock Text="{x:Bind Lang.Panel_RiseTime, Mode=OneWay}"
-                                           FontSize="10" FontWeight="SemiBold"
-                                           CharacterSpacing="60" Opacity="0.55"/>
-                                <TextBlock x:Name="RiseTimeValue"
-                                           Text="--" FontSize="16" FontWeight="SemiBold"/>
+                        <Border Grid.Row="0" Grid.Column="0" Style="{StaticResource DashCardStyle}" Padding="10,8">
+                            <StackPanel Spacing="7">
+                                <TextBlock Text="{x:Bind Lang.Panel_RiseTime, Mode=OneWay}" Style="{StaticResource DashCardTitleStyle}"/>
+                                <Grid ColumnSpacing="6">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                    <Border Style="{StaticResource DashInputBoxStyle}"><TextBlock x:Name="RiseTimeValue" Text="--" FontSize="11" HorizontalAlignment="Center"/></Border>
+                                    <TextBlock Grid.Column="1" Text="s" Style="{StaticResource DashTinyLabelStyle}" VerticalAlignment="Center"/>
+                                </Grid>
                             </StackPanel>
                         </Border>
 
-                        <Border Grid.Row="0" Grid.Column="1"
-                                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                                BorderThickness="1" CornerRadius="8"
-                                Padding="12,10,12,12">
-                            <StackPanel Spacing="4">
-                                <TextBlock Text="{x:Bind Lang.Panel_Overshoot, Mode=OneWay}"
-                                           FontSize="10" FontWeight="SemiBold"
-                                           CharacterSpacing="60" Opacity="0.55"/>
-                                <TextBlock x:Name="OvershootValue"
-                                           Text="--" FontSize="16" FontWeight="SemiBold"/>
+                        <Border Grid.Row="0" Grid.Column="1" Style="{StaticResource DashCardStyle}" Padding="10,8">
+                            <StackPanel Spacing="7">
+                                <TextBlock Text="{x:Bind Lang.Panel_Overshoot, Mode=OneWay}" Style="{StaticResource DashCardTitleStyle}"/>
+                                <Grid ColumnSpacing="6">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                    <Border Style="{StaticResource DashInputBoxStyle}"><TextBlock x:Name="OvershootValue" Text="--" FontSize="11" HorizontalAlignment="Center"/></Border>
+                                    <TextBlock Grid.Column="1" Text="%" Style="{StaticResource DashTinyLabelStyle}" VerticalAlignment="Center"/>
+                                </Grid>
                             </StackPanel>
                         </Border>
 
-                        <Border Grid.Row="1" Grid.Column="0"
-                                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                                BorderThickness="1" CornerRadius="8"
-                                Padding="12,10,12,12">
-                            <StackPanel Spacing="4">
-                                <TextBlock Text="{x:Bind Lang.Panel_Settling, Mode=OneWay}"
-                                           FontSize="10" FontWeight="SemiBold"
-                                           CharacterSpacing="60" Opacity="0.55"/>
-                                <TextBlock x:Name="SettlingValue"
-                                           Text="--" FontSize="16" FontWeight="SemiBold"/>
+                        <Border Grid.Row="1" Grid.Column="0" Style="{StaticResource DashCardStyle}" Padding="10,8">
+                            <StackPanel Spacing="7">
+                                <TextBlock Text="{x:Bind Lang.Panel_Settling, Mode=OneWay}" Style="{StaticResource DashCardTitleStyle}"/>
+                                <Grid ColumnSpacing="6">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                    <Border Style="{StaticResource DashInputBoxStyle}"><TextBlock x:Name="SettlingValue" Text="--" FontSize="11" HorizontalAlignment="Center"/></Border>
+                                    <TextBlock Grid.Column="1" Text="s" Style="{StaticResource DashTinyLabelStyle}" VerticalAlignment="Center"/>
+                                </Grid>
                             </StackPanel>
                         </Border>
 
-                        <Border Grid.Row="1" Grid.Column="1"
-                                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                                BorderThickness="1" CornerRadius="8"
-                                Padding="12,10,12,12">
-                            <StackPanel Spacing="4">
-                                <TextBlock Text="{x:Bind Lang.Panel_SteadyErr, Mode=OneWay}"
-                                           FontSize="10" FontWeight="SemiBold"
-                                           CharacterSpacing="60" Opacity="0.55"/>
-                                <TextBlock x:Name="SteadyErrValue"
-                                           Text="--" FontSize="16" FontWeight="SemiBold"/>
+                        <Border Grid.Row="1" Grid.Column="1" Style="{StaticResource DashCardStyle}" Padding="10,8">
+                            <StackPanel Spacing="7">
+                                <TextBlock Text="{x:Bind Lang.Panel_SteadyErr, Mode=OneWay}" Style="{StaticResource DashCardTitleStyle}"/>
+                                <Grid ColumnSpacing="6">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                    <Border Style="{StaticResource DashInputBoxStyle}"><TextBlock x:Name="SteadyErrValue" Text="--" FontSize="11" HorizontalAlignment="Center"/></Border>
+                                    <TextBlock Grid.Column="1" Text="%" Style="{StaticResource DashTinyLabelStyle}" VerticalAlignment="Center"/>
+                                </Grid>
                             </StackPanel>
                         </Border>
                     </Grid>
 
                     <!-- Transfer Function -->
-                    <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                            BorderThickness="1" CornerRadius="8"
-                            Padding="12">
-                        <TextBlock Text="{x:Bind Lang.Panel_TransferFunction, Mode=OneWay}"
-                                   FontSize="10" FontWeight="SemiBold"
-                                   CharacterSpacing="60" Opacity="0.55"
-                                   HorizontalAlignment="Center"/>
+                    <Border Style="{StaticResource DashCardStyle}" MinHeight="56">
+                        <Grid RowSpacing="8">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+                            <TextBlock Grid.Row="0"
+                                       Text="{x:Bind Lang.Panel_TransferFunction, Mode=OneWay}"
+                                       Style="{StaticResource DashCardTitleStyle}"/>
+                            <Border Grid.Row="1" Style="{StaticResource DashInputBoxStyle}" Padding="10">
+                                <TextBlock Text="G(s) = K / (tau s + 1)"
+                                           FontFamily="Consolas"
+                                           FontSize="12"
+                                           Opacity="0.72"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"/>
+                            </Border>
+                        </Grid>
                     </Border>
+
+                    <!-- ── MIGRATED: Control ───────────────────────────────── -->
+                    <Border Style="{StaticResource DashCardStyle}" Padding="10,8">
+                        <StackPanel Spacing="10">
+                            <TextBlock Text="{x:Bind Lang.Ctl_Header, Mode=OneWay}"
+                                       Style="{StaticResource DashCardTitleStyle}"/>
+                            <Grid ColumnSpacing="8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="1.1*"/>
+                                    <ColumnDefinition Width="1.1*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+
+                                <Border Grid.Column="0" Style="{StaticResource DashCardStyle}" Padding="8">
+                                    <StackPanel Spacing="8">
+                                        <TextBlock Text="{x:Bind Lang.Ctl_Setpoint, Mode=OneWay}"
+                                                   Style="{StaticResource DashCardTitleStyle}"/>
+                                        <Grid ColumnSpacing="6">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                             </Grid.ColumnDefinitions>
+                                             <NumberBox Value="10" Minimum="0" SmallChange="1"
+                                                        SpinButtonPlacementMode="Compact"
+                                                        FontSize="11"
+                                                        Style="{StaticResource DashNumberBoxStyle}"/>
+                                            <TextBlock Grid.Column="1" Text="&#176;C"
+                                                       Style="{StaticResource DashTinyLabelStyle}"
+                                                       VerticalAlignment="Center"/>
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
+
+                                <Border Grid.Column="1" Style="{StaticResource DashCardStyle}" Padding="8">
+                                    <StackPanel Spacing="4">
+                                        <TextBlock Text="{x:Bind Lang.Ctl_Mode, Mode=OneWay}"
+                                                   Style="{StaticResource DashCardTitleStyle}"
+                                                   Margin="0,0,0,2"/>
+                                        <RadioButton Content="{x:Bind Lang.Ctl_Manual, Mode=OneWay}"
+                                                     GroupName="DashboardMode"
+                                                     Style="{StaticResource CompactRadioButtonStyle}"/>
+                                        <RadioButton Content="{x:Bind Lang.Ctl_Auto, Mode=OneWay}"
+                                                     GroupName="DashboardMode" IsChecked="True"
+                                                     Style="{StaticResource CompactRadioButtonStyle}"/>
+                                        <RadioButton Content="{x:Bind Lang.Ctl_Cascade, Mode=OneWay}"
+                                                     GroupName="DashboardMode"
+                                                     Style="{StaticResource CompactRadioButtonStyle}"/>
+                                    </StackPanel>
+                                </Border>
+
+                                <StackPanel Grid.Column="2" Width="106" Spacing="5" VerticalAlignment="Center">
+                                    <!-- RUN — green, inline Button.Resources overrides native visual states -->
+                                    <Button HorizontalAlignment="Stretch" FontSize="11">
+                                        <Button.Resources>
+                                            <SolidColorBrush x:Key="ButtonBackground"             Color="{ThemeResource SystemFillColorSuccess}"/>
+                                            <SolidColorBrush x:Key="ButtonBackgroundPointerOver"  Color="{ThemeResource SystemFillColorSuccess}"/>
+                                            <SolidColorBrush x:Key="ButtonBackgroundPressed"      Color="{ThemeResource SystemFillColorSuccess}"/>
+                                            <SolidColorBrush x:Key="ButtonForeground"             Color="{ThemeResource TextOnAccentFillColorPrimary}"/>
+                                            <SolidColorBrush x:Key="ButtonForegroundPointerOver"  Color="{ThemeResource TextOnAccentFillColorPrimary}"/>
+                                            <SolidColorBrush x:Key="ButtonForegroundPressed"      Color="{ThemeResource TextOnAccentFillColorSecondary}"/>
+                                            <SolidColorBrush x:Key="ButtonBorderBrush"            Color="{ThemeResource SystemFillColorSuccess}"/>
+                                            <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="{ThemeResource SystemFillColorSuccess}"/>
+                                            <SolidColorBrush x:Key="ButtonBorderBrushPressed"     Color="{ThemeResource SystemFillColorSuccess}"/>
+                                        </Button.Resources>
+                                        <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Center">
+                                            <FontIcon FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" Glyph="&#xE768;" FontSize="11"/>
+                                            <TextBlock Text="{x:Bind Lang.Ctl_Run, Mode=OneWay}"/>
+                                        </StackPanel>
+                                    </Button>
+                                    <!-- STOP — red -->
+                                    <Button HorizontalAlignment="Stretch" FontSize="11">
+                                        <Button.Resources>
+                                            <SolidColorBrush x:Key="ButtonBackground"             Color="{ThemeResource SystemFillColorCritical}"/>
+                                            <SolidColorBrush x:Key="ButtonBackgroundPointerOver"  Color="{ThemeResource SystemFillColorCritical}"/>
+                                            <SolidColorBrush x:Key="ButtonBackgroundPressed"      Color="{ThemeResource SystemFillColorCritical}"/>
+                                            <SolidColorBrush x:Key="ButtonForeground"             Color="{ThemeResource TextOnAccentFillColorPrimary}"/>
+                                            <SolidColorBrush x:Key="ButtonForegroundPointerOver"  Color="{ThemeResource TextOnAccentFillColorPrimary}"/>
+                                            <SolidColorBrush x:Key="ButtonForegroundPressed"      Color="{ThemeResource TextOnAccentFillColorSecondary}"/>
+                                            <SolidColorBrush x:Key="ButtonBorderBrush"            Color="{ThemeResource SystemFillColorCritical}"/>
+                                            <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="{ThemeResource SystemFillColorCritical}"/>
+                                            <SolidColorBrush x:Key="ButtonBorderBrushPressed"     Color="{ThemeResource SystemFillColorCritical}"/>
+                                        </Button.Resources>
+                                        <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Center">
+                                            <FontIcon FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" Glyph="&#xE71A;" FontSize="11"/>
+                                            <TextBlock Text="{x:Bind Lang.Ctl_Stop, Mode=OneWay}"/>
+                                        </StackPanel>
+                                    </Button>
+                                    <!-- RESET — standard WinUI 3 button -->
+                                    <Button HorizontalAlignment="Stretch" FontSize="11">
+                                        <Button.Resources>
+                                            <SolidColorBrush x:Key="ButtonBackground"             Color="{ThemeResource SystemFillColorSolidNeutral}"/>
+                                            <SolidColorBrush x:Key="ButtonBackgroundPointerOver"  Color="{ThemeResource SystemFillColorSolidNeutral}"/>
+                                            <SolidColorBrush x:Key="ButtonBackgroundPressed"      Color="{ThemeResource SystemFillColorSolidNeutral}"/>
+                                            <SolidColorBrush x:Key="ButtonForeground"             Color="{ThemeResource TextOnAccentFillColorPrimary}"/>
+                                            <SolidColorBrush x:Key="ButtonForegroundPointerOver"  Color="{ThemeResource TextOnAccentFillColorPrimary}"/>
+                                            <SolidColorBrush x:Key="ButtonForegroundPressed"      Color="{ThemeResource TextOnAccentFillColorSecondary}"/>
+                                            <SolidColorBrush x:Key="ButtonBorderBrush"            Color="{ThemeResource SystemFillColorSolidNeutral}"/>
+                                            <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="{ThemeResource SystemFillColorSolidNeutral}"/>
+                                            <SolidColorBrush x:Key="ButtonBorderBrushPressed"     Color="{ThemeResource SystemFillColorSolidNeutral}"/>
+                                        </Button.Resources>
+                                        <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Center">
+                                            <FontIcon FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" Glyph="&#xE72C;" FontSize="11"/>
+                                            <TextBlock Text="{x:Bind Lang.Ctl_Reset, Mode=OneWay}"/>
+                                        </StackPanel>
+                                    </Button>
+                                    <!-- E-STOP — danger outline -->
+                                    <Button HorizontalAlignment="Stretch" FontSize="11">
+                                        <Button.Resources>
+                                            <SolidColorBrush x:Key="ButtonBackground"             Color="Transparent"/>
+                                            <SolidColorBrush x:Key="ButtonBackgroundPointerOver"  Color="{ThemeResource SystemFillColorCriticalBackground}"/>
+                                            <SolidColorBrush x:Key="ButtonBackgroundPressed"      Color="{ThemeResource SystemFillColorCriticalBackground}"/>
+                                            <SolidColorBrush x:Key="ButtonForeground"             Color="{ThemeResource SystemFillColorCritical}"/>
+                                            <SolidColorBrush x:Key="ButtonForegroundPointerOver"  Color="{ThemeResource SystemFillColorCritical}"/>
+                                            <SolidColorBrush x:Key="ButtonForegroundPressed"      Color="{ThemeResource SystemFillColorCritical}"/>
+                                            <SolidColorBrush x:Key="ButtonBorderBrush"            Color="{ThemeResource SystemFillColorCritical}"/>
+                                            <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="{ThemeResource SystemFillColorCritical}"/>
+                                            <SolidColorBrush x:Key="ButtonBorderBrushPressed"     Color="{ThemeResource SystemFillColorCritical}"/>
+                                        </Button.Resources>
+                                        <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Center">
+                                            <FontIcon FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" Glyph="&#xE783;" FontSize="11"/>
+                                            <TextBlock Text="{x:Bind Lang.Ctl_EStop, Mode=OneWay}"/>
+                                        </StackPanel>
+                                    </Button>
+                                </StackPanel>
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- ── MIGRATED: Status System + Alarm ───────────────── -->
+                    <Grid ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="1.25*"/>
+                            <ColumnDefinition Width="1.75*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <Border Grid.Column="0" Style="{StaticResource DashCardStyle}" Height="110">
+                            <Grid RowSpacing="8">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="*"/>
+                                </Grid.RowDefinitions>
+                                <TextBlock Text="{x:Bind Lang.Sys_StatusTitle, Mode=OneWay}"
+                                           Style="{StaticResource DashCardTitleStyle}"/>
+                                <Grid Grid.Row="1"
+                                      Margin="8,0,8,0"
+                                      RowSpacing="4"
+                                      ColumnSpacing="8"
+                                      VerticalAlignment="Center">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+                                    <TextBlock Grid.Row="0" Text="{x:Bind Lang.Sys_Plc, Mode=OneWay}" Style="{StaticResource DashTinyLabelStyle}"/>
+                                    <Grid Grid.Row="0" Grid.Column="1" Width="10" Height="10">
+                                        <Ellipse Fill="{ThemeResource SystemFillColorSuccessBrush}" Visibility="{x:Bind Status.PlcConnected, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                                        <Ellipse Fill="{ThemeResource SystemFillColorCriticalBrush}" Visibility="{x:Bind Status.PlcConnected, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}"/>
+                                    </Grid>
+                                    <TextBlock Grid.Row="0" Grid.Column="2" Text="{x:Bind Status.PlcText, Mode=OneWay}" Style="{StaticResource DashTinyLabelStyle}"/>
+
+                                    <TextBlock Grid.Row="1" Text="{x:Bind Lang.Sys_Camera, Mode=OneWay}" Style="{StaticResource DashTinyLabelStyle}"/>
+                                    <Grid Grid.Row="1" Grid.Column="1" Width="10" Height="10">
+                                        <Ellipse Fill="{ThemeResource SystemFillColorSuccessBrush}" Visibility="{x:Bind Status.CameraConnected, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                                        <Ellipse Fill="{ThemeResource SystemFillColorCriticalBrush}" Visibility="{x:Bind Status.CameraConnected, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}"/>
+                                    </Grid>
+                                    <TextBlock Grid.Row="1" Grid.Column="2" Text="{x:Bind Status.CameraText, Mode=OneWay}" Style="{StaticResource DashTinyLabelStyle}"/>
+
+                                    <TextBlock Grid.Row="2" Text="{x:Bind Lang.Sys_Sensor, Mode=OneWay}" Style="{StaticResource DashTinyLabelStyle}"/>
+                                    <Grid Grid.Row="2" Grid.Column="1" Width="10" Height="10">
+                                        <Ellipse Fill="{ThemeResource SystemFillColorSuccessBrush}" Visibility="{x:Bind Status.SensorConnected, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                                        <Ellipse Fill="{ThemeResource SystemFillColorCriticalBrush}" Visibility="{x:Bind Status.SensorConnected, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}"/>
+                                    </Grid>
+                                    <TextBlock Grid.Row="2" Grid.Column="2" Text="{x:Bind Status.SensorText, Mode=OneWay}" Style="{StaticResource DashTinyLabelStyle}"/>
+
+                                    <TextBlock Grid.Row="3" Text="{x:Bind Lang.Sys_AiAssistant, Mode=OneWay}" Style="{StaticResource DashTinyLabelStyle}"/>
+                                    <Grid Grid.Row="3" Grid.Column="1" Width="10" Height="10">
+                                        <Ellipse Fill="{ThemeResource SystemFillColorSuccessBrush}" Visibility="{x:Bind Status.AiConnected, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                                        <Ellipse Fill="{ThemeResource SystemFillColorCriticalBrush}" Visibility="{x:Bind Status.AiConnected, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}"/>
+                                    </Grid>
+                                    <TextBlock Grid.Row="3" Grid.Column="2" Text="{x:Bind Status.AiText, Mode=OneWay}" Style="{StaticResource DashTinyLabelStyle}"/>
+                                </Grid>
+                            </Grid>
+                        </Border>
+
+                        <Border Grid.Column="1" Style="{StaticResource DashCardStyle}" Height="110">
+                            <Grid RowSpacing="8">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="*"/>
+                                </Grid.RowDefinitions>
+                                <TextBlock Text="{x:Bind Lang.Alarm_Title, Mode=OneWay}"
+                                           Style="{StaticResource DashCardTitleStyle}"
+                                           HorizontalAlignment="Center"/>
+                                <Border Grid.Row="1"
+                                        Height="34"
+                                        Background="{StaticResource DashAlarmOkBrush}"
+                                        CornerRadius="4"
+                                        HorizontalAlignment="Stretch"
+                                        VerticalAlignment="Center">
+                                    <StackPanel Orientation="Horizontal"
+                                                Spacing="8"
+                                                HorizontalAlignment="Center"
+                                                VerticalAlignment="Center">
+                                        <FontIcon FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                                                  Glyph="&#xE930;"
+                                                  FontSize="12"
+                                                  Foreground="{StaticResource DashAlarmTextBrush}"/>
+                                        <TextBlock Text="{x:Bind Lang.Alarm_None, Mode=OneWay}"
+                                                   FontSize="10"
+                                                   Foreground="{StaticResource DashAlarmTextBrush}"
+                                                   VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </Border>
+                            </Grid>
+                        </Border>
+                    </Grid>
 
                 </StackPanel>
             </ScrollViewer>
-
-            <Button x:Name="LeftFullscreenBtn"
-                    Width="16" Height="16"
-                    HorizontalAlignment="Right"
-                    VerticalAlignment="Top"
-                    Padding="0"
-                    Margin="0,4,4,0"
-                    Canvas.ZIndex="10"
-                    Click="LeftFullscreen_Click">
-                <FontIcon FontFamily="Segoe MDL2 Assets" Glyph="&#xE740;" FontSize="9"/>
-            </Button>
-
         </Grid>
 
-        <!-- Splitter 1 -->
         <Border x:Name="Splitter1"
                 Grid.Column="1"
                 Background="{ThemeResource CardStrokeColorDefaultBrush}"
@@ -179,21 +570,198 @@
                 PointerReleased="Splitter1_PointerReleased"
                 PointerCaptureLost="Splitter1_PointerCaptureLost"/>
 
-        <!-- Center Panel -->
+        <!-- ═══════════════════════════════════════════════════════════════
+             CENTER PANEL — top: Live Camera | HMI  /  HSplitter  /  bottom
+             ═══════════════════════════════════════════════════════════════ -->
         <Grid x:Name="CenterPanel" Grid.Column="2">
-            <Button x:Name="CenterFullscreenBtn"
-                    Width="16" Height="16"
-                    HorizontalAlignment="Right"
-                    VerticalAlignment="Top"
-                    Padding="0"
-                    Margin="0,4,4,0"
-                    Canvas.ZIndex="10"
-                    Click="CenterFullscreen_Click">
-                <FontIcon FontFamily="Segoe MDL2 Assets" Glyph="&#xE740;" FontSize="9"/>
-            </Button>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="30"/>                    <!-- panel header (fixed) -->
+                <RowDefinition x:Name="CenterTopRow"/>          <!-- top section (resizable) -->
+                <RowDefinition Height="4"/>                     <!-- horizontal splitter -->
+                <RowDefinition x:Name="CenterBottomRow"/>       <!-- bottom section (resizable) -->
+            </Grid.RowDefinitions>
+
+            <!-- Panel header -->
+            <Border Grid.Row="0"
+                    BorderThickness="0,0,0,1"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    Padding="10,0,8,0">
+                <Grid ColumnSpacing="8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <FontIcon Grid.Column="0"
+                              FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                              Glyph="&#xE714;"
+                              FontSize="12"
+                              Opacity="0.78"
+                              VerticalAlignment="Center"/>
+                    <TextBlock Grid.Column="1"
+                               Text="{x:Bind Lang.Live_Header, Mode=OneWay}"
+                               Style="{StaticResource DashPanelHeaderStyle}"
+                               VerticalAlignment="Center"/>
+                    <Button x:Name="CenterFullscreenBtn"
+                            Grid.Column="2"
+                            Width="18" Height="18"
+                            Padding="0"
+                            VerticalAlignment="Center"
+                            Click="CenterFullscreen_Click">
+                        <FontIcon FontFamily="Segoe MDL2 Assets" Glyph="&#xE740;" FontSize="9"/>
+                    </Button>
+                </Grid>
+            </Border>
+
+            <!-- Top section: 2 columns — Live Camera | HMI -->
+            <Grid Grid.Row="1" ColumnSpacing="8" Margin="8,8,8,4">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- Live Camera feed -->
+                <Border Grid.Column="0"
+                        Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                        BorderThickness="1"
+                        CornerRadius="8"
+                        Padding="10">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        <Grid Grid.Row="0" ColumnSpacing="6">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <ComboBox x:Name="DashboardCameraSelector"
+                                      Grid.Column="0"
+                                      MinWidth="108"
+                                      MaxWidth="170"
+                                      Height="26"
+                                      FontSize="10"
+                                      PlaceholderText="{x:Bind Lang.Live_SelectCamera, Mode=OneWay}"
+                                      SelectionChanged="DashboardCameraSelector_SelectionChanged"/>
+                            <Border Grid.Column="2"
+                                    HorizontalAlignment="Right"
+                                    Style="{StaticResource DashInputBoxStyle}"
+                                    MinHeight="24" Padding="10,3">
+                                <TextBlock x:Name="DashboardCameraInfoText"
+                                           Text="-"
+                                           Style="{StaticResource DashTinyLabelStyle}"/>
+                            </Border>
+                        </Grid>
+                        <Grid Grid.Row="1" Margin="0,8">
+                            <MediaPlayerElement x:Name="DashboardCameraPreview"
+                                                AreTransportControlsEnabled="False"
+                                                ManipulationMode="None"
+                                                Stretch="UniformToFill"
+                                                Visibility="Collapsed"/>
+                            <!-- Client mode: shows the camera frames received from the server -->
+                            <Image x:Name="DashboardCameraReceiveImage"
+                                   Stretch="Uniform"
+                                   Visibility="Collapsed"/>
+                            <StackPanel x:Name="DashboardCameraPlaceholder"
+                                        Spacing="7"
+                                        HorizontalAlignment="Center"
+                                        VerticalAlignment="Center">
+                                <TextBlock Text="..."
+                                           FontSize="18"
+                                           Opacity="0.35"
+                                           HorizontalAlignment="Center"/>
+                                <Canvas Width="42" Height="30" HorizontalAlignment="Center" Opacity="0.72">
+                                    <Rectangle Canvas.Left="7" Canvas.Top="9"
+                                               Width="23" Height="14"
+                                               RadiusX="2" RadiusY="2"
+                                               Stroke="{ThemeResource TextFillColorPrimaryBrush}"
+                                               StrokeThickness="2"/>
+                                    <Path Data="M30,13 L38,9 L38,23 L30,19 Z"
+                                          Stroke="{ThemeResource TextFillColorPrimaryBrush}"
+                                          StrokeThickness="2"
+                                          Fill="Transparent"/>
+                                    <Line X1="6" Y1="4" X2="37" Y2="27"
+                                          Stroke="{ThemeResource TextFillColorPrimaryBrush}"
+                                          StrokeThickness="2"/>
+                                </Canvas>
+                                <TextBlock x:Name="DashboardCameraPlaceholderText"
+                                           Text="{x:Bind Lang.Live_Waiting, Mode=OneWay}"
+                                           FontSize="10"
+                                           Opacity="0.55"
+                                           HorizontalAlignment="Center"/>
+                            </StackPanel>
+                        </Grid>
+                        <Border Grid.Row="2"
+                                HorizontalAlignment="Right"
+                                Style="{StaticResource DashInputBoxStyle}"
+                                MinHeight="24" Padding="10,3">
+                            <TextBlock Text="00:00:00 AM"
+                                       Style="{StaticResource DashTinyLabelStyle}"/>
+                        </Border>
+                    </Grid>
+                </Border>
+
+                <!-- HMI Heat Exchanger -->
+                <Border Grid.Column="1"
+                        Style="{StaticResource DashCardStyle}"
+                        Padding="8">
+                    <controls:HmiShareView/>
+                </Border>
+            </Grid>
+
+            <!-- Horizontal splitter (draggable) -->
+            <Border x:Name="HSplitter"
+                    Grid.Row="2"
+                    Background="{ThemeResource CardStrokeColorDefaultBrush}"
+                    PointerPressed="HSplitter_PointerPressed"
+                    PointerMoved="HSplitter_PointerMoved"
+                    PointerReleased="HSplitter_PointerReleased"
+                    PointerCaptureLost="HSplitter_PointerCaptureLost"/>
+
+            <!-- Bottom section: Learning Analytic -->
+            <Border Grid.Row="3"
+                    Margin="8,4,8,8"
+                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1"
+                    CornerRadius="8">
+                <Grid RowSpacing="8">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="30"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <Border Grid.Row="0"
+                            BorderThickness="0,0,0,1"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                            Padding="10,0,6,0">
+                        <Grid>
+                            <TextBlock Text="{x:Bind Lang.Learn_Title, Mode=OneWay}"
+                                       Style="{StaticResource DashPanelHeaderStyle}"
+                                       VerticalAlignment="Center"/>
+                            <Button x:Name="LearningAnalyticFullscreenBtn"
+                                    Width="18" Height="18"
+                                    HorizontalAlignment="Right"
+                                    VerticalAlignment="Center"
+                                    Padding="0"
+                                    ToolTipService.ToolTip="{x:Bind Lang.Learn_OpenFull, Mode=OneWay}"
+                                    Click="LearningAnalyticFullscreen_Click">
+                                <FontIcon FontFamily="Segoe MDL2 Assets" Glyph="&#xE740;" FontSize="9"/>
+                            </Button>
+                        </Grid>
+                    </Border>
+
+                    <Grid Grid.Row="1"
+                          Margin="10,0,10,10"
+                          Background="Transparent"/>
+                </Grid>
+            </Border>
         </Grid>
 
-        <!-- Splitter 2 -->
         <Border x:Name="Splitter2"
                 Grid.Column="3"
                 Background="{ThemeResource CardStrokeColorDefaultBrush}"
@@ -202,70 +770,140 @@
                 PointerReleased="Splitter2_PointerReleased"
                 PointerCaptureLost="Splitter2_PointerCaptureLost"/>
 
-        <!-- Right Panel -->
+        <!-- ═══════════════════════════════════════════════════════════════
+             RIGHT PANEL — AI Assistant
+             Quick Suggestions now sit ABOVE the input bar (inside the chat card)
+             ═══════════════════════════════════════════════════════════════ -->
         <Grid x:Name="RightPanel" Grid.Column="4">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="30"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
 
-            <Grid>
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="*"/>
-                    <RowDefinition Height="Auto"/>
-                </Grid.RowDefinitions>
+            <Border Grid.Row="0"
+                    BorderThickness="0,0,0,1"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    Padding="10,0,6,0">
+                <Grid>
+                    <TextBlock Text="{x:Bind Lang.Ai_Title, Mode=OneWay}"
+                               Style="{StaticResource DashPanelHeaderStyle}"
+                               VerticalAlignment="Center"/>
+                    <Button x:Name="RightFullscreenBtn"
+                            Width="18" Height="18"
+                            HorizontalAlignment="Right"
+                            VerticalAlignment="Center"
+                            Padding="0"
+                            Click="RightFullscreen_Click">
+                        <FontIcon FontFamily="Segoe MDL2 Assets" Glyph="&#xE740;" FontSize="9"/>
+                    </Button>
+                </Grid>
+            </Border>
 
-                <!-- Chat history -->
-                <ScrollViewer x:Name="ChatScroll"
-                              Grid.Row="0"
-                              VerticalScrollBarVisibility="Auto"
-                              HorizontalScrollBarVisibility="Disabled"
-                              Padding="10,8,10,8">
-                    <StackPanel x:Name="ChatPanel" Spacing="6">
-                        <TextBlock Text="{x:Bind Lang.Ai_Title, Mode=OneWay}"
-                                   FontSize="11" FontWeight="SemiBold"
-                                   CharacterSpacing="80" Opacity="0.55"
-                                   Margin="2,0,0,4"/>
-                    </StackPanel>
-                </ScrollViewer>
+            <!-- Chat card: history + quick suggestions + input bar -->
+            <Border Grid.Row="1"
+                    Margin="8,8,8,10"
+                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1"
+                    CornerRadius="8">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*"/>       <!-- chat history -->
+                        <RowDefinition Height="Auto"/>    <!-- quick suggestions -->
+                        <RowDefinition Height="Auto"/>    <!-- input bar -->
+                    </Grid.RowDefinitions>
 
-                <!-- Input bar -->
-                <Border Grid.Row="1"
-                        BorderThickness="0,1,0,0"
-                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                        Padding="8,8,8,8">
-                    <Grid ColumnSpacing="8">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <TextBox x:Name="ChatInput"
-                                 Grid.Column="0"
-                                 FontSize="12"
-                                 PlaceholderText="{x:Bind Lang.Ai_InputHint, Mode=OneWay}"
-                                 VerticalAlignment="Center"
-                                 KeyDown="ChatInput_KeyDown"/>
-                        <Button x:Name="ChatSendBtn"
-                                Grid.Column="1"
-                                Width="36" Height="36"
-                                Padding="0"
-                                VerticalAlignment="Center"
-                                Style="{ThemeResource AccentButtonStyle}"
-                                Click="ChatSend_Click">
-                            <FontIcon FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
-                                      FontSize="13" Glyph="&#xE725;"/>
-                        </Button>
-                    </Grid>
-                </Border>
-            </Grid>
+                    <!-- Chat history -->
+                    <ScrollViewer x:Name="ChatScroll"
+                                  Grid.Row="0"
+                                  VerticalScrollBarVisibility="Auto"
+                                  HorizontalScrollBarVisibility="Disabled"
+                                  Padding="12,10,12,10">
+                        <StackPanel x:Name="ChatPanel" Spacing="8"/>
+                    </ScrollViewer>
 
-            <Button x:Name="RightFullscreenBtn"
-                    Width="16" Height="16"
-                    HorizontalAlignment="Right"
-                    VerticalAlignment="Top"
-                    Padding="0"
-                    Margin="0,4,4,0"
-                    Canvas.ZIndex="10"
-                    Click="RightFullscreen_Click">
-                <FontIcon FontFamily="Segoe MDL2 Assets" Glyph="&#xE740;" FontSize="9"/>
-            </Button>
+                    <!-- Quick Suggestions (above input) -->
+                    <Border Grid.Row="1"
+                            BorderThickness="0,1,0,0"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                            Padding="8,8,8,6">
+                        <StackPanel Spacing="6">
+                            <TextBlock Text="{x:Bind Lang.Ai_QuickSuggestion, Mode=OneWay}"
+                                       Style="{StaticResource DashCardTitleStyle}"/>
+                            <Grid ColumnSpacing="6" RowSpacing="6">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                <Button Grid.Row="0" Grid.Column="0"
+                                        Tag="Tuning PID"
+                                        HorizontalAlignment="Stretch"
+                                        FontSize="11"
+                                        Click="QuickSuggestion_Click"
+                                        Content="{x:Bind Lang.Ai_SugTuningPid, Mode=OneWay}"/>
+                                <Button Grid.Row="0" Grid.Column="1"
+                                        Tag="Analysis Overshoot"
+                                        HorizontalAlignment="Stretch"
+                                        FontSize="11"
+                                        Click="QuickSuggestion_Click"
+                                        Content="{x:Bind Lang.Ai_SugOvershoot, Mode=OneWay}"/>
+                                <Button Grid.Row="1" Grid.Column="0"
+                                        Tag="Heat Exchanger Theory"
+                                        HorizontalAlignment="Stretch"
+                                        FontSize="11"
+                                        Click="QuickSuggestion_Click"
+                                        Content="{x:Bind Lang.Ai_SugHeatExchanger, Mode=OneWay}"/>
+                                <Button Grid.Row="1" Grid.Column="1"
+                                        Tag="Troubleshooting"
+                                        HorizontalAlignment="Stretch"
+                                        FontSize="11"
+                                        Click="QuickSuggestion_Click"
+                                        Content="{x:Bind Lang.Ai_SugTroubleshooting, Mode=OneWay}"/>
+                            </Grid>
+                        </StackPanel>
+                    </Border>
 
+                    <!-- Input bar -->
+                    <Border Grid.Row="2"
+                            BorderThickness="0,1,0,0"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                            Padding="8">
+                        <Grid ColumnSpacing="8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBox x:Name="ChatInput"
+                                     Grid.Column="0"
+                                     FontSize="11"
+                                     MinHeight="34"
+                                     MaxHeight="104"
+                                     AcceptsReturn="True"
+                                     TextWrapping="Wrap"
+                                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                     ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                     PlaceholderText="{x:Bind Lang.Ai_InputHint, Mode=OneWay}"
+                                     VerticalAlignment="Center"
+                                     KeyDown="ChatInput_KeyDown"/>
+                            <Button x:Name="ChatSendBtn"
+                                    Grid.Column="1"
+                                    Width="38" Height="34"
+                                    Padding="0"
+                                    VerticalAlignment="Center"
+                                    Style="{ThemeResource AccentButtonStyle}"
+                                    Click="ChatSend_Click">
+                                <FontIcon FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                                          FontSize="15"
+                                          Glyph="&#xE725;"/>
+                            </Button>
+                        </Grid>
+                    </Border>
+                </Grid>
+            </Border>
         </Grid>
     </Grid>
 </Page>

@@ -1,0 +1,29 @@
+<Project>
+  <!--
+    Flavor-specific output folders. These MUST live in Directory.Build.props so
+    they are evaluated before the .NET SDK props import the default obj/bin
+    paths (setting BaseIntermediateOutputPath inside the .csproj after import
+    triggers MSB3539 and is ignored).
+
+    Flavor is supplied on the command line:  dotnet build -p:Flavor=Client
+    Default (matching the .csproj default) is Server.
+
+      Server build →  bin\Server\...   obj\Server\...
+      Client build →  bin\Client\...   obj\Client\...
+  -->
+  <PropertyGroup>
+    <Flavor Condition="'$(Flavor)' == ''">Server</Flavor>
+    <BaseOutputPath>bin\$(Flavor)\</BaseOutputPath>
+    <BaseIntermediateOutputPath>obj\$(Flavor)\</BaseIntermediateOutputPath>
+
+    <!--
+      Now that obj/bin live under flavor sub-folders, the SDK's default source
+      glob (**/*.cs) only auto-excludes the CURRENT flavor's intermediate path.
+      Any leftover obj\Debug / obj\Win32 / bin\* folders from earlier builds
+      would otherwise be swept in, double-including the generated XAML *.g.i.cs
+      and breaking the build. Exclude the whole obj/bin trees — the XAML targets
+      add the current flavor's generated files explicitly, so nothing is lost.
+    -->
+    <DefaultItemExcludes>$(DefaultItemExcludes);obj\**;bin\**</DefaultItemExcludes>
+  </PropertyGroup>
+</Project>

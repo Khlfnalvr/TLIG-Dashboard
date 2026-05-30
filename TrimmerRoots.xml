@@ -15,4 +15,7 @@
     is inadvertently removed by the trimmer.
   -->
   <assembly fullname="TLIGDashboard" preserve="all"/>
+
+  <!-- Markdig uses reflection for the extension pipeline. -->
+  <assembly fullname="Markdig" preserve="all"/>
 </linker>

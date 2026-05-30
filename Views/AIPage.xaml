@@ -6,109 +6,14 @@
 
     <Grid x:Name="RootGrid" SizeChanged="RootGrid_SizeChanged">
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>  <!-- top bar -->
             <RowDefinition Height="*"/>     <!-- chat history -->
+            <RowDefinition Height="Auto"/>  <!-- quick suggestions -->
             <RowDefinition Height="Auto"/>  <!-- input bar -->
         </Grid.RowDefinitions>
 
-        <!-- ── Top bar ──────────────────────────────────────────────── -->
-        <Border Grid.Row="0"
-                BorderThickness="0,0,0,1"
-                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                Background="{ThemeResource LayerFillColorDefaultBrush}"
-                Padding="20,8,12,8">
-            <Grid>
-                <TextBlock x:Name="ModelLabel"
-                           FontSize="11" FontWeight="SemiBold"
-                           CharacterSpacing="60" Opacity="0.55"
-                           VerticalAlignment="Center"/>
-
-                <StackPanel Orientation="Horizontal"
-                            HorizontalAlignment="Right"
-                            Spacing="4">
-                    <!-- Clear chat -->
-                    <Button x:Name="ClearBtn"
-                            Padding="8,5"
-                            Click="ClearBtn_Click">
-                        <StackPanel Orientation="Horizontal" Spacing="6">
-                            <FontIcon FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
-                                      FontSize="12" Glyph="&#xE74D;"/>
-                            <TextBlock x:Name="ClearLabel" FontSize="12"/>
-                        </StackPanel>
-                    </Button>
-
-                    <!-- AI Settings -->
-                    <Button x:Name="SettingsBtn"
-                            Padding="8,5"
-                            Style="{ThemeResource AccentButtonStyle}">
-                        <StackPanel Orientation="Horizontal" Spacing="6">
-                            <FontIcon FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
-                                      FontSize="12" Glyph="&#xE713;"/>
-                            <TextBlock x:Name="SettingsLabel" FontSize="12"/>
-                        </StackPanel>
-                        <Button.Flyout>
-                            <Flyout x:Name="SettingsFlyout" Placement="Bottom">
-                                <Flyout.FlyoutPresenterStyle>
-                                    <Style TargetType="FlyoutPresenter">
-                                        <Setter Property="Padding"         Value="16,12,16,16"/>
-                                        <Setter Property="CornerRadius"    Value="{ThemeResource OverlayCornerRadius}"/>
-                                        <Setter Property="BorderBrush"     Value="{ThemeResource SurfaceStrokeColorFlyoutBrush}"/>
-                                        <Setter Property="BorderThickness" Value="1"/>
-                                        <Setter Property="MinWidth"        Value="340"/>
-                                    </Style>
-                                </Flyout.FlyoutPresenterStyle>
-
-                                <StackPanel Width="320" Spacing="12">
-                                    <!-- Server URL -->
-                                    <StackPanel Spacing="4">
-                                        <TextBlock x:Name="LblApiUrl" FontSize="11" Opacity="0.7"/>
-                                        <TextBox x:Name="ApiUrlBox"
-                                                 FontSize="12"
-                                                 PlaceholderText="https://api.deepseek.com"/>
-                                    </StackPanel>
-
-                                    <!-- API Key -->
-                                    <StackPanel Spacing="4">
-                                        <TextBlock x:Name="LblApiKey" FontSize="11" Opacity="0.7"/>
-                                        <PasswordBox x:Name="ApiKeyBox"
-                                                     FontSize="12"
-                                                     PlaceholderText="sk-..."/>
-                                    </StackPanel>
-
-                                    <!-- Model -->
-                                    <StackPanel Spacing="4">
-                                        <TextBlock x:Name="LblModel" FontSize="11" Opacity="0.7"/>
-                                        <TextBox x:Name="ModelBox"
-                                                 FontSize="12"
-                                                 PlaceholderText="deepseek-chat"/>
-                                    </StackPanel>
-
-                                    <!-- System Prompt -->
-                                    <StackPanel Spacing="4">
-                                        <TextBlock x:Name="LblSysPrompt" FontSize="11" Opacity="0.7"/>
-                                        <TextBox x:Name="SysPromptBox"
-                                                 FontSize="12"
-                                                 AcceptsReturn="True"
-                                                 TextWrapping="Wrap"
-                                                 MaxHeight="100"/>
-                                    </StackPanel>
-
-                                    <!-- Save -->
-                                    <Button x:Name="SaveSettingsBtn"
-                                            HorizontalAlignment="Stretch"
-                                            Style="{ThemeResource AccentButtonStyle}"
-                                            Click="SaveSettings_Click"/>
-                                </StackPanel>
-                            </Flyout>
-                        </Button.Flyout>
-                    </Button>
-                </StackPanel>
-            </Grid>
-        </Border>
-
         <!-- ── Chat history ─────────────────────────────────────────── -->
         <ScrollViewer x:Name="ChatScroll"
-                      Grid.Row="1"
+                      Grid.Row="0"
                       VerticalScrollBarVisibility="Auto"
                       HorizontalScrollBarVisibility="Disabled"
                       Padding="20,14,20,14">
@@ -116,6 +21,57 @@
                         Spacing="10"
                         HorizontalAlignment="Center"/>
         </ScrollViewer>
+
+        <!-- ── Quick Suggestions (above input) ───────────────────────── -->
+        <Border Grid.Row="1"
+                BorderThickness="0,1,0,0"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                Background="{ThemeResource LayerFillColorDefaultBrush}"
+                Padding="20,10,20,10">
+            <StackPanel x:Name="SuggestionPanel"
+                        Spacing="8"
+                        HorizontalAlignment="Center">
+                <TextBlock x:Name="SuggestionLabel"
+                           Text="{x:Bind Lang.Ai_QuickSuggestion, Mode=OneWay}"
+                           FontSize="11" FontWeight="SemiBold"
+                           Opacity="0.6"/>
+                <Grid x:Name="SuggestionGrid"
+                      ColumnSpacing="8" RowSpacing="8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <Button Grid.Row="0" Grid.Column="0"
+                            Tag="Tuning PID"
+                            HorizontalAlignment="Stretch"
+                            FontSize="13"
+                            Click="QuickSuggestion_Click"
+                            Content="{x:Bind Lang.Ai_SugTuningPid, Mode=OneWay}"/>
+                    <Button Grid.Row="0" Grid.Column="1"
+                            Tag="Analysis Overshoot"
+                            HorizontalAlignment="Stretch"
+                            FontSize="13"
+                            Click="QuickSuggestion_Click"
+                            Content="{x:Bind Lang.Ai_SugOvershoot, Mode=OneWay}"/>
+                    <Button Grid.Row="1" Grid.Column="0"
+                            Tag="Heat Exchanger Theory"
+                            HorizontalAlignment="Stretch"
+                            FontSize="13"
+                            Click="QuickSuggestion_Click"
+                            Content="{x:Bind Lang.Ai_SugHeatExchanger, Mode=OneWay}"/>
+                    <Button Grid.Row="1" Grid.Column="1"
+                            Tag="Troubleshooting"
+                            HorizontalAlignment="Stretch"
+                            FontSize="13"
+                            Click="QuickSuggestion_Click"
+                            Content="{x:Bind Lang.Ai_SugTroubleshooting, Mode=OneWay}"/>
+                </Grid>
+            </StackPanel>
+        </Border>
 
         <!-- ── Input bar ─────────────────────────────────────────────── -->
         <Border Grid.Row="2"
@@ -133,16 +89,21 @@
                 <TextBox x:Name="ChatInput"
                          Grid.Column="0"
                          FontSize="13"
-                         MaxHeight="120"
+                         MinHeight="34"
+                         MaxHeight="104"
+                         AcceptsReturn="True"
+                         TextWrapping="Wrap"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                         ScrollViewer.VerticalScrollBarVisibility="Auto"
                          VerticalAlignment="Center"
                          KeyDown="ChatInput_KeyDown"/>
 
                 <!-- Stop generation (visible while streaming) -->
                 <Button x:Name="StopBtn"
                         Grid.Column="1"
-                        Width="42" Height="42"
+                        Width="42"
                         Padding="0"
-                        VerticalAlignment="Bottom"
+                        VerticalAlignment="Stretch"
                         Visibility="Collapsed"
                         Click="StopBtn_Click">
                     <FontIcon FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
@@ -152,9 +113,9 @@
                 <!-- Send -->
                 <Button x:Name="ChatSendBtn"
                         Grid.Column="2"
-                        Width="42" Height="42"
+                        Width="42"
                         Padding="0"
-                        VerticalAlignment="Bottom"
+                        VerticalAlignment="Stretch"
                         Style="{ThemeResource AccentButtonStyle}"
                         Click="ChatSend_Click">
                     <FontIcon FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"

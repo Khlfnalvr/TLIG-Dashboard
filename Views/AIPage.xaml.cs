@@ -3,6 +3,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
+using TLIGDashboard.Helpers;
 using TLIGDashboard.Services;
 using Windows.UI;
 
@@ -29,9 +30,19 @@ public sealed partial class AIPage : Page
         double halfWidth = RootGrid.ActualWidth * 0.5;
         if (halfWidth > 0)
         {
-            ChatPanel.Width = halfWidth;
-            InputGrid.Width = halfWidth;
+            ChatPanel.Width      = halfWidth;
+            InputGrid.Width      = halfWidth;
+            SuggestionPanel.Width = halfWidth;
         }
+    }
+
+    private void QuickSuggestion_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button button) return;
+        string? prompt = button.Tag as string ?? button.Content?.ToString();
+        if (string.IsNullOrWhiteSpace(prompt)) return;
+        ChatInput.Text = prompt.Trim();
+        _ = SendMessageAsync();
     }
 
     // ── Initialise ────────────────────────────────────────────────────────────
@@ -39,6 +50,7 @@ public sealed partial class AIPage : Page
     // How many history entries are already rendered in ChatPanel.
     // When OnNavigatedTo fires, we only add the delta (new messages since last visit).
     private int _renderedCount;
+    private ElementTheme _renderedTheme = ElementTheme.Default;
 
     private bool _initialized;
     private void OnLoaded(object sender, RoutedEventArgs e)
@@ -49,15 +61,29 @@ public sealed partial class AIPage : Page
         {
             _initialized = true;
             Lang.PropertyChanged += (_, _) => DispatcherQueue.TryEnqueue(ApplyLocalization);
+            ActualThemeChanged += OnActualThemeChanged;
         }
+    }
+
+    private void OnActualThemeChanged(FrameworkElement sender, object args)
+    {
+        if (_cts != null) return; // don't disrupt active streaming
+        ChatPanel.Children.Clear();
+        _renderedCount = 0;
+        SyncBubblesWithHistory();
     }
 
     protected override void OnNavigatedTo(
         Microsoft.UI.Xaml.Navigation.NavigationEventArgs e)
     {
         base.OnNavigatedTo(e);
-        // Sync bubbles with App.Ai.History so messages sent from Dashboard
-        // (or a previous session) are visible when opening the AI page.
+        // If theme changed while this page was not in the visual tree (ActualThemeChanged
+        // doesn't fire on detached pages), force a full re-render.
+        if (_renderedCount > 0 && _renderedTheme != ActualTheme)
+        {
+            ChatPanel.Children.Clear();
+            _renderedCount = 0;
+        }
         SyncBubblesWithHistory();
     }
 
@@ -77,90 +103,48 @@ public sealed partial class AIPage : Page
                     AddUserBubble(msg.Content);
                     break;
                 case "assistant":
-                    // Render as completed bubble (no streaming needed for history)
-                    AddAiBubble(msg.Content);
+                {
+                    var (border, _) = AddAiBubble(msg.Content);
+                    border.Child = MarkdownRenderer.Render(
+                        msg.Content, 13, ActualTheme == ElementTheme.Dark);
                     break;
+                }
             }
         }
         _renderedCount = history.Count;
+        _renderedTheme = ActualTheme;
         ScrollToBottom();
     }
 
     private void ApplyLocalization()
     {
         ChatInput.PlaceholderText = Lang.Ai_InputHintFull;
-        ClearLabel.Text      = Lang.Ai_ClearChat;
-        SettingsLabel.Text   = Lang.Ai_Settings;
-        LblApiUrl.Text       = Lang.Ai_ApiUrl;
-        LblApiKey.Text       = Lang.Ai_ApiKey;
-        LblModel.Text        = Lang.Ai_Model;
-        LblSysPrompt.Text    = Lang.Ai_SystemPrompt;
-        SaveSettingsBtn.Content = Lang.Ai_SaveSettings;
         ToolTipService.SetToolTip(StopBtn, Lang.Ai_StopGen);
-        RefreshModelLabel();
     }
 
-    private void RefreshModelLabel() =>
-        ModelLabel.Text = Lang.Format("Ai_ModelLabel", _ai.Model);
-
-    // ── Settings persistence ──────────────────────────────────────────────────
-
-    private void LoadAiSettings()
-    {
-        var s = AppSettingsService.Load();
-        _ai.ApiUrl       = s.AiApiUrl;
-        _ai.ApiKey       = s.AiApiKey;
-        _ai.Model        = s.AiModel;
-        _ai.SystemPrompt = s.AiSystemPrompt;
-
-        ApiUrlBox.Text      = s.AiApiUrl;
-        ApiKeyBox.Password  = s.AiApiKey;
-        ModelBox.Text       = s.AiModel;
-        SysPromptBox.Text   = s.AiSystemPrompt;
-
-        RefreshModelLabel();
-    }
-
-    /// <summary>Called by MainWindow when AI settings are saved from the flyout.</summary>
+    /// <summary>Called by MainWindow when AI settings are saved.</summary>
     public void ReloadSettings()
     {
         var s = AppSettingsService.Load();
-        _ai.ApiUrl       = s.AiApiUrl;
-        _ai.ApiKey       = s.AiApiKey;
-        _ai.Model        = s.AiModel;
         _ai.SystemPrompt = s.AiSystemPrompt;
-        RefreshModelLabel();
-    }
 
-    private void SaveSettings_Click(object sender, RoutedEventArgs e)
-    {
-        _ai.ApiUrl       = ApiUrlBox.Text.Trim();
-        _ai.ApiKey       = ApiKeyBox.Password.Trim();
-        _ai.Model        = ModelBox.Text.Trim();
-        _ai.SystemPrompt = SysPromptBox.Text.Trim();
-
-        var s = AppSettingsService.Load();
-        s.AiApiUrl       = _ai.ApiUrl;
-        s.AiApiKey       = _ai.ApiKey;
-        s.AiModel        = _ai.Model;
-        s.AiSystemPrompt = _ai.SystemPrompt;
-        AppSettingsService.Save(s);
-
-        RefreshModelLabel();
-        SettingsFlyout.Hide();
-    }
-
-    // ── Clear chat ────────────────────────────────────────────────────────────
-
-    private void ClearBtn_Click(object sender, RoutedEventArgs e)
-    {
-        _ai.ClearHistory();
-        ChatPanel.Children.Clear();
-        _renderedCount = 0;
-
-        // Also clear DashboardPage's chat panel if it's cached in the Frame
-        if (App.CurrentWindow?.GetContentFrame()?.Content is DashboardPage dash)
-            dash.ClearChatPanel();
+        if (BuildInfo.IsServer)
+        {
+            // Server talks to the provider directly with its own key.
+            _ai.ApiUrl = s.AiApiUrl;
+            _ai.ApiKey = s.AiApiKey;
+            _ai.Model  = s.AiModel;
+        }
+        else
+        {
+            // Client routes chat through the server's /ai proxy. The access token
+            // stands in for the Bearer key; the server overrides the model, but
+            // AiService still requires a non-empty model string.
+            var host = s.ServerHost.Replace("http://", "").Replace("ws://", "").TrimEnd('/');
+            _ai.ApiUrl = string.IsNullOrWhiteSpace(host) ? "" : $"http://{host}/ai";
+            _ai.ApiKey = s.ServerToken;
+            _ai.Model  = "(server)";
+        }
     }
 
     // ── Send / stop ───────────────────────────────────────────────────────────
@@ -203,7 +187,7 @@ public sealed partial class AIPage : Page
         StopBtn.Visibility    = Visibility.Visible;
 
         AddUserBubble(text);
-        var aiBubble = AddAiBubble(Lang.Ai_Thinking);
+        var (aiBubbleBorder, aiBubble) = AddAiBubble(Lang.Ai_Thinking);
         _streamingBlock = aiBubble;
 
         _cts = new CancellationTokenSource();
@@ -245,12 +229,15 @@ public sealed partial class AIPage : Page
             System.Diagnostics.Debug.WriteLine($"[AiService] {ex}");
         }
 
-        // Back on UI thread — finalise bubble text
+        // Back on UI thread — finalise bubble
         if (errorMsg != null)
             aiBubble.Text = errorMsg;
         else if (!hasContent)
             aiBubble.Text = "⚠ Server tidak mengembalikan konten. " +
                             "Periksa nama model dan saldo API.";
+        else
+            aiBubbleBorder.Child = MarkdownRenderer.Render(
+                aiBubble.Text, 13, ActualTheme == ElementTheme.Dark);
 
         _cts?.Dispose();
         _cts                  = null;
@@ -284,7 +271,7 @@ public sealed partial class AIPage : Page
         ScrollToBottom();
     }
 
-    private TextBlock AddAiBubble(string initialText)
+    private (Border border, TextBlock tb) AddAiBubble(string initialText)
     {
         bool isDark = ActualTheme == ElementTheme.Dark;
         var bg = new SolidColorBrush(isDark
@@ -301,7 +288,7 @@ public sealed partial class AIPage : Page
         container.Children.Add(bubble);
         ChatPanel.Children.Add(container);
         ScrollToBottom();
-        return tb;
+        return (bubble, tb);
     }
 
     private void AddErrorBubble(string message)

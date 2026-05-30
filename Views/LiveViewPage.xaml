@@ -2,7 +2,202 @@
     x:Class="TLIGDashboard.Views.LiveViewPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:TLIGDashboard.Controls"
     Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
 
-    <Grid/>
+    <Page.Resources>
+        <Style x:Key="LiveViewCardStyle" TargetType="Border">
+            <Setter Property="Background" Value="{ThemeResource CardBackgroundFillColorDefaultBrush}"/>
+            <Setter Property="BorderBrush" Value="{ThemeResource CardStrokeColorDefaultBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="8"/>
+            <Setter Property="Padding" Value="12"/>
+        </Style>
+
+        <Style x:Key="LiveViewHeaderStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Opacity" Value="0.82"/>
+            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+        </Style>
+
+        <Style x:Key="LiveViewTitleStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Opacity" Value="0.82"/>
+            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+        </Style>
+
+        <Style x:Key="LiveViewTinyTextStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Opacity" Value="0.72"/>
+            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+        </Style>
+
+        <Style x:Key="LiveViewPillStyle" TargetType="Border">
+            <Setter Property="Background" Value="{ThemeResource CardBackgroundFillColorSecondaryBrush}"/>
+            <Setter Property="BorderBrush" Value="{ThemeResource CardStrokeColorDefaultBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="5"/>
+            <Setter Property="Padding" Value="12,5"/>
+            <Setter Property="MinHeight" Value="30"/>
+        </Style>
+    </Page.Resources>
+
+    <Grid Padding="16" RowSpacing="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="40"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <Border Grid.Row="0"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                BorderThickness="0,0,0,1"
+                Padding="8,0">
+            <Grid ColumnSpacing="10">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <FontIcon Grid.Column="0"
+                          FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                          Glyph="&#xE714;"
+                          FontSize="11"
+                          Opacity="0.82"
+                          VerticalAlignment="Center"/>
+                <TextBlock Grid.Column="1"
+                           Text="{x:Bind Lang.Live_Header, Mode=OneWay}"
+                           Style="{StaticResource LiveViewHeaderStyle}"
+                           VerticalAlignment="Center"/>
+            </Grid>
+        </Border>
+
+        <Grid x:Name="LiveHmiGrid"
+              Grid.Row="1"
+              SizeChanged="LiveHmiGrid_SizeChanged">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition x:Name="LiveColumn" Width="*"/>
+                <ColumnDefinition Width="8"/>
+                <ColumnDefinition x:Name="HmiColumn" Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <Border x:Name="LiveCameraPanel"
+                    Grid.Column="0"
+                    Style="{StaticResource LiveViewCardStyle}">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <Grid Grid.Row="0" ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+
+                        <ComboBox x:Name="CameraSelector"
+                                  Grid.Column="0"
+                                  MinWidth="176"
+                                  MaxWidth="260"
+                                  Height="28"
+                                  FontSize="11"
+                                  PlaceholderText="{x:Bind Lang.Live_SelectCamera, Mode=OneWay}"
+                                  SelectionChanged="CameraSelector_SelectionChanged"/>
+
+                        <Button x:Name="CameraStopBtn"
+                                Grid.Column="2"
+                                Height="28"
+                                MinWidth="54"
+                                Padding="10,0"
+                                FontSize="11"
+                                Visibility="Collapsed"
+                                Click="CameraStopBtn_Click"/>
+
+                        <Border Grid.Column="3"
+                                HorizontalAlignment="Right"
+                                Style="{StaticResource LiveViewPillStyle}">
+                            <TextBlock x:Name="CameraInfoText"
+                                       Text="-"
+                                       Style="{StaticResource LiveViewTinyTextStyle}"
+                                       VerticalAlignment="Center"/>
+                        </Border>
+                    </Grid>
+
+                    <Grid Grid.Row="1" Margin="0,12">
+                        <MediaPlayerElement x:Name="CameraPreview"
+                                            AreTransportControlsEnabled="False"
+                                            ManipulationMode="None"
+                                            Stretch="UniformToFill"
+                                            Visibility="Collapsed"/>
+
+                        <!-- Client mode: shows the camera frames received from the server -->
+                        <Image x:Name="CameraReceiveImage"
+                               Stretch="Uniform"
+                               Visibility="Collapsed"/>
+
+                        <StackPanel x:Name="CameraPlaceholder"
+                                    Spacing="8"
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Center">
+                            <TextBlock Text="..."
+                                       FontSize="20"
+                                       Opacity="0.35"
+                                       HorizontalAlignment="Center"/>
+                            <Canvas Width="58" Height="42" HorizontalAlignment="Center" Opacity="0.72">
+                                <Rectangle Canvas.Left="9" Canvas.Top="13"
+                                           Width="32" Height="20"
+                                           RadiusX="3" RadiusY="3"
+                                           Stroke="{ThemeResource TextFillColorPrimaryBrush}"
+                                           StrokeThickness="2"/>
+                                <Path Data="M41,18 L53,13 L53,33 L41,28 Z"
+                                      Stroke="{ThemeResource TextFillColorPrimaryBrush}"
+                                      StrokeThickness="2"
+                                      Fill="Transparent"/>
+                                <Line X1="8" Y1="6" X2="52" Y2="38"
+                                      Stroke="{ThemeResource TextFillColorPrimaryBrush}"
+                                      StrokeThickness="2"/>
+                            </Canvas>
+                            <TextBlock x:Name="CameraPlaceholderText"
+                                       Text="{x:Bind Lang.Live_Waiting, Mode=OneWay}"
+                                       FontSize="12"
+                                       Opacity="0.58"
+                                       TextAlignment="Center"
+                                       HorizontalAlignment="Center"/>
+                        </StackPanel>
+                    </Grid>
+
+                    <Border Grid.Row="2"
+                            HorizontalAlignment="Right"
+                            Style="{StaticResource LiveViewPillStyle}">
+                        <TextBlock Text="00:00:00 AM"
+                                   Style="{StaticResource LiveViewTinyTextStyle}"
+                                   VerticalAlignment="Center"/>
+                    </Border>
+                </Grid>
+            </Border>
+
+            <Grid x:Name="LiveHmiSplitter"
+                  Grid.Column="1"
+                  Background="Transparent"
+                  PointerPressed="LiveHmiSplitter_PointerPressed"
+                  PointerMoved="LiveHmiSplitter_PointerMoved"
+                  PointerReleased="LiveHmiSplitter_PointerReleased"
+                  PointerCaptureLost="LiveHmiSplitter_PointerCaptureLost">
+                <Border Width="1"
+                        HorizontalAlignment="Center"
+                        Background="{ThemeResource CardStrokeColorDefaultBrush}"/>
+            </Grid>
+
+            <Border x:Name="HmiPanel"
+                    Grid.Column="2"
+                    Style="{StaticResource LiveViewCardStyle}">
+                <controls:HmiShareView/>
+            </Border>
+        </Grid>
+    </Grid>
 </Page>

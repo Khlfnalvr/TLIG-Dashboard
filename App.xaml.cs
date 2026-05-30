@@ -17,6 +17,12 @@ public partial class App : Application
     /// </summary>
     public static Services.AiService Ai { get; } = new();
 
+    /// <summary>
+    /// Shared live connection status for the "Status System" panel.
+    /// Defaults to all-disconnected (red); updated as subsystems connect.
+    /// </summary>
+    public static Services.SystemStatusService Status { get; } = Services.SystemStatusService.Instance;
+
     public App()
     {
         InitializeComponent();

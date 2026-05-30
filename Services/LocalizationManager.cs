@@ -91,6 +91,7 @@ public sealed class LocalizationManager : INotifyPropertyChanged
     public string Nav_Playback     => T(nameof(Nav_Playback));
     public string Nav_Parameter    => T(nameof(Nav_Parameter));
     public string Nav_LiveView     => T(nameof(Nav_LiveView));
+    public string Nav_LearningAnalytic => T(nameof(Nav_LearningAnalytic));
     public string Nav_AI           => T(nameof(Nav_AI));
 
     // ── Theme toggle ──────────────────────────────────────────────────────
@@ -314,8 +315,9 @@ public sealed class LocalizationManager : INotifyPropertyChanged
     public string Login_ErrorInvalid => T(nameof(Login_ErrorInvalid));
 
     // ── Account flyout ────────────────────────────────────────────────────
-    public string Account_LoggedInAs => T(nameof(Account_LoggedInAs));
-    public string Account_Logout     => T(nameof(Account_Logout));
+    public string Account_LoggedInAs     => T(nameof(Account_LoggedInAs));
+    public string Account_NotLoggedInYet => T(nameof(Account_NotLoggedInYet));
+    public string Account_Logout         => T(nameof(Account_Logout));
 
     // ── System model panel ────────────────────────────────────────────────
     public string Panel_ModelSistem      => T(nameof(Panel_ModelSistem));
@@ -327,6 +329,109 @@ public sealed class LocalizationManager : INotifyPropertyChanged
     public string Panel_Settling         => T(nameof(Panel_Settling));
     public string Panel_SteadyErr        => T(nameof(Panel_SteadyErr));
     public string Panel_TransferFunction => T(nameof(Panel_TransferFunction));
+
+    // ── Live view / HMI ──────────────────────────────────────────────────
+    public string Live_Header      => T(nameof(Live_Header));
+    public string Live_CamInfo     => T(nameof(Live_CamInfo));
+    public string Live_Waiting     => T(nameof(Live_Waiting));
+    public string Live_LiveBtn     => T(nameof(Live_LiveBtn));
+    public string Live_SelectCamera => T(nameof(Live_SelectCamera));
+    public string Live_NoCamera     => T(nameof(Live_NoCamera));
+    public string Live_CameraDenied => T(nameof(Live_CameraDenied));
+    public string Live_CameraError  => T(nameof(Live_CameraError));
+    public string Live_CameraStop   => T(nameof(Live_CameraStop));
+    public string Hmi_Header       => T(nameof(Hmi_Header));
+    public string Hmi_SelectSource => T(nameof(Hmi_SelectSource));
+    public string Hmi_RefreshSources => T(nameof(Hmi_RefreshSources));
+    public string Hmi_StopShare    => T(nameof(Hmi_StopShare));
+    public string Hmi_NoSource     => T(nameof(Hmi_NoSource));
+    public string Hmi_SourceSelected => T(nameof(Hmi_SourceSelected));
+    public string Hmi_SourceClosed => T(nameof(Hmi_SourceClosed));
+    public string Hmi_SelectPlaceholder => T(nameof(Hmi_SelectPlaceholder));
+    public string Hmi_CaptureUnsupported => T(nameof(Hmi_CaptureUnsupported));
+    public string Hmi_CaptureError => T(nameof(Hmi_CaptureError));
+    public string Hmi_CaptureErrorUnknown => T(nameof(Hmi_CaptureErrorUnknown));
+    public string Hmi_WaitingStream => T(nameof(Hmi_WaitingStream));
+
+    // ── Sharing (server broadcast / client connect) ──────────────────────────
+    public string Share_TabBroadcast   => T(nameof(Share_TabBroadcast));
+    public string Share_TabConnect     => T(nameof(Share_TabConnect));
+    public string Share_Port           => T(nameof(Share_Port));
+    public string Share_Token          => T(nameof(Share_Token));
+    public string Share_ShareCamera    => T(nameof(Share_ShareCamera));
+    public string Share_ShareHmi       => T(nameof(Share_ShareHmi));
+    public string Share_Start          => T(nameof(Share_Start));
+    public string Share_Stop           => T(nameof(Share_Stop));
+    public string Share_Running        => T(nameof(Share_Running));
+    public string Share_Stopped        => T(nameof(Share_Stopped));
+    public string Share_Clients        => T(nameof(Share_Clients));
+    public string Share_LocalAddress   => T(nameof(Share_LocalAddress));
+    public string Share_PublicAddress  => T(nameof(Share_PublicAddress));
+    public string Share_PublicFetching => T(nameof(Share_PublicFetching));
+    public string Share_PublicFailed   => T(nameof(Share_PublicFailed));
+    public string Share_ServerHost     => T(nameof(Share_ServerHost));
+    public string Share_Connect        => T(nameof(Share_Connect));
+    public string Share_Disconnect     => T(nameof(Share_Disconnect));
+    public string Share_Connected      => T(nameof(Share_Connected));
+    public string Share_Disconnected   => T(nameof(Share_Disconnected));
+    public string Share_ConnError      => T(nameof(Share_ConnError));
+
+    // ── Learning analytic ────────────────────────────────────────────────
+    public string Learn_Title       => T(nameof(Learn_Title));
+    public string Learn_Status      => T(nameof(Learn_Status));
+    public string Learn_ModelQuality => T(nameof(Learn_ModelQuality));
+    public string Learn_Accuracy    => T(nameof(Learn_Accuracy));
+    public string Learn_Loss        => T(nameof(Learn_Loss));
+    public string Learn_Dataset     => T(nameof(Learn_Dataset));
+    public string Learn_LastTraining => T(nameof(Learn_LastTraining));
+    public string Learn_Waiting     => T(nameof(Learn_Waiting));
+    public string Learn_TrainingTrend => T(nameof(Learn_TrainingTrend));
+    public string Learn_FeatureImpact => T(nameof(Learn_FeatureImpact));
+    public string Learn_InsightQueue => T(nameof(Learn_InsightQueue));
+    public string Learn_DataCoverage => T(nameof(Learn_DataCoverage));
+    public string Learn_AnomalyScore => T(nameof(Learn_AnomalyScore));
+    public string Learn_OpenFull    => T(nameof(Learn_OpenFull));
+    public string Learn_Insight1    => T(nameof(Learn_Insight1));
+    public string Learn_Insight2    => T(nameof(Learn_Insight2));
+    public string Learn_Insight3    => T(nameof(Learn_Insight3));
+
+    // ── Control section ───────────────────────────────────────────────────
+    public string Ctl_Header       => T(nameof(Ctl_Header));
+    public string Ctl_Setpoint     => T(nameof(Ctl_Setpoint));
+    public string Ctl_Mode         => T(nameof(Ctl_Mode));
+    public string Ctl_Manual       => T(nameof(Ctl_Manual));
+    public string Ctl_Auto         => T(nameof(Ctl_Auto));
+    public string Ctl_Cascade      => T(nameof(Ctl_Cascade));
+    public string Ctl_Run          => T(nameof(Ctl_Run));
+    public string Ctl_Stop         => T(nameof(Ctl_Stop));
+    public string Ctl_Reset        => T(nameof(Ctl_Reset));
+    public string Ctl_EStop        => T(nameof(Ctl_EStop));
+
+    // ── Status system & alarm ─────────────────────────────────────────────
+    public string Sys_StatusTitle  => T(nameof(Sys_StatusTitle));
+    public string Sys_Plc          => T(nameof(Sys_Plc));
+    public string Sys_Camera       => T(nameof(Sys_Camera));
+    public string Sys_Sensor       => T(nameof(Sys_Sensor));
+    public string Sys_AiAssistant  => T(nameof(Sys_AiAssistant));
+    public string Sys_Online       => T(nameof(Sys_Online));
+    public string Sys_Active       => T(nameof(Sys_Active));
+    public string Sys_Offline      => T(nameof(Sys_Offline));
+    public string Sys_Inactive     => T(nameof(Sys_Inactive));
+    public string Alarm_Title      => T(nameof(Alarm_Title));
+    public string Alarm_None       => T(nameof(Alarm_None));
+
+    // ── Block diagram labels ───────────────────────────────────────────────
+    public string Blk_Setpoint     => T(nameof(Blk_Setpoint));
+    public string Blk_Pid          => T(nameof(Blk_Pid));
+    public string Blk_Plant        => T(nameof(Blk_Plant));
+    public string Resp_Step        => T(nameof(Resp_Step));
+
+    // ── AI quick suggestion ────────────────────────────────────────────────
+    public string Ai_QuickSuggestion     => T(nameof(Ai_QuickSuggestion));
+    public string Ai_SugTuningPid        => T(nameof(Ai_SugTuningPid));
+    public string Ai_SugOvershoot        => T(nameof(Ai_SugOvershoot));
+    public string Ai_SugHeatExchanger    => T(nameof(Ai_SugHeatExchanger));
+    public string Ai_SugTroubleshooting  => T(nameof(Ai_SugTroubleshooting));
 
     // ── AI chat ───────────────────────────────────────────────────────────
     public string Ai_Title         => T(nameof(Ai_Title));
@@ -371,7 +476,8 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             [nameof(Nav_Playback)]     = "Playback",
             [nameof(Nav_Parameter)]    = "Parameter",
             [nameof(Nav_LiveView)]     = "Live View",
-            [nameof(Nav_AI)]           = "AI",
+            [nameof(Nav_LearningAnalytic)] = "Learning Analytic",
+            [nameof(Nav_AI)]           = "AI Chat",
 
             [nameof(Ui_Dark)]          = "DARK",
             [nameof(Ui_Light)]         = "LIGHT",
@@ -575,8 +681,9 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             [nameof(Login_ErrorEmpty)]    = "Username and password cannot be empty.",
             [nameof(Login_ErrorInvalid)]  = "Invalid username or password.",
 
-            [nameof(Account_LoggedInAs)]  = "Logged in as",
-            [nameof(Account_Logout)]      = "Logout",
+            [nameof(Account_LoggedInAs)]     = "Logged in as",
+            [nameof(Account_NotLoggedInYet)] = "Not logged in yet",
+            [nameof(Account_Logout)]         = "Logout",
 
             [nameof(Panel_ModelSistem)]      = "SYSTEM MODEL",
             [nameof(Panel_DiagramBlok)]      = "BLOCK DIAGRAM",
@@ -604,6 +711,102 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             [nameof(Ai_Thinking)]      = "Thinking...",
             [nameof(Ai_StopGen)]       = "Stop",
             [nameof(Ai_ModelLabel)]    = "Model: {0}",
+
+            [nameof(Live_Header)]      = "LIVE - INSTRUMENTATION CONTROL AND OPTIMIZATION LABORATORY",
+            [nameof(Live_CamInfo)]     = "1080p - 30fps",
+            [nameof(Live_Waiting)]     = "Waiting for Camera Connection...",
+            [nameof(Live_LiveBtn)]     = "Live",
+            [nameof(Live_SelectCamera)] = "Select camera",
+            [nameof(Live_NoCamera)]     = "No camera detected",
+            [nameof(Live_CameraDenied)] = "Camera access denied",
+            [nameof(Live_CameraError)]  = "Camera preview failed: {0}",
+            [nameof(Live_CameraStop)]   = "Stop",
+            [nameof(Hmi_Header)]       = "HMI - HEAT EXCHANGER",
+            [nameof(Hmi_SelectSource)] = "Select source",
+            [nameof(Hmi_RefreshSources)] = "Refresh",
+            [nameof(Hmi_StopShare)]    = "Stop",
+            [nameof(Hmi_NoSource)]     = "No source",
+            [nameof(Hmi_SourceSelected)] = "Source selected",
+            [nameof(Hmi_SourceClosed)] = "Shared source was closed.",
+            [nameof(Hmi_SelectPlaceholder)] = "Select a LabVIEW HMI window or display to show here.",
+            [nameof(Hmi_CaptureUnsupported)] = "Screen sharing is not supported on this device.",
+            [nameof(Hmi_CaptureError)] = "Screen sharing failed: {0}",
+            [nameof(Hmi_CaptureErrorUnknown)] = "Screen sharing failed.",
+            [nameof(Hmi_WaitingStream)] = "Waiting for the server stream...",
+
+            [nameof(Share_TabBroadcast)] = "Broadcast",
+            [nameof(Share_TabConnect)]   = "Connect",
+            [nameof(Share_Port)]         = "Port",
+            [nameof(Share_Token)]        = "Access token",
+            [nameof(Share_ShareCamera)]  = "Share camera",
+            [nameof(Share_ShareHmi)]     = "Share HMI screen",
+            [nameof(Share_Start)]        = "Start server",
+            [nameof(Share_Stop)]         = "Stop server",
+            [nameof(Share_Running)]      = "Server running on port {0}",
+            [nameof(Share_Stopped)]      = "Server stopped",
+            [nameof(Share_Clients)]      = "{0} client(s) connected",
+            [nameof(Share_LocalAddress)]   = "LAN: {0}",
+            [nameof(Share_PublicAddress)]  = "Public: {0}",
+            [nameof(Share_PublicFetching)] = "Public IP: fetching...",
+            [nameof(Share_PublicFailed)]   = "Public IP: unavailable (no internet?)",
+            [nameof(Share_ServerHost)]   = "Server address (host:port)",
+            [nameof(Share_Connect)]      = "Connect",
+            [nameof(Share_Disconnect)]   = "Disconnect",
+            [nameof(Share_Connected)]    = "Connected to {0}",
+            [nameof(Share_Disconnected)] = "Not connected",
+            [nameof(Share_ConnError)]    = "Connection failed: {0}",
+
+            [nameof(Learn_Title)]       = "LEARNING ANALYTIC",
+            [nameof(Learn_Status)]      = "Learning Status",
+            [nameof(Learn_ModelQuality)] = "Model Quality",
+            [nameof(Learn_Accuracy)]    = "Accuracy",
+            [nameof(Learn_Loss)]        = "Loss",
+            [nameof(Learn_Dataset)]     = "Dataset",
+            [nameof(Learn_LastTraining)] = "Last Training",
+            [nameof(Learn_Waiting)]     = "Waiting for training data",
+            [nameof(Learn_TrainingTrend)] = "Training Trend",
+            [nameof(Learn_FeatureImpact)] = "Feature Impact",
+            [nameof(Learn_InsightQueue)] = "Insight Queue",
+            [nameof(Learn_DataCoverage)] = "Data Coverage",
+            [nameof(Learn_AnomalyScore)] = "Anomaly Score",
+            [nameof(Learn_OpenFull)]    = "Open Learning Analytic",
+            [nameof(Learn_Insight1)]    = "No closed-loop learning session has been recorded yet.",
+            [nameof(Learn_Insight2)]    = "Connect live data to start collecting training samples.",
+            [nameof(Learn_Insight3)]    = "PID response and process stability will appear here.",
+
+            [nameof(Ctl_Header)]       = "CONTROL",
+            [nameof(Ctl_Setpoint)]     = "Setpoint Temperature",
+            [nameof(Ctl_Mode)]         = "Mode",
+            [nameof(Ctl_Manual)]       = "Manual",
+            [nameof(Ctl_Auto)]         = "Auto",
+            [nameof(Ctl_Cascade)]      = "Cascade",
+            [nameof(Ctl_Run)]          = "RUN",
+            [nameof(Ctl_Stop)]         = "STOP",
+            [nameof(Ctl_Reset)]        = "RESET",
+            [nameof(Ctl_EStop)]        = "E-STOP",
+
+            [nameof(Sys_StatusTitle)]  = "STATUS SYSTEM",
+            [nameof(Sys_Plc)]          = "PLC",
+            [nameof(Sys_Camera)]       = "Camera",
+            [nameof(Sys_Sensor)]       = "Sensor",
+            [nameof(Sys_AiAssistant)]  = "AI Assistant",
+            [nameof(Sys_Online)]       = "Online",
+            [nameof(Sys_Active)]       = "Active",
+            [nameof(Sys_Offline)]      = "Offline",
+            [nameof(Sys_Inactive)]     = "Inactive",
+            [nameof(Alarm_Title)]      = "ALARM",
+            [nameof(Alarm_None)]       = "No Active Alarm",
+
+            [nameof(Blk_Setpoint)]     = "Setpoint",
+            [nameof(Blk_Pid)]          = "PID",
+            [nameof(Blk_Plant)]        = "Plant",
+            [nameof(Resp_Step)]        = "Step Response",
+
+            [nameof(Ai_QuickSuggestion)]    = "Quick Suggestion",
+            [nameof(Ai_SugTuningPid)]       = "Tuning PID",
+            [nameof(Ai_SugOvershoot)]       = "Analysis Overshoot",
+            [nameof(Ai_SugHeatExchanger)]   = "Heat Exchanger Theory",
+            [nameof(Ai_SugTroubleshooting)] = "Troubleshooting",
         },
 
         // ── INDONESIA ─────────────────────────────────────────────────────
@@ -616,7 +819,8 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             [nameof(Nav_Playback)]     = "Putar Ulang",
             [nameof(Nav_Parameter)]    = "Parameter",
             [nameof(Nav_LiveView)]     = "Tampilan Live",
-            [nameof(Nav_AI)]           = "AI",
+            [nameof(Nav_LearningAnalytic)] = "Learning Analytic",
+            [nameof(Nav_AI)]           = "AI Chat",
 
             [nameof(Ui_Dark)]          = "GELAP",
             [nameof(Ui_Light)]         = "TERANG",
@@ -820,8 +1024,9 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             [nameof(Login_ErrorEmpty)]    = "Username dan password tidak boleh kosong.",
             [nameof(Login_ErrorInvalid)]  = "Username atau password salah.",
 
-            [nameof(Account_LoggedInAs)]  = "Masuk sebagai",
-            [nameof(Account_Logout)]      = "Keluar",
+            [nameof(Account_LoggedInAs)]     = "Masuk sebagai",
+            [nameof(Account_NotLoggedInYet)] = "Belum login",
+            [nameof(Account_Logout)]         = "Keluar",
 
             [nameof(Panel_ModelSistem)]      = "MODEL SISTEM",
             [nameof(Panel_DiagramBlok)]      = "DIAGRAM BLOK",
@@ -849,6 +1054,102 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             [nameof(Ai_Thinking)]      = "Berpikir...",
             [nameof(Ai_StopGen)]       = "Berhenti",
             [nameof(Ai_ModelLabel)]    = "Model: {0}",
+
+            [nameof(Live_Header)]      = "LIVE - LABORATORIUM INSTRUMENTASI KONTROL DAN OPTIMASI",
+            [nameof(Live_CamInfo)]     = "1080p - 30fps",
+            [nameof(Live_Waiting)]     = "Menunggu Koneksi Kamera...",
+            [nameof(Live_LiveBtn)]     = "Live",
+            [nameof(Live_SelectCamera)] = "Pilih kamera",
+            [nameof(Live_NoCamera)]     = "Tidak ada kamera terdeteksi",
+            [nameof(Live_CameraDenied)] = "Akses kamera ditolak",
+            [nameof(Live_CameraError)]  = "Preview kamera gagal: {0}",
+            [nameof(Live_CameraStop)]   = "Stop",
+            [nameof(Hmi_Header)]       = "HMI - HEAT EXCHANGER",
+            [nameof(Hmi_SelectSource)] = "Pilih source",
+            [nameof(Hmi_RefreshSources)] = "Refresh",
+            [nameof(Hmi_StopShare)]    = "Stop",
+            [nameof(Hmi_NoSource)]     = "Belum ada source",
+            [nameof(Hmi_SourceSelected)] = "Source dipilih",
+            [nameof(Hmi_SourceClosed)] = "Source share sudah ditutup.",
+            [nameof(Hmi_SelectPlaceholder)] = "Pilih window LabVIEW HMI atau layar untuk ditampilkan di sini.",
+            [nameof(Hmi_CaptureUnsupported)] = "Screen sharing tidak didukung di perangkat ini.",
+            [nameof(Hmi_CaptureError)] = "Screen sharing gagal: {0}",
+            [nameof(Hmi_CaptureErrorUnknown)] = "Screen sharing gagal.",
+            [nameof(Hmi_WaitingStream)] = "Menunggu stream dari server...",
+
+            [nameof(Share_TabBroadcast)] = "Siaran",
+            [nameof(Share_TabConnect)]   = "Sambung",
+            [nameof(Share_Port)]         = "Port",
+            [nameof(Share_Token)]        = "Token akses",
+            [nameof(Share_ShareCamera)]  = "Bagikan kamera",
+            [nameof(Share_ShareHmi)]     = "Bagikan layar HMI",
+            [nameof(Share_Start)]        = "Mulai server",
+            [nameof(Share_Stop)]         = "Hentikan server",
+            [nameof(Share_Running)]      = "Server berjalan di port {0}",
+            [nameof(Share_Stopped)]      = "Server berhenti",
+            [nameof(Share_Clients)]      = "{0} client terhubung",
+            [nameof(Share_LocalAddress)]   = "LAN: {0}",
+            [nameof(Share_PublicAddress)]  = "Publik: {0}",
+            [nameof(Share_PublicFetching)] = "IP Publik: mengambil...",
+            [nameof(Share_PublicFailed)]   = "IP Publik: tidak tersedia (tidak ada internet?)",
+            [nameof(Share_ServerHost)]   = "Alamat server (host:port)",
+            [nameof(Share_Connect)]      = "Sambungkan",
+            [nameof(Share_Disconnect)]   = "Putuskan",
+            [nameof(Share_Connected)]    = "Tersambung ke {0}",
+            [nameof(Share_Disconnected)] = "Tidak tersambung",
+            [nameof(Share_ConnError)]    = "Koneksi gagal: {0}",
+
+            [nameof(Learn_Title)]       = "LEARNING ANALYTIC",
+            [nameof(Learn_Status)]      = "Status Learning",
+            [nameof(Learn_ModelQuality)] = "Kualitas Model",
+            [nameof(Learn_Accuracy)]    = "Akurasi",
+            [nameof(Learn_Loss)]        = "Loss",
+            [nameof(Learn_Dataset)]     = "Dataset",
+            [nameof(Learn_LastTraining)] = "Training Terakhir",
+            [nameof(Learn_Waiting)]     = "Menunggu data training",
+            [nameof(Learn_TrainingTrend)] = "Tren Training",
+            [nameof(Learn_FeatureImpact)] = "Dampak Fitur",
+            [nameof(Learn_InsightQueue)] = "Antrian Insight",
+            [nameof(Learn_DataCoverage)] = "Cakupan Data",
+            [nameof(Learn_AnomalyScore)] = "Skor Anomali",
+            [nameof(Learn_OpenFull)]    = "Buka Learning Analytic",
+            [nameof(Learn_Insight1)]    = "Sesi learning closed-loop belum direkam.",
+            [nameof(Learn_Insight2)]    = "Hubungkan data live untuk mulai mengumpulkan sampel training.",
+            [nameof(Learn_Insight3)]    = "Respon PID dan stabilitas proses akan tampil di sini.",
+
+            [nameof(Ctl_Header)]       = "KONTROL",
+            [nameof(Ctl_Setpoint)]     = "Setpoint Temperatur",
+            [nameof(Ctl_Mode)]         = "Mode",
+            [nameof(Ctl_Manual)]       = "Manual",
+            [nameof(Ctl_Auto)]         = "Auto",
+            [nameof(Ctl_Cascade)]      = "Cascade",
+            [nameof(Ctl_Run)]          = "JALANKAN",
+            [nameof(Ctl_Stop)]         = "BERHENTI",
+            [nameof(Ctl_Reset)]        = "RESET",
+            [nameof(Ctl_EStop)]        = "E-STOP",
+
+            [nameof(Sys_StatusTitle)]  = "STATUS SISTEM",
+            [nameof(Sys_Plc)]          = "PLC",
+            [nameof(Sys_Camera)]       = "Kamera",
+            [nameof(Sys_Sensor)]       = "Sensor",
+            [nameof(Sys_AiAssistant)]  = "Asisten AI",
+            [nameof(Sys_Online)]       = "Online",
+            [nameof(Sys_Active)]       = "Aktif",
+            [nameof(Sys_Offline)]      = "Offline",
+            [nameof(Sys_Inactive)]     = "Nonaktif",
+            [nameof(Alarm_Title)]      = "ALARM",
+            [nameof(Alarm_None)]       = "Tidak Ada Alarm Aktif",
+
+            [nameof(Blk_Setpoint)]     = "Setpoint",
+            [nameof(Blk_Pid)]          = "PID",
+            [nameof(Blk_Plant)]        = "Plant",
+            [nameof(Resp_Step)]        = "Respon Step",
+
+            [nameof(Ai_QuickSuggestion)]    = "Saran Cepat",
+            [nameof(Ai_SugTuningPid)]       = "Tuning PID",
+            [nameof(Ai_SugOvershoot)]       = "Analisis Overshoot",
+            [nameof(Ai_SugHeatExchanger)]   = "Teori Heat Exchanger",
+            [nameof(Ai_SugTroubleshooting)] = "Troubleshooting",
         },
     };
 
@@ -868,6 +1169,11 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             ["Ui_SourceNotConnected"] = "SOURCE: NOT CONNECTED",
             ["Ui_SourceConnected"] = "SOURCE: {0} @ {1}",
             ["Ui_InitialConnectionHint"] = "Not connected - open Control Panel to connect to the server",
+            ["Ui_ServerOpcNotConnected"] = "OPC UA: NOT CONNECTED",
+            ["Ui_ServerOpcHint"] = "OPC UA not connected — open the connection flyout to connect to a PLC/OPC UA server",
+            ["Ui_ClientNotConnected"] = "SERVER: NOT CONNECTED",
+            ["Ui_ClientNotConnectedHint"] = "Not connected to TLIG Dashboard Server — open the connection flyout and enter the server address",
+            ["Ui_ClientConnected"] = "SERVER: {0}",
 
             ["OpcUa_StatusConnected"]   = "Connected — {0}",
             ["OpcUa_StatusDisconnected"] = "Disconnected",
@@ -999,6 +1305,11 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             ["Ui_SourceNotConnected"] = "SUMBER: TIDAK TERHUBUNG",
             ["Ui_SourceConnected"] = "SUMBER: {0} @ {1}",
             ["Ui_InitialConnectionHint"] = "Tidak terhubung - buka Panel Kontrol untuk terhubung ke server",
+            ["Ui_ServerOpcNotConnected"] = "OPC UA: TIDAK TERHUBUNG",
+            ["Ui_ServerOpcHint"] = "OPC UA belum terhubung — buka flyout koneksi untuk menyambung ke PLC/server OPC UA",
+            ["Ui_ClientNotConnected"] = "SERVER: TIDAK TERHUBUNG",
+            ["Ui_ClientNotConnectedHint"] = "Belum terhubung ke TLIG Dashboard Server — buka flyout koneksi dan masukkan alamat server",
+            ["Ui_ClientConnected"] = "SERVER: {0}",
 
             ["OpcUa_StatusConnected"]   = "Terhubung — {0}",
             ["OpcUa_StatusDisconnected"] = "Terputus",
