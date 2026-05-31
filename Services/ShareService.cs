@@ -13,12 +13,18 @@ namespace TLIGDashboard.Services;
 /// Wire-protocol constants shared by <see cref="ShareServer"/> and
 /// <see cref="ShareClient"/>.
 ///
+/// Authentication is credential-based: the client POSTs <c>{username,password}</c>
+/// to <c>/auth/login</c> and receives a short-lived <b>session token</b> that the
+/// server validates against its user database. That session token is then used as
+/// the WebSocket credential and the AI-proxy Bearer credential — there is no longer
+/// a static, manually-shared access token.
+///
 /// Frames are pushed server→client as binary WebSocket messages:
 ///   byte 0      = channel (<see cref="ChannelCamera"/> / <see cref="ChannelHmi"/>)
 ///   byte 1..end = JPEG image bytes
 ///
 /// AI chat is proxied over HTTP: the client POSTs an OpenAI-compatible body to
-/// <c>/ai/chat/completions</c> with the access token as the Bearer credential;
+/// <c>/ai/chat/completions</c> with the session token as the Bearer credential;
 /// the server swaps in its real provider key and streams the reply back.
 /// </summary>
 public static class ShareProtocol
@@ -26,19 +32,19 @@ public static class ShareProtocol
     public const byte ChannelCamera = 0;
     public const byte ChannelHmi    = 1;
 
-    public const string WsPath  = "/ws";
-    public const string AiPath  = "/ai/chat/completions";
-    public const string GuidWs  = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
+    public const string WsPath         = "/ws";
+    public const string AiPath         = "/ai/chat/completions";
+    public const string AuthLoginPath  = "/auth/login";
+    public const string AuthLogoutPath = "/auth/logout";
+    public const string GuidWs         = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 
-    /// <summary>Generates a short, human-typeable access token.</summary>
-    public static string NewToken()
+    /// <summary>Generates an opaque, high-entropy session token (URL-safe base64).</summary>
+    public static string NewSessionToken()
     {
-        const string alphabet = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
-        Span<byte> rnd = stackalloc byte[8];
+        Span<byte> rnd = stackalloc byte[24];
         RandomNumberGenerator.Fill(rnd);
-        var sb = new StringBuilder(8);
-        foreach (var b in rnd) sb.Append(alphabet[b % alphabet.Length]);
-        return sb.ToString();
+        return Convert.ToBase64String(rnd)
+            .Replace('+', '-').Replace('/', '_').TrimEnd('=');
     }
 }
 
@@ -60,7 +66,6 @@ public sealed class ShareServer
     // ── State ───────────────────────────────────────────────────────────────
     public bool   IsRunning   { get; private set; }
     public int    Port        { get; private set; }
-    public string Token       { get; private set; } = "";
     public bool   ShareCamera { get; private set; } = true;
     public bool   ShareHmi    { get; private set; } = true;
     public int    ClientCount => _clients.Count;
@@ -71,15 +76,34 @@ public sealed class ShareServer
     private CancellationTokenSource? _cts;
     private readonly ConcurrentDictionary<WsClient, byte> _clients = new();
 
+    // Active login sessions: token → who it belongs to. Issued by /auth/login,
+    // validated by the WebSocket + AI proxy, revoked by /auth/logout and on Stop.
+    private readonly ConcurrentDictionary<string, Session> _sessions = new();
+    private sealed record Session(string Username, string Role, DateTime IssuedUtc);
+
+    private string IssueSession(UserAccount user)
+    {
+        var token = ShareProtocol.NewSessionToken();
+        _sessions[token] = new Session(user.Username, user.Role, DateTime.UtcNow);
+        return token;
+    }
+
+    private bool ValidateSession(string? token) =>
+        !string.IsNullOrEmpty(token) && _sessions.ContainsKey(token);
+
+    private void RevokeSession(string? token)
+    {
+        if (!string.IsNullOrEmpty(token)) _sessions.TryRemove(token, out _);
+    }
+
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 
-    public void Start(int port, string token, bool shareCamera = true, bool shareHmi = true)
+    public void Start(int port, bool shareCamera = true, bool shareHmi = true)
     {
         Stop();
         Port  = port;
         ShareCamera = shareCamera;
         ShareHmi    = shareHmi;
-        Token = string.IsNullOrWhiteSpace(token) ? ShareProtocol.NewToken() : token.Trim();
         _cts  = new CancellationTokenSource();
         _listener = new TcpListener(IPAddress.Any, port);
         _listener.Start();
@@ -97,6 +121,7 @@ public sealed class ShareServer
         foreach (var c in _clients.Keys)
             c.Dispose();
         _clients.Clear();
+        _sessions.Clear();
         _cts?.Dispose();
         _cts = null;
         RaiseStateChanged();
@@ -154,7 +179,15 @@ public sealed class ShareServer
                 return; // socket owns the connection lifetime
             }
 
-            if (method == "POST" && path == ShareProtocol.AiPath)
+            if (method == "POST" && path == ShareProtocol.AuthLoginPath)
+            {
+                await HandleAuthLoginAsync(stream, headers, ct);
+            }
+            else if (method == "POST" && path == ShareProtocol.AuthLogoutPath)
+            {
+                await HandleAuthLogoutAsync(stream, headers, ct);
+            }
+            else if (method == "POST" && path == ShareProtocol.AiPath)
             {
                 await HandleAiProxyAsync(stream, headers, ct);
             }
@@ -181,9 +214,9 @@ public sealed class ShareServer
         TcpClient tcp, NetworkStream stream, string rawPath,
         Dictionary<string, string> headers, CancellationToken ct)
     {
-        if (GetToken(rawPath, headers) != Token)
+        if (!ValidateSession(GetToken(rawPath, headers)))
         {
-            await WriteSimpleAsync(stream, "401 Unauthorized", "text/plain", "Invalid token", ct);
+            await WriteSimpleAsync(stream, "401 Unauthorized", "text/plain", "Invalid or expired session", ct);
             tcp.Close();
             return;
         }
@@ -227,20 +260,65 @@ public sealed class ShareServer
         }
     }
 
+    // ── Auth: credential login → session token, and logout → revoke ─────────────
+
+    private async Task HandleAuthLoginAsync(
+        NetworkStream stream, Dictionary<string, string> headers, CancellationToken ct)
+    {
+        var body = await ReadBodyAsync(stream, headers, ct);
+
+        string username = "", password = "";
+        try
+        {
+            var node = JsonNode.Parse(body);
+            username = (string?)node?["username"] ?? "";
+            password = (string?)node?["password"] ?? "";
+        }
+        catch { /* malformed body → treated as empty credentials below */ }
+
+        var user = UserStore.Instance.Verify(username, password);
+        if (user is null)
+        {
+            await WriteSimpleAsync(stream, "401 Unauthorized", "application/json",
+                "{\"error\":\"invalid_credentials\"}", ct);
+            return;
+        }
+
+        var token = IssueSession(user);
+        var json = new JsonObject
+        {
+            ["token"]       = token,
+            ["username"]    = user.Username,
+            ["displayName"] = user.DisplayName,
+            ["role"]        = user.Role,
+        }.ToJsonString();
+        await WriteJsonAsync(stream, json, ct);
+    }
+
+    private async Task HandleAuthLogoutAsync(
+        NetworkStream stream, Dictionary<string, string> headers, CancellationToken ct)
+    {
+        if (headers.TryGetValue("authorization", out var auth) &&
+            auth.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+            RevokeSession(auth["Bearer ".Length..].Trim());
+
+        await WriteJsonAsync(stream, "{\"ok\":true}", ct);
+    }
+
     // ── AI proxy: inject the real provider key, override the model, stream back ─
 
     private async Task HandleAiProxyAsync(
         NetworkStream stream, Dictionary<string, string> headers, CancellationToken ct)
     {
-        // Validate the bearer token the client presented.
+        // Validate the session token the client presented as the Bearer credential.
         string presented = "";
         if (headers.TryGetValue("authorization", out var auth) &&
             auth.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
             presented = auth["Bearer ".Length..].Trim();
 
-        if (presented != Token)
+        if (!ValidateSession(presented))
         {
-            await WriteSimpleAsync(stream, "401 Unauthorized", "text/plain", "Invalid token", ct);
+            await WriteSimpleAsync(stream, "401 Unauthorized", "text/plain", "Invalid or expired session", ct);
             return;
         }
 
@@ -500,11 +578,12 @@ public sealed class ShareClient : IDisposable
     public async Task<bool> ConnectAsync(string host, string token)
     {
         Disconnect();
-        host = host.Trim();
-        // Accept "host:port", "ws://host:port", or "http://host:port".
-        host = host.Replace("http://", "").Replace("ws://", "").TrimEnd('/');
+        // Derive the WebSocket scheme from the same TLS-detection logic used by AuthClient:
+        // wss:// for proxied domains (Cloudflare Tunnel etc.), ws:// for direct LAN:port.
+        var wsScheme = AuthClient.NeedsTls(host) ? "wss" : "ws";
+        var hostNorm = AuthClient.NormalizeHost(host);
 
-        var uri = new Uri($"ws://{host}{ShareProtocol.WsPath}?token={Uri.EscapeDataString(token.Trim())}");
+        var uri = new Uri($"{wsScheme}://{hostNorm}{ShareProtocol.WsPath}?token={Uri.EscapeDataString(token.Trim())}");
         _cts = new CancellationTokenSource();
         _ws  = new ClientWebSocket();
 
@@ -577,4 +656,137 @@ public sealed class ShareClient : IDisposable
     }
 
     public void Dispose() => Disconnect();
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  AUTH CLIENT (credential login → session token)
+// ════════════════════════════════════════════════════════════════════════════
+
+/// <summary>Outcome of a credential login attempt against a server.</summary>
+public sealed class AuthResult
+{
+    public bool    Success     { get; init; }
+    public string  Token       { get; init; } = "";
+    public string  DisplayName { get; init; } = "";
+    public string  Role        { get; init; } = "";
+    /// <summary>Localization key describing the failure (null on success).</summary>
+    public string? ErrorKey    { get; init; }
+    /// <summary>Optional technical detail (exception text, status code) for logs.</summary>
+    public string? Detail      { get; init; }
+}
+
+/// <summary>
+/// Stateless helper that performs credential login / logout against a
+/// <see cref="ShareServer"/>. On success the server returns a session token that
+/// the caller stores and feeds to <see cref="ShareClient"/> and the AI proxy.
+/// </summary>
+public static class AuthClient
+{
+    /// <summary>
+    /// Strips any explicit scheme and trailing slash, returning just the
+    /// <c>host[:port]</c> string used for connection.
+    /// Examples: "http://192.168.1.10:8088/" → "192.168.1.10:8088"
+    ///           "https://abc.trycloudflare.com" → "abc.trycloudflare.com"
+    /// </summary>
+    public static string NormalizeHost(string host) =>
+        (host ?? "").Trim()
+            .Replace("https://", "", StringComparison.OrdinalIgnoreCase)
+            .Replace("http://",  "", StringComparison.OrdinalIgnoreCase)
+            .Replace("wss://",   "", StringComparison.OrdinalIgnoreCase)
+            .Replace("ws://",    "", StringComparison.OrdinalIgnoreCase)
+            .TrimEnd('/');
+
+    /// <summary>
+    /// Returns true when the host string indicates a TLS connection is required.
+    /// Rule: a host WITHOUT an explicit port number is assumed to be a proxied
+    /// domain (Cloudflare Tunnel, ngrok HTTPS, etc.) that terminates TLS at the
+    /// edge → use wss:// and https://.
+    /// A host WITH an explicit port (e.g. "192.168.1.10:8088", "lab.internal:8088")
+    /// is a direct / LAN connection → use ws:// and http://.
+    /// The user can override by prefixing "https://" or "wss://" explicitly.
+    /// </summary>
+    public static bool NeedsTls(string rawHost)
+    {
+        rawHost = (rawHost ?? "").Trim();
+        // Explicit scheme takes precedence.
+        if (rawHost.StartsWith("https://", StringComparison.OrdinalIgnoreCase) ||
+            rawHost.StartsWith("wss://",   StringComparison.OrdinalIgnoreCase))
+            return true;
+        if (rawHost.StartsWith("http://",  StringComparison.OrdinalIgnoreCase) ||
+            rawHost.StartsWith("ws://",    StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        // No explicit scheme: presence of a port number → direct TCP, plain.
+        var normalized = NormalizeHost(rawHost);
+        int colonIdx   = normalized.LastIndexOf(':');
+        if (colonIdx >= 0 && int.TryParse(normalized.AsSpan(colonIdx + 1), out _))
+            return false;   // has ":PORT" → LAN / direct
+
+        return true;        // domain with no port → assume proxied HTTPS
+    }
+
+    /// <summary>
+    /// Returns the base HTTP/HTTPS URL for the server (no trailing slash).
+    /// Used by <see cref="LoginAsync"/>, <see cref="LogoutAsync"/>, and
+    /// <see cref="Views.AIPage"/> for the AI proxy URL.
+    /// </summary>
+    public static string BaseUrl(string rawHost)
+    {
+        var host   = NormalizeHost(rawHost);
+        var scheme = NeedsTls(rawHost) ? "https" : "http";
+        return $"{scheme}://{host}";
+    }
+
+    public static async Task<AuthResult> LoginAsync(
+        string host, string username, string password, CancellationToken ct = default)
+    {
+        var normalizedHost = NormalizeHost(host);
+        if (string.IsNullOrWhiteSpace(normalizedHost))
+            return new AuthResult { ErrorKey = "Login_ErrorNoServer" };
+
+        var url     = $"{BaseUrl(host)}{ShareProtocol.AuthLoginPath}";
+        var payload = new JsonObject { ["username"] = username, ["password"] = password }.ToJsonString();
+
+        using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
+        try
+        {
+            using var resp = await http.PostAsync(
+                url, new StringContent(payload, Encoding.UTF8, "application/json"), ct);
+
+            if (resp.StatusCode == HttpStatusCode.Unauthorized)
+                return new AuthResult { ErrorKey = "Login_ErrorInvalid" };
+            if (!resp.IsSuccessStatusCode)
+                return new AuthResult { ErrorKey = "Login_ErrorUnreachable", Detail = $"HTTP {(int)resp.StatusCode}" };
+
+            var json = await resp.Content.ReadAsStringAsync(ct);
+            var node = JsonNode.Parse(json);
+            return new AuthResult
+            {
+                Success     = true,
+                Token       = (string?)node?["token"]       ?? "",
+                DisplayName = (string?)node?["displayName"] ?? username,
+                Role        = (string?)node?["role"]        ?? "",
+            };
+        }
+        catch (Exception ex)
+        {
+            return new AuthResult { ErrorKey = "Login_ErrorUnreachable", Detail = ex.Message };
+        }
+    }
+
+    /// <summary>Best-effort revoke of a session token on the server.</summary>
+    public static async Task LogoutAsync(string host, string token)
+    {
+        if (string.IsNullOrWhiteSpace(NormalizeHost(host)) ||
+            string.IsNullOrWhiteSpace(token)) return;
+        try
+        {
+            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
+            using var req  = new HttpRequestMessage(
+                HttpMethod.Post, $"{BaseUrl(host)}{ShareProtocol.AuthLogoutPath}");
+            req.Headers.TryAddWithoutValidation("Authorization", $"Bearer {token}");
+            await http.SendAsync(req);
+        }
+        catch { /* logout is best-effort; the session also dies when the server stops */ }
+    }
 }

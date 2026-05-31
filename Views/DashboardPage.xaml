@@ -660,7 +660,7 @@
                             <MediaPlayerElement x:Name="DashboardCameraPreview"
                                                 AreTransportControlsEnabled="False"
                                                 ManipulationMode="None"
-                                                Stretch="UniformToFill"
+                                                Stretch="Uniform"
                                                 Visibility="Collapsed"/>
                             <!-- Client mode: shows the camera frames received from the server -->
                             <Image x:Name="DashboardCameraReceiveImage"

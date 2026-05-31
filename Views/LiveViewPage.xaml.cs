@@ -84,8 +84,10 @@ public sealed partial class LiveViewPage : Page
 
         if (_clientMode)
             EnterCameraClientMode();
-        else
+        else if (_mediaCapture is null)
             await PopulateCameraListAsync();
+        else
+            RefreshCameraStopBtn(); // returning to page — camera already running
     }
 
     // ── Client mode: render camera frames received from the server ────────────
@@ -133,22 +135,13 @@ public sealed partial class LiveViewPage : Page
         catch { /* drop a bad frame */ }
     }
 
-    private async void OnUnloaded(object sender, RoutedEventArgs e)
+    private void OnUnloaded(object sender, RoutedEventArgs e)
     {
         _isPageLoaded = false;
 
         if (_clientMode)
             ShareClient.Instance.FrameReceived -= OnRemoteCameraFrame;
-
-        await _cameraSwitchLock.WaitAsync();
-        try
-        {
-            StopCameraPreview(updateUi: false);
-        }
-        finally
-        {
-            _cameraSwitchLock.Release();
-        }
+        // Camera preview and broadcast keep running in the background.
     }
 
     private double AvailableWidth =>

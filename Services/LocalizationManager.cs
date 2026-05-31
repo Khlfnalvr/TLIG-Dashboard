@@ -461,6 +461,110 @@ public sealed class LocalizationManager : INotifyPropertyChanged
     public string Cell_TrimReset      => T(nameof(Cell_TrimReset));
     public string Cell_TrimHint       => T(nameof(Cell_TrimHint));
 
+    // ── Login (credential connect) ────────────────────────────────────────
+    public string Login_ServerAddress     => T(nameof(Login_ServerAddress));
+    public string Login_ServerAddressHint => T(nameof(Login_ServerAddressHint));
+    public string Login_Connecting         => T(nameof(Login_Connecting));
+    public string Login_ErrorNoServer       => T(nameof(Login_ErrorNoServer));
+    public string Login_ErrorUnreachable     => T(nameof(Login_ErrorUnreachable));
+
+    // ── Sharing: session / connect panel ──────────────────────────────────
+    public string Share_ServerAccount  => T(nameof(Share_ServerAccount));
+    public string Share_NotLoggedIn    => T(nameof(Share_NotLoggedIn));
+    public string Share_LoginAgain     => T(nameof(Share_LoginAgain));
+    public string Share_AuthHint         => T(nameof(Share_AuthHint));
+
+    // ── Firewall / port-forwarding status ─────────────────────────────────
+    public string Share_FwTitle          => T(nameof(Share_FwTitle));
+    public string Share_FwActive         => T(nameof(Share_FwActive));
+    public string Share_FwMissing        => T(nameof(Share_FwMissing));
+    public string Share_FwUnknown        => T(nameof(Share_FwUnknown));
+    public string Share_FwAddBtn         => T(nameof(Share_FwAddBtn));
+    public string Share_FwAdding         => T(nameof(Share_FwAdding));
+    public string Share_FwAddFailed      => T(nameof(Share_FwAddFailed));
+    public string Share_NatHint          => T(nameof(Share_NatHint));
+    public string Share_TunnelHint       => T(nameof(Share_TunnelHint));
+
+    // ── Cloudflare Tunnel ─────────────────────────────────────────────────────
+    public string Tunnel_Title         => T(nameof(Tunnel_Title));
+    public string Tunnel_Start         => T(nameof(Tunnel_Start));
+    public string Tunnel_Stop          => T(nameof(Tunnel_Stop));
+    public string Tunnel_Starting      => T(nameof(Tunnel_Starting));
+    public string Tunnel_Running       => T(nameof(Tunnel_Running));
+    public string Tunnel_Stopped       => T(nameof(Tunnel_Stopped));
+    public string Tunnel_Error         => T(nameof(Tunnel_Error));
+    public string Tunnel_NotFound      => T(nameof(Tunnel_NotFound));
+    public string Tunnel_Download      => T(nameof(Tunnel_Download));
+    public string Tunnel_Downloading   => T(nameof(Tunnel_Downloading));
+    public string Tunnel_DownloadFail  => T(nameof(Tunnel_DownloadFail));
+    public string Tunnel_CopyUrl       => T(nameof(Tunnel_CopyUrl));
+    public string Tunnel_Copied        => T(nameof(Tunnel_Copied));
+    public string Tunnel_ShareHint     => T(nameof(Tunnel_ShareHint));
+
+    // ── Cloudflare Tunnel — custom domain (named tunnel) ────────────────────────
+    public string Tunnel_UseCustomDomain => T(nameof(Tunnel_UseCustomDomain));
+    public string Tunnel_CustomDomainDesc => T(nameof(Tunnel_CustomDomainDesc));
+    public string Tunnel_DomainLabel     => T(nameof(Tunnel_DomainLabel));
+    public string Tunnel_DomainHint      => T(nameof(Tunnel_DomainHint));
+    public string Tunnel_Login           => T(nameof(Tunnel_Login));
+    public string Tunnel_Relogin         => T(nameof(Tunnel_Relogin));
+    public string Tunnel_LoggingIn       => T(nameof(Tunnel_LoggingIn));
+    public string Tunnel_LoggedIn        => T(nameof(Tunnel_LoggedIn));
+    public string Tunnel_NotLoggedIn     => T(nameof(Tunnel_NotLoggedIn));
+    public string Tunnel_LoginUrlHint    => T(nameof(Tunnel_LoginUrlHint));
+    public string Tunnel_DomainRequired  => T(nameof(Tunnel_DomainRequired));
+
+    // ── Settings page (server-only full configuration) ────────────────────────
+    public string Nav_Settings         => T(nameof(Nav_Settings));
+    public string Settings_Subtitle    => T(nameof(Settings_Subtitle));
+    public string Settings_BroadcastSection => T(nameof(Settings_BroadcastSection));
+    public string Nav_Broadcast        => T(nameof(Nav_Broadcast));
+    public string Bcast_Subtitle       => T(nameof(Bcast_Subtitle));
+    public string Bcast_ServerSection  => T(nameof(Bcast_ServerSection));
+    public string Bcast_TunnelDesc     => T(nameof(Bcast_TunnelDesc));
+
+    // ── User Management page ───────────────────────────────────────────────
+    public string Nav_UserManagement => T(nameof(Nav_UserManagement));
+    public string Um_Title           => T(nameof(Um_Title));
+    public string Um_Subtitle        => T(nameof(Um_Subtitle));
+    public string Um_AddUser         => T(nameof(Um_AddUser));
+    public string Um_ColUser         => T(nameof(Um_ColUser));
+    public string Um_ColName         => T(nameof(Um_ColName));
+    public string Um_ColRole         => T(nameof(Um_ColRole));
+    public string Um_ColStatus       => T(nameof(Um_ColStatus));
+    public string Um_ColLastLogin    => T(nameof(Um_ColLastLogin));
+    public string Um_Enabled         => T(nameof(Um_Enabled));
+    public string Um_Disabled        => T(nameof(Um_Disabled));
+    public string Um_Enable          => T(nameof(Um_Enable));
+    public string Um_Disable         => T(nameof(Um_Disable));
+    public string Um_ResetPassword   => T(nameof(Um_ResetPassword));
+    public string Um_Edit            => T(nameof(Um_Edit));
+    public string Um_Delete          => T(nameof(Um_Delete));
+    public string Um_Never           => T(nameof(Um_Never));
+    public string Um_DlgAddTitle     => T(nameof(Um_DlgAddTitle));
+    public string Um_DlgEditTitle    => T(nameof(Um_DlgEditTitle));
+    public string Um_DlgResetTitle   => T(nameof(Um_DlgResetTitle));
+    public string Um_DlgDeleteTitle  => T(nameof(Um_DlgDeleteTitle));
+    public string Um_DlgDeleteMsg    => T(nameof(Um_DlgDeleteMsg));
+    public string Um_FieldUsername   => T(nameof(Um_FieldUsername));
+    public string Um_FieldDisplayName => T(nameof(Um_FieldDisplayName));
+    public string Um_FieldPassword   => T(nameof(Um_FieldPassword));
+    public string Um_FieldNewPassword => T(nameof(Um_FieldNewPassword));
+    public string Um_FieldRole       => T(nameof(Um_FieldRole));
+    public string Um_Save            => T(nameof(Um_Save));
+    public string Um_Cancel          => T(nameof(Um_Cancel));
+    public string Um_Confirm         => T(nameof(Um_Confirm));
+    public string Um_RoleAdmin       => T(nameof(Um_RoleAdmin));
+    public string Um_RoleOperator    => T(nameof(Um_RoleOperator));
+    public string Um_RoleViewer      => T(nameof(Um_RoleViewer));
+    public string Um_Empty           => T(nameof(Um_Empty));
+    public string Um_ErrUsernameEmpty => T(nameof(Um_ErrUsernameEmpty));
+    public string Um_ErrPasswordEmpty => T(nameof(Um_ErrPasswordEmpty));
+    public string Um_ErrUserExists    => T(nameof(Um_ErrUserExists));
+    public string Um_ErrUserNotFound  => T(nameof(Um_ErrUserNotFound));
+    public string Um_ErrLastAdmin     => T(nameof(Um_ErrLastAdmin));
+    public string Um_ErrInvalidRole   => T(nameof(Um_ErrInvalidRole));
+
     // ══════════════════════════════════════════════════════════════════════
     // Translation table
     // ══════════════════════════════════════════════════════════════════════
@@ -755,6 +859,106 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             [nameof(Share_Connected)]    = "Connected to {0}",
             [nameof(Share_Disconnected)] = "Not connected",
             [nameof(Share_ConnError)]    = "Connection failed: {0}",
+            [nameof(Share_ServerAccount)] = "Server session",
+            [nameof(Share_NotLoggedIn)]   = "Not signed in to a server",
+            [nameof(Share_LoginAgain)]    = "Sign in / switch server",
+            [nameof(Share_AuthHint)]      = "Clients sign in with their own user accounts. Manage accounts in the User Management page.",
+
+            // ── Firewall / NAT ──
+            [nameof(Share_FwTitle)]     = "Windows Firewall",
+            [nameof(Share_FwActive)]    = "Inbound rule active — LAN clients can connect.",
+            [nameof(Share_FwMissing)]   = "No inbound rule found for this port. LAN may work; public IP will be blocked.",
+            [nameof(Share_FwUnknown)]   = "Could not check firewall status.",
+            [nameof(Share_FwAddBtn)]    = "Add firewall exception (requires Admin)…",
+            [nameof(Share_FwAdding)]    = "Adding firewall rule…",
+            [nameof(Share_FwAddFailed)] = "Failed to add rule — make sure you approved the Admin prompt.",
+            [nameof(Share_NatHint)]     = "Public IP access also requires port forwarding on your router: forward external port {0} → this machine's LAN IP:{0}.",
+            [nameof(Share_TunnelHint)]  = "For campus/university networks (Eduroam, client-isolated WiFi): run \"cloudflared tunnel --url http://localhost:{0}\" on this machine. Clients enter the generated *.trycloudflare.com address — no port forwarding or VPN needed.",
+
+            // ── Cloudflare Tunnel ──
+            [nameof(Tunnel_Title)]        = "Cloudflare Tunnel",
+            [nameof(Tunnel_Start)]        = "Start tunnel",
+            [nameof(Tunnel_Stop)]         = "Stop tunnel",
+            [nameof(Tunnel_Starting)]     = "Starting tunnel…",
+            [nameof(Tunnel_Running)]      = "Tunnel active",
+            [nameof(Tunnel_Stopped)]      = "Tunnel stopped",
+            [nameof(Tunnel_Error)]        = "Error: {0}",
+            [nameof(Tunnel_NotFound)]     = "cloudflared.exe not bundled. Click below to download it once (~35 MB) — it will be saved and reused.",
+            [nameof(Tunnel_Download)]     = "Download cloudflared…",
+            [nameof(Tunnel_Downloading)]  = "Downloading cloudflared… {0}%",
+            [nameof(Tunnel_DownloadFail)] = "Download failed. Check your internet connection and try again.",
+            [nameof(Tunnel_CopyUrl)]      = "Copy",
+            [nameof(Tunnel_Copied)]       = "Copied!",
+            [nameof(Tunnel_ShareHint)]    = "Share this URL with clients — works from any network (Eduroam, home, mobile) without port forwarding or VPN.",
+            [nameof(Tunnel_UseCustomDomain)] = "Use a custom domain (fixed address)",
+            [nameof(Tunnel_CustomDomainDesc)] = "A quick tunnel's address changes every run. Use your own domain for a permanent URL. The domain must already be added to Cloudflare (free) with its nameservers pointing to Cloudflare. Sign in once below; the app will create the tunnel and DNS record automatically.",
+            [nameof(Tunnel_DomainLabel)]  = "Custom domain (hostname)",
+            [nameof(Tunnel_DomainHint)]   = "e.g. tlig.example.com",
+            [nameof(Tunnel_Login)]        = "Connect domain (sign in)",
+            [nameof(Tunnel_Relogin)]      = "Sign in again",
+            [nameof(Tunnel_LoggingIn)]    = "Waiting for browser sign-in… authorize your domain in the page that opened.",
+            [nameof(Tunnel_LoggedIn)]     = "Signed in to Cloudflare ✓",
+            [nameof(Tunnel_NotLoggedIn)]  = "Not signed in yet.",
+            [nameof(Tunnel_LoginUrlHint)] = "If the browser didn't open, go to: {0}",
+            [nameof(Tunnel_DomainRequired)] = "Enter a custom domain first.",
+
+            // ── Settings page ──
+            [nameof(Nav_Settings)]            = "Settings",
+            [nameof(Settings_Subtitle)]       = "Full configuration for this server — broadcast, OPC UA, and AI. The title-bar flyout offers the same options for quick changes.",
+            [nameof(Settings_BroadcastSection)] = "Broadcast",
+            [nameof(Nav_Broadcast)]       = "Broadcast",
+            [nameof(Bcast_Subtitle)]      = "Broadcast this server's camera + HMI screen and expose it to clients.",
+            [nameof(Bcast_ServerSection)] = "Share server",
+            [nameof(Bcast_TunnelDesc)]    = "Expose the server to the public internet without port forwarding or a VPN — ideal for campus networks (Eduroam). cloudflared is bundled with this app.",
+
+            // ── Login (credential connect) ──
+            [nameof(Login_ServerAddress)]     = "Server address",
+            [nameof(Login_ServerAddressHint)] = "192.168.1.10:8088  or  abc.trycloudflare.com",
+            [nameof(Login_Connecting)]        = "Connecting to server…",
+            [nameof(Login_ErrorNoServer)]     = "Please enter the server address.",
+            [nameof(Login_ErrorUnreachable)]  = "Cannot reach the server. Check the address and make sure the server is running.",
+
+            // ── User Management ──
+            [nameof(Nav_UserManagement)] = "Users",
+            [nameof(Um_Title)]      = "User Management",
+            [nameof(Um_Subtitle)]   = "Manage the accounts that can sign in to this server.",
+            [nameof(Um_AddUser)]    = "Add user",
+            [nameof(Um_ColUser)]    = "Username",
+            [nameof(Um_ColName)]    = "Display name",
+            [nameof(Um_ColRole)]    = "Role",
+            [nameof(Um_ColStatus)]  = "Status",
+            [nameof(Um_ColLastLogin)] = "Last login",
+            [nameof(Um_Enabled)]    = "Enabled",
+            [nameof(Um_Disabled)]   = "Disabled",
+            [nameof(Um_Enable)]     = "Enable",
+            [nameof(Um_Disable)]    = "Disable",
+            [nameof(Um_ResetPassword)] = "Reset password",
+            [nameof(Um_Edit)]       = "Edit",
+            [nameof(Um_Delete)]     = "Delete",
+            [nameof(Um_Never)]      = "Never",
+            [nameof(Um_DlgAddTitle)]    = "Add user",
+            [nameof(Um_DlgEditTitle)]   = "Edit user",
+            [nameof(Um_DlgResetTitle)]  = "Reset password",
+            [nameof(Um_DlgDeleteTitle)] = "Delete user",
+            [nameof(Um_DlgDeleteMsg)]   = "Delete user \"{0}\"? This cannot be undone.",
+            [nameof(Um_FieldUsername)]    = "Username",
+            [nameof(Um_FieldDisplayName)] = "Display name",
+            [nameof(Um_FieldPassword)]    = "Password",
+            [nameof(Um_FieldNewPassword)] = "New password",
+            [nameof(Um_FieldRole)]        = "Role",
+            [nameof(Um_Save)]    = "Save",
+            [nameof(Um_Cancel)]  = "Cancel",
+            [nameof(Um_Confirm)] = "Confirm",
+            [nameof(Um_RoleAdmin)]    = "Administrator",
+            [nameof(Um_RoleOperator)] = "Operator",
+            [nameof(Um_RoleViewer)]   = "Viewer",
+            [nameof(Um_Empty)]        = "No users yet.",
+            [nameof(Um_ErrUsernameEmpty)] = "Username cannot be empty.",
+            [nameof(Um_ErrPasswordEmpty)] = "Password cannot be empty.",
+            [nameof(Um_ErrUserExists)]    = "A user with that name already exists.",
+            [nameof(Um_ErrUserNotFound)]  = "User not found.",
+            [nameof(Um_ErrLastAdmin)]     = "There must be at least one enabled administrator.",
+            [nameof(Um_ErrInvalidRole)]   = "Invalid role.",
 
             [nameof(Learn_Title)]       = "LEARNING ANALYTIC",
             [nameof(Learn_Status)]      = "Learning Status",
@@ -1098,6 +1302,106 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             [nameof(Share_Connected)]    = "Tersambung ke {0}",
             [nameof(Share_Disconnected)] = "Tidak tersambung",
             [nameof(Share_ConnError)]    = "Koneksi gagal: {0}",
+            [nameof(Share_ServerAccount)] = "Sesi server",
+            [nameof(Share_NotLoggedIn)]   = "Belum masuk ke server",
+            [nameof(Share_LoginAgain)]    = "Masuk / ganti server",
+            [nameof(Share_AuthHint)]      = "Client masuk dengan akun pengguna masing-masing. Kelola akun di halaman Manajemen Pengguna.",
+
+            // ── Firewall / NAT ──
+            [nameof(Share_FwTitle)]     = "Windows Firewall",
+            [nameof(Share_FwActive)]    = "Aturan inbound aktif — client LAN bisa terhubung.",
+            [nameof(Share_FwMissing)]   = "Tidak ada aturan inbound untuk port ini. LAN mungkin berjalan; IP publik akan diblokir.",
+            [nameof(Share_FwUnknown)]   = "Tidak dapat memeriksa status firewall.",
+            [nameof(Share_FwAddBtn)]    = "Tambah pengecualian firewall (perlu Admin)…",
+            [nameof(Share_FwAdding)]    = "Menambahkan aturan firewall…",
+            [nameof(Share_FwAddFailed)] = "Gagal menambah aturan — pastikan Anda menyetujui prompt Admin.",
+            [nameof(Share_NatHint)]     = "Akses IP publik juga memerlukan port forwarding di router: teruskan port eksternal {0} → IP LAN mesin ini:{0}.",
+            [nameof(Share_TunnelHint)]  = "Untuk jaringan kampus/eduroam (WiFi terisolasi): jalankan \"cloudflared tunnel --url http://localhost:{0}\" di mesin ini. Client masukkan alamat *.trycloudflare.com yang dihasilkan — tanpa port forwarding atau VPN.",
+
+            // ── Cloudflare Tunnel ──
+            [nameof(Tunnel_Title)]        = "Cloudflare Tunnel",
+            [nameof(Tunnel_Start)]        = "Mulai tunnel",
+            [nameof(Tunnel_Stop)]         = "Hentikan tunnel",
+            [nameof(Tunnel_Starting)]     = "Memulai tunnel…",
+            [nameof(Tunnel_Running)]      = "Tunnel aktif",
+            [nameof(Tunnel_Stopped)]      = "Tunnel berhenti",
+            [nameof(Tunnel_Error)]        = "Error: {0}",
+            [nameof(Tunnel_NotFound)]     = "cloudflared.exe tidak ditemukan. Klik di bawah untuk mengunduh sekali (~35 MB) — akan disimpan dan digunakan kembali.",
+            [nameof(Tunnel_Download)]     = "Unduh cloudflared…",
+            [nameof(Tunnel_Downloading)]  = "Mengunduh cloudflared… {0}%",
+            [nameof(Tunnel_DownloadFail)] = "Unduhan gagal. Periksa koneksi internet Anda dan coba lagi.",
+            [nameof(Tunnel_CopyUrl)]      = "Salin",
+            [nameof(Tunnel_Copied)]       = "Tersalin!",
+            [nameof(Tunnel_ShareHint)]    = "Bagikan URL ini ke client — berfungsi dari jaringan apapun (Eduroam, rumah, seluler) tanpa port forwarding atau VPN.",
+            [nameof(Tunnel_UseCustomDomain)] = "Gunakan domain kustom (alamat tetap)",
+            [nameof(Tunnel_CustomDomainDesc)] = "Alamat quick tunnel berubah setiap kali dijalankan. Gunakan domain Anda sendiri agar URL permanen. Domain harus sudah ditambahkan ke Cloudflare (gratis) dengan nameserver mengarah ke Cloudflare. Masuk sekali di bawah; aplikasi akan membuat tunnel dan record DNS secara otomatis.",
+            [nameof(Tunnel_DomainLabel)]  = "Domain kustom (hostname)",
+            [nameof(Tunnel_DomainHint)]   = "mis. tlig.example.com",
+            [nameof(Tunnel_Login)]        = "Hubungkan domain (masuk)",
+            [nameof(Tunnel_Relogin)]      = "Masuk ulang",
+            [nameof(Tunnel_LoggingIn)]    = "Menunggu login di browser… izinkan domain Anda pada halaman yang terbuka.",
+            [nameof(Tunnel_LoggedIn)]     = "Sudah masuk ke Cloudflare ✓",
+            [nameof(Tunnel_NotLoggedIn)]  = "Belum masuk.",
+            [nameof(Tunnel_LoginUrlHint)] = "Jika browser tidak terbuka, kunjungi: {0}",
+            [nameof(Tunnel_DomainRequired)] = "Masukkan domain kustom terlebih dahulu.",
+
+            // ── Halaman pengaturan ──
+            [nameof(Nav_Settings)]            = "Pengaturan",
+            [nameof(Settings_Subtitle)]       = "Konfigurasi lengkap server ini — broadcast, OPC UA, dan AI. Flyout di title-bar menyediakan opsi yang sama untuk perubahan cepat.",
+            [nameof(Settings_BroadcastSection)] = "Broadcast",
+            [nameof(Nav_Broadcast)]       = "Siaran",
+            [nameof(Bcast_Subtitle)]      = "Siarkan kamera + layar HMI server ini dan paparkan ke client.",
+            [nameof(Bcast_ServerSection)] = "Server berbagi",
+            [nameof(Bcast_TunnelDesc)]    = "Paparkan server ke internet publik tanpa port forwarding atau VPN — ideal untuk jaringan kampus (Eduroam). cloudflared sudah disertakan dalam aplikasi ini.",
+
+            // ── Login (sambung dengan kredensial) ──
+            [nameof(Login_ServerAddress)]     = "Alamat server",
+            [nameof(Login_ServerAddressHint)] = "192.168.1.10:8088  atau  abc.trycloudflare.com",
+            [nameof(Login_Connecting)]        = "Menyambung ke server…",
+            [nameof(Login_ErrorNoServer)]     = "Masukkan alamat server terlebih dahulu.",
+            [nameof(Login_ErrorUnreachable)]  = "Tidak dapat menjangkau server. Periksa alamat dan pastikan server berjalan.",
+
+            // ── Manajemen Pengguna ──
+            [nameof(Nav_UserManagement)] = "Pengguna",
+            [nameof(Um_Title)]      = "Manajemen Pengguna",
+            [nameof(Um_Subtitle)]   = "Kelola akun yang dapat masuk ke server ini.",
+            [nameof(Um_AddUser)]    = "Tambah pengguna",
+            [nameof(Um_ColUser)]    = "Nama pengguna",
+            [nameof(Um_ColName)]    = "Nama tampilan",
+            [nameof(Um_ColRole)]    = "Peran",
+            [nameof(Um_ColStatus)]  = "Status",
+            [nameof(Um_ColLastLogin)] = "Masuk terakhir",
+            [nameof(Um_Enabled)]    = "Aktif",
+            [nameof(Um_Disabled)]   = "Nonaktif",
+            [nameof(Um_Enable)]     = "Aktifkan",
+            [nameof(Um_Disable)]    = "Nonaktifkan",
+            [nameof(Um_ResetPassword)] = "Atur ulang sandi",
+            [nameof(Um_Edit)]       = "Ubah",
+            [nameof(Um_Delete)]     = "Hapus",
+            [nameof(Um_Never)]      = "Belum pernah",
+            [nameof(Um_DlgAddTitle)]    = "Tambah pengguna",
+            [nameof(Um_DlgEditTitle)]   = "Ubah pengguna",
+            [nameof(Um_DlgResetTitle)]  = "Atur ulang sandi",
+            [nameof(Um_DlgDeleteTitle)] = "Hapus pengguna",
+            [nameof(Um_DlgDeleteMsg)]   = "Hapus pengguna \"{0}\"? Tindakan ini tidak dapat dibatalkan.",
+            [nameof(Um_FieldUsername)]    = "Nama pengguna",
+            [nameof(Um_FieldDisplayName)] = "Nama tampilan",
+            [nameof(Um_FieldPassword)]    = "Kata sandi",
+            [nameof(Um_FieldNewPassword)] = "Kata sandi baru",
+            [nameof(Um_FieldRole)]        = "Peran",
+            [nameof(Um_Save)]    = "Simpan",
+            [nameof(Um_Cancel)]  = "Batal",
+            [nameof(Um_Confirm)] = "Konfirmasi",
+            [nameof(Um_RoleAdmin)]    = "Administrator",
+            [nameof(Um_RoleOperator)] = "Operator",
+            [nameof(Um_RoleViewer)]   = "Pengamat",
+            [nameof(Um_Empty)]        = "Belum ada pengguna.",
+            [nameof(Um_ErrUsernameEmpty)] = "Nama pengguna tidak boleh kosong.",
+            [nameof(Um_ErrPasswordEmpty)] = "Kata sandi tidak boleh kosong.",
+            [nameof(Um_ErrUserExists)]    = "Pengguna dengan nama itu sudah ada.",
+            [nameof(Um_ErrUserNotFound)]  = "Pengguna tidak ditemukan.",
+            [nameof(Um_ErrLastAdmin)]     = "Harus ada minimal satu administrator aktif.",
+            [nameof(Um_ErrInvalidRole)]   = "Peran tidak valid.",
 
             [nameof(Learn_Title)]       = "LEARNING ANALYTIC",
             [nameof(Learn_Status)]      = "Status Learning",

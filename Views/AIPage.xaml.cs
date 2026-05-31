@@ -140,10 +140,13 @@ public sealed partial class AIPage : Page
             // Client routes chat through the server's /ai proxy. The access token
             // stands in for the Bearer key; the server overrides the model, but
             // AiService still requires a non-empty model string.
-            var host = s.ServerHost.Replace("http://", "").Replace("ws://", "").TrimEnd('/');
-            _ai.ApiUrl = string.IsNullOrWhiteSpace(host) ? "" : $"http://{host}/ai";
-            _ai.ApiKey = s.ServerToken;
-            _ai.Model  = "(server)";
+            // Use the same TLS-detection as AuthClient so Cloudflare-Tunnel URLs
+            // get https:// and direct LAN:port URLs get http://.
+            var baseUrl = AuthClient.BaseUrl(s.ServerHost);
+            _ai.ApiUrl  = string.IsNullOrWhiteSpace(AuthClient.NormalizeHost(s.ServerHost))
+                ? "" : $"{baseUrl}/ai";
+            _ai.ApiKey  = s.ServerToken;
+            _ai.Model   = "(server)";
         }
     }
 

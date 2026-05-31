@@ -21,10 +21,20 @@ public class AppSettings
     public bool   ShareHmi    { get; set; } = true;    // broadcast the HMI screen share
     public bool   ShareAutoStart { get; set; } = false; // start the server automatically on launch
 
+    // ── Sharing: Cloudflare named tunnel (custom domain) ──────────────────
+    // When enabled, the tunnel runs on the user's own domain (a fixed public URL)
+    // instead of a random *.trycloudflare.com address. Requires a one-time
+    // `cloudflared tunnel login` (browser sign-in) that authorizes a Cloudflare zone.
+    public bool   TunnelUseCustomDomain { get; set; } = false;
+    public string TunnelCustomDomain    { get; set; } = "";              // e.g. "tlig.example.com"
+    public string TunnelName            { get; set; } = "tlig-dashboard"; // cloudflared tunnel name
+
     // ── Sharing: client side ──────────────────────────────────────────────
-    // The client connects to a server to receive its stream + AI proxy.
-    public string ServerHost  { get; set; } = "";      // e.g. "192.168.1.10:8088"
-    public string ServerToken { get; set; } = "";      // token issued by the server
+    // The client logs in with credentials; the server issues a session token that
+    // is used for the WebSocket stream + AI proxy (no manual access token anymore).
+    public string ServerHost     { get; set; } = "";   // e.g. "192.168.1.10:8088"
+    public string ServerUsername { get; set; } = "";   // last username, used to prefill the login popup
+    public string ServerToken    { get; set; } = "";   // session token issued by the server on login (transient)
 
     // AI service settings
     public string AiApiUrl       { get; set; } = "https://api.deepseek.com";

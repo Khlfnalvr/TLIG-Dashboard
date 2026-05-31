@@ -132,7 +132,7 @@
                         <MediaPlayerElement x:Name="CameraPreview"
                                             AreTransportControlsEnabled="False"
                                             ManipulationMode="None"
-                                            Stretch="UniformToFill"
+                                            Stretch="Uniform"
                                             Visibility="Collapsed"/>
 
                         <!-- Client mode: shows the camera frames received from the server -->

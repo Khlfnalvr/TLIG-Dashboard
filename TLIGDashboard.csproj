@@ -15,10 +15,10 @@
     <DefineConstants>DISABLE_XAML_GENERATED_MAIN</DefineConstants>
     <EnableMsixTooling>true</EnableMsixTooling>
     <ApplicationIcon>Assets\logo.ico</ApplicationIcon>
-    <Version>2.1.1</Version>
-    <AssemblyVersion>2.1.1.0</AssemblyVersion>
-    <FileVersion>2.1.1.0</FileVersion>
-    <InformationalVersion>2.1.1</InformationalVersion>
+    <Version>1.0.0</Version>
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <FileVersion>1.0.0.0</FileVersion>
+    <InformationalVersion>1.0.0-alpha</InformationalVersion>
   </PropertyGroup>
 
   <!--
@@ -102,6 +102,19 @@
     <PackageReference Include="System.Drawing.Common" Version="10.0.0" />
     <!-- OPC UA client stack for server connectivity -->
     <PackageReference Include="OPCFoundation.NetStandard.Opc.Ua" Version="1.5.378.145" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      Cloudflare Tunnel binary — bundled for zero-install server deployment.
+      Download cloudflared-windows-amd64.exe from:
+        https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe
+      and rename/place it here as "cloudflared.exe" before building.
+      If the file is absent the app auto-downloads it on first use.
+    -->
+    <Content Include="cloudflared.exe" Condition="'$(Flavor)' == 'Server' And Exists('cloudflared.exe')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
 
   <ItemGroup>

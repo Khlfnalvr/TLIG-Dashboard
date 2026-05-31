@@ -1,4 +1,4 @@
-﻿using System.Collections.ObjectModel;
+using System.Collections.ObjectModel;
 using System.IO;
 using System.Reflection;
 using System.Runtime.InteropServices;
@@ -45,10 +45,13 @@ public sealed partial class MainWindow : Window
         { "Parameter", typeof(ParameterPage) },
         { "LiveView",  typeof(LiveViewPage) },
         { "LearningAnalytic", typeof(LearningAnalyticPage) },
-        { "AI",        typeof(AIPage) }
+        { "AI",        typeof(AIPage) },
+        { "Broadcast", typeof(BroadcastSettingsPage) },
+        { "UserManagement", typeof(UserManagementPage) }
     };
 
     private string _loggedInUser = "";
+    private string _loggedInRole = "";
 
     private bool _initializing;
     private IntPtr _hwnd;
@@ -93,6 +96,7 @@ public sealed partial class MainWindow : Window
         UpdateLangMenuState();
 
         InitOpcUaFlyout();
+        InitLoginOverlay();
 
         _ = StartupUpdateCheckAsync();
     }
@@ -465,6 +469,7 @@ public sealed partial class MainWindow : Window
     {
         // Apply persisted nav-item visibility, then select the first visible.
         ApplyNavVisibilityFromSettings();
+        ApplyRoleNavVisibility();   // User Management stays hidden until an admin signs in
         NavView.SelectedItem = FirstVisibleNavItem() ?? NavView.MenuItems[0];
         UpdateTitleBarLayout();
     }
@@ -578,7 +583,29 @@ public sealed partial class MainWindow : Window
     }
 
     // ── Login ─────────────────────────────────────────────────────────────
-    private void LoginSubmit_Click(object sender, RoutedEventArgs e)
+    // The server flavor authenticates against the local user database; the client
+    // flavor authenticates against a remote server (address entered in the popup)
+    // and, on success, opens the live stream + points the AI proxy at that server.
+
+    private void InitLoginOverlay()
+    {
+        // The server address field only applies to the client flavor.
+        LoginServerPanel.Visibility = Services.BuildInfo.IsClient
+            ? Visibility.Visible : Visibility.Collapsed;
+
+        var s = AppSettingsService.Load();
+        if (Services.BuildInfo.IsClient)
+        {
+            LoginServerBox.Text   = s.ServerHost;
+            LoginUsernameBox.Text = s.ServerUsername;
+        }
+        else
+        {
+            LoginUsernameBox.Text = s.ServerUsername;
+        }
+    }
+
+    private async void LoginSubmit_Click(object sender, RoutedEventArgs e)
     {
         string user = LoginUsernameBox.Text.Trim();
         string pass = LoginPasswordBox.Password;
@@ -589,25 +616,141 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        if (user == "admin" && pass == "admin")
+        if (Services.BuildInfo.IsServer)
         {
-            _loggedInUser = user;
-            UpdateAccountFlyoutText();
-            LoginOverlay.Visibility = Visibility.Collapsed;
-            LoginErrorText.Visibility = Visibility.Collapsed;
+            // Local console login against the server's own user database.
+            var account = UserStore.Instance.Verify(user, pass);
+            if (account is null) { LoginFailed(); return; }
+
+            // Persist the last-used username so the login box is pre-filled next launch.
+            var sv = AppSettingsService.Load();
+            sv.ServerUsername = account.Username;
+            AppSettingsService.Save(sv);
+
+            OnLoginSucceeded(account.Username, account.DisplayName, account.Role);
+            return;
         }
-        else
+
+        // ── Client: authenticate against the remote server ──
+        string host = LoginServerBox.Text.Trim();
+        if (string.IsNullOrEmpty(host))
         {
-            SetLoginError(Lang.Login_ErrorInvalid);
+            SetLoginError(Lang.Login_ErrorNoServer);
+            return;
+        }
+
+        SetLoginBusy(true);
+        var result = await AuthClient.LoginAsync(host, user, pass);
+        SetLoginBusy(false);
+
+        if (!result.Success)
+        {
+            SetLoginError(Lang.Get(result.ErrorKey ?? "Login_ErrorInvalid"));
             LoginPasswordBox.Password = "";
             LoginPasswordBox.Focus(FocusState.Programmatic);
+            return;
         }
+
+        // Persist the host + username + issued session token so the rest of the app
+        // (WebSocket stream + AI proxy) can use the same credentials. The password
+        // itself is never stored.
+        var s = AppSettingsService.Load();
+        s.ServerHost     = AuthClient.NormalizeHost(host);
+        s.ServerUsername = user;
+        s.ServerToken    = result.Token;
+        AppSettingsService.Save(s);
+
+        OnLoginSucceeded(user, result.DisplayName, result.Role);
+
+        // Open the live stream and point the AI assistant at the server proxy.
+        _ = ConnectClientStreamAsync(s.ServerHost, result.Token);
+    }
+
+    private void OnLoginSucceeded(string accountName, string displayName, string role)
+    {
+        _loggedInUser = string.IsNullOrWhiteSpace(displayName) ? accountName : displayName;
+        _loggedInRole = role;
+        UpdateAccountFlyoutText();
+        ApplyRoleNavVisibility();
+        LoginErrorText.Visibility = Visibility.Collapsed;
+        LoginPasswordBox.Password = "";
+        LoginOverlay.Visibility   = Visibility.Collapsed;
+    }
+
+    private void LoginFailed()
+    {
+        SetLoginError(Lang.Login_ErrorInvalid);
+        LoginPasswordBox.Password = "";
+        LoginPasswordBox.Focus(FocusState.Programmatic);
+    }
+
+    private void SetLoginBusy(bool busy)
+    {
+        LoginSubmitBtn.IsEnabled = !busy;
+        LoginBusyPanel.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;
+        if (busy) LoginErrorText.Visibility = Visibility.Collapsed;
+    }
+
+    private async Task ConnectClientStreamAsync(string host, string token)
+    {
+        bool ok = await ShareClient.Instance.ConnectAsync(host, token);
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            RefreshClientStatus(ok, ok ? null : Lang.Share_Disconnected);
+            if (ContentFrame?.Content is Views.AIPage aiPage)
+                aiPage.ReloadSettings();
+        });
     }
 
     private void SetLoginError(string message)
     {
         LoginErrorText.Text = message;
         LoginErrorText.Visibility = Visibility.Visible;
+    }
+
+    /// <summary>Prefills and shows the login overlay (used on logout / switch server).</summary>
+    private void ShowLoginOverlay()
+    {
+        if (Services.BuildInfo.IsClient)
+        {
+            var s = AppSettingsService.Load();
+            LoginServerBox.Text   = s.ServerHost;
+            LoginUsernameBox.Text = s.ServerUsername;
+        }
+        LoginPasswordBox.Password = "";
+        LoginErrorText.Visibility = Visibility.Collapsed;
+        LoginOverlay.Visibility   = Visibility.Visible;
+
+        if (Services.BuildInfo.IsClient && string.IsNullOrWhiteSpace(LoginServerBox.Text))
+            LoginServerBox.Focus(FocusState.Programmatic);
+        else
+            LoginUsernameBox.Focus(FocusState.Programmatic);
+    }
+
+    /// <summary>
+    /// Server-only nav items: Broadcast settings (any signed-in user) and User
+    /// Management (Administrator only). Both are hidden until the operator signs in.
+    /// </summary>
+    private void ApplyRoleNavVisibility()
+    {
+        bool signedIn = !string.IsNullOrWhiteSpace(_loggedInUser);
+        bool showBroadcast = Services.BuildInfo.IsServer && signedIn;
+        bool showUm        = Services.BuildInfo.IsServer && signedIn &&
+                             string.Equals(_loggedInRole, UserRoles.Admin, StringComparison.OrdinalIgnoreCase);
+
+        NavBroadcast.Visibility      = showBroadcast ? Visibility.Visible : Visibility.Collapsed;
+        NavUserManagement.Visibility = showUm        ? Visibility.Visible : Visibility.Collapsed;
+
+        if (!showBroadcast && ReferenceEquals(NavView.SelectedItem, NavBroadcast))
+            NavView.SelectedItem = FirstVisibleNavItem();
+        if (!showUm && ReferenceEquals(NavView.SelectedItem, NavUserManagement))
+            NavView.SelectedItem = FirstVisibleNavItem();
+    }
+
+    private void LoginServer_KeyDown(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e)
+    {
+        if (e.Key == Windows.System.VirtualKey.Enter)
+            LoginUsernameBox.Focus(FocusState.Programmatic);
     }
 
     private void LoginUsername_KeyDown(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e)
@@ -638,19 +781,38 @@ public sealed partial class MainWindow : Window
         AccountUsernameText.Text = isLoggedIn
             ? _loggedInUser
             : Lang.Account_NotLoggedInYet;
-        LogoutBtn.IsEnabled = isLoggedIn;
+        LogoutBtn.Content = isLoggedIn ? (object)Lang.Account_Logout : Lang.Login_Submit;
     }
 
     private void LogoutBtn_Click(object sender, RoutedEventArgs e)
     {
         AccountFlyout.Hide();
+
+        if (string.IsNullOrWhiteSpace(_loggedInUser))
+        {
+            ShowLoginOverlay();
+            return;
+        }
+
+        if (Services.BuildInfo.IsClient)
+        {
+            // Disconnect the stream, revoke the session on the server (best-effort),
+            // and clear the stored token (host + username are kept to prefill login).
+            var s = AppSettingsService.Load();
+            ShareClient.Instance.Disconnect();
+            _ = AuthClient.LogoutAsync(s.ServerHost, s.ServerToken);
+            s.ServerToken = "";
+            AppSettingsService.Save(s);
+            App.Status.AiConnected = false;
+            if (ContentFrame?.Content is Views.AIPage aiPage)
+                aiPage.ReloadSettings();
+        }
+
         _loggedInUser = "";
+        _loggedInRole = "";
         UpdateAccountFlyoutText();
-        LoginUsernameBox.Text     = "";
-        LoginPasswordBox.Password = "";
-        LoginErrorText.Visibility = Visibility.Collapsed;
-        LoginOverlay.Visibility   = Visibility.Visible;
-        LoginUsernameBox.Focus(FocusState.Programmatic);
+        ApplyRoleNavVisibility();
+        ShowLoginOverlay();
     }
 
     private void RefreshApp_Click(object sender, RoutedEventArgs e)
@@ -1572,10 +1734,7 @@ public sealed partial class MainWindow : Window
         SyncOpcConnectButton();
         UpdateOpcStatusDot();
         if (Services.BuildInfo.IsServer)
-        {
             InitAiPanel();
-            RefreshShareLocalAddress();   // IP can change (DHCP/VPN) — refresh on every open
-        }
     }
 
     private void OpcAuthCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -1669,94 +1828,53 @@ public sealed partial class MainWindow : Window
         PanelOpcUa.Visibility = (!isAi && !isShare) ? Visibility.Visible : Visibility.Collapsed;
         PanelAiApi.Visibility = isAi ? Visibility.Visible : Visibility.Collapsed;
 
-        // The share tab shows the broadcast panel on the server flavor and the
-        // connect panel on the client flavor.
-        PanelBroadcast.Visibility = (isShare && Services.BuildInfo.IsServer)
-            ? Visibility.Visible : Visibility.Collapsed;
-        PanelConnect.Visibility   = (isShare && Services.BuildInfo.IsClient)
+        // The share tab is the client's session/connect panel. On the server flavor
+        // the tab is hidden — broadcast settings live on the dedicated Broadcast page.
+        PanelConnect.Visibility = (isShare && Services.BuildInfo.IsClient)
             ? Visibility.Visible : Visibility.Collapsed;
     }
 
-    // ── Sharing: server broadcast / client connect ────────────────────────────
+    // ── Sharing: client connect panel (server broadcast lives on its own page) ──
 
     private void InitSharePanel()
     {
-        TabShare.Text = Services.BuildInfo.IsServer ? Lang.Share_TabBroadcast : Lang.Share_TabConnect;
-
-        var s = AppSettingsService.Load();
         if (Services.BuildInfo.IsServer)
         {
-            SharePortBox.Text       = s.SharePort.ToString();
-            ShareTokenBox.Text      = string.IsNullOrWhiteSpace(s.ShareToken)
-                ? ShareProtocol.NewToken() : s.ShareToken;
-            ShareCameraCheck.IsChecked = s.ShareCamera;
-            ShareHmiCheck.IsChecked    = s.ShareHmi;
-            RefreshShareLocalAddress();
-            RefreshServerStatus();
-            ShareServer.Instance.StateChanged += () =>
-                DispatcherQueue.TryEnqueue(RefreshServerStatus);
-        }
-        else
-        {
-            ServerHostBox.Text  = s.ServerHost;
-            ServerTokenBox.Text = s.ServerToken;
-            RefreshClientStatus();
-            ShareClient.Instance.ConnectionChanged += (ok, info) =>
-                DispatcherQueue.TryEnqueue(() => RefreshClientStatus(ok, info));
-        }
-    }
-
-    private void RefreshServerStatus()
-    {
-        bool running = ShareServer.Instance.IsRunning;
-        ShareStartBtn.Content = running ? Lang.Share_Stop : Lang.Share_Start;
-        ShareServerStatusText.Text = running
-            ? $"{Lang.Format(nameof(Lang.Share_Running), ShareServer.Instance.Port)} · " +
-              Lang.Format(nameof(Lang.Share_Clients), ShareServer.Instance.ClientCount)
-            : Lang.Share_Stopped;
-        SharePortBox.IsEnabled  = !running;
-        ShareTokenBox.IsEnabled = !running;
-        RefreshShareLocalAddress();
-    }
-
-    private void ShareStartBtn_Click(object sender, RoutedEventArgs e)
-    {
-        if (ShareServer.Instance.IsRunning)
-        {
-            ShareServer.Instance.Stop();
-            RefreshServerStatus();
+            // Server broadcast settings moved to BroadcastSettingsPage — hide the
+            // flyout's share tab so there is a single source of truth.
+            TabShare.Visibility = Visibility.Collapsed;
             return;
         }
 
-        if (!int.TryParse(SharePortBox.Text.Trim(), out var port) || port < 1 || port > 65535)
-            port = 8088;
-        var token = string.IsNullOrWhiteSpace(ShareTokenBox.Text)
-            ? ShareProtocol.NewToken() : ShareTokenBox.Text.Trim();
-        bool shareCam = ShareCameraCheck.IsChecked == true;
-        bool shareHmi = ShareHmiCheck.IsChecked == true;
-
-        ShareServer.Instance.Start(port, token, shareCam, shareHmi);
-        ShareTokenBox.Text = ShareServer.Instance.Token;
-
-        var s = AppSettingsService.Load();
-        s.SharePort   = port;
-        s.ShareToken  = ShareServer.Instance.Token;
-        s.ShareCamera = shareCam;
-        s.ShareHmi    = shareHmi;
-        AppSettingsService.Save(s);
-
-        RefreshServerStatus();
+        TabShare.Text = Lang.Share_TabConnect;
+        RefreshClientStatus();
+        ShareClient.Instance.ConnectionChanged += (ok, info) =>
+            DispatcherQueue.TryEnqueue(() => RefreshClientStatus(ok, info));
     }
 
     private void RefreshClientStatus(bool? ok = null, string? info = null)
     {
         bool connected = ShareClient.Instance.IsConnected;
-        ConnectServerBtn.Content = connected ? Lang.Share_Disconnect : Lang.Share_Connect;
+        var  s         = AppSettingsService.Load();
+        bool hasSession = !string.IsNullOrWhiteSpace(s.ServerHost) &&
+                          !string.IsNullOrWhiteSpace(s.ServerToken);
+
+        // Session summary: "username @ host", or a not-signed-in placeholder.
+        ConnectServerInfoText.Text = string.IsNullOrWhiteSpace(s.ServerHost)
+            ? Lang.Share_NotLoggedIn
+            : $"{(string.IsNullOrWhiteSpace(s.ServerUsername) ? "?" : s.ServerUsername)} @ {s.ServerHost}";
+
+        // Button: Disconnect when live; Connect when we hold a session; otherwise
+        // it falls back to opening the login popup.
+        ConnectServerBtn.Content = connected
+            ? Lang.Share_Disconnect
+            : (hasSession ? Lang.Share_Connect : Lang.Login_Submit);
+
         if (ok == false && info is not null)
             ClientStatusText.Text = Lang.Format(nameof(Lang.Share_ConnError), info);
         else
             ClientStatusText.Text = connected
-                ? Lang.Format(nameof(Lang.Share_Connected), ServerHostBox.Text.Trim())
+                ? Lang.Format(nameof(Lang.Share_Connected), s.ServerHost)
                 : Lang.Share_Disconnected;
 
         // The AI assistant is "active" on the client when connected to the server.
@@ -1772,15 +1890,16 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        var host  = ServerHostBox.Text.Trim();
-        var token = ServerTokenBox.Text.Trim();
-        if (string.IsNullOrEmpty(host)) return;
+        var s     = AppSettingsService.Load();
+        var host  = s.ServerHost;
+        var token = s.ServerToken;
 
-        // Persist first so the AI proxy URL is available to AIPage.
-        var s = AppSettingsService.Load();
-        s.ServerHost  = host;
-        s.ServerToken = token;
-        AppSettingsService.Save(s);
+        // No active session → send the user through the credential login popup.
+        if (string.IsNullOrWhiteSpace(host) || string.IsNullOrWhiteSpace(token))
+        {
+            ShowLoginOverlay();
+            return;
+        }
 
         ConnectServerBtn.IsEnabled = false;
         bool ok = await ShareClient.Instance.ConnectAsync(host, token);
@@ -1793,103 +1912,13 @@ public sealed partial class MainWindow : Window
             aiPage.ReloadSettings();
     }
 
-    /// <summary>
-    /// Returns all active IPv4 addresses on this machine (excluding loopback).
-    /// Uses NetworkInterface instead of DNS to reliably enumerate every adapter,
-    /// even when the hostname does not resolve to all of them.
-    /// </summary>
-    private static string[] LocalIPv4Addresses()
+    private void SwitchServerBtn_Click(object sender, RoutedEventArgs e)
     {
-        try
-        {
-            return System.Net.NetworkInformation.NetworkInterface
-                .GetAllNetworkInterfaces()
-                .Where(nic =>
-                    nic.OperationalStatus == System.Net.NetworkInformation.OperationalStatus.Up &&
-                    nic.NetworkInterfaceType != System.Net.NetworkInformation.NetworkInterfaceType.Loopback)
-                .SelectMany(nic => nic.GetIPProperties().UnicastAddresses)
-                .Where(ua => ua.Address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork)
-                .Select(ua => ua.Address.ToString())
-                .ToArray();
-        }
-        catch { }
-        return ["127.0.0.1"];
-    }
-
-    private void RefreshShareLocalAddress()
-    {
-        var ips = LocalIPv4Addresses();
-        int displayPort = ShareServer.Instance.IsRunning
-            ? ShareServer.Instance.Port
-            : (int.TryParse(SharePortBox?.Text, out var p) ? p : 8088);
-
-        ShareLocalAddrText.Text = ips.Length switch
-        {
-            0 => Lang.Format(nameof(Lang.Share_LocalAddress), $"127.0.0.1:{displayPort}"),
-            1 => Lang.Format(nameof(Lang.Share_LocalAddress), $"{ips[0]}:{displayPort}"),
-            _ => Lang.Format(nameof(Lang.Share_LocalAddress),
-                     string.Join("  /  ", ips.Select(ip => $"{ip}:{displayPort}")))
-        };
-
-        // Fetch public IP asynchronously — show a placeholder immediately.
-        SharePublicAddrText.Visibility = Visibility.Visible;
-        SharePublicAddrText.Text = Lang.Share_PublicFetching;
-        _ = FetchAndShowPublicIpAsync(displayPort);
-    }
-
-    // Cache the last-fetched public IP so repeated flyout-opens don't hammer the API.
-    private string? _cachedPublicIp;
-    private DateTime _publicIpFetchedAt = DateTime.MinValue;
-
-    private async Task FetchAndShowPublicIpAsync(int port)
-    {
-        // Re-use the cached value for 5 minutes.
-        if (_cachedPublicIp is not null &&
-            (DateTime.UtcNow - _publicIpFetchedAt).TotalMinutes < 5)
-        {
-            DispatcherQueue.TryEnqueue(() =>
-                SharePublicAddrText.Text =
-                    Lang.Format(nameof(Lang.Share_PublicAddress), $"{_cachedPublicIp}:{port}"));
-            return;
-        }
-
-        string? ip = null;
-        // Try two well-known plain-text public-IP APIs (returns just the IP, no JSON).
-        string[] endpoints =
-        [
-            "https://api.ipify.org",
-            "https://checkip.amazonaws.com",
-        ];
-
-        using var http = new System.Net.Http.HttpClient
-            { Timeout = TimeSpan.FromSeconds(6) };
-
-        foreach (var url in endpoints)
-        {
-            try
-            {
-                ip = (await http.GetStringAsync(url)).Trim();
-                if (System.Net.IPAddress.TryParse(ip, out _)) break;
-                ip = null;
-            }
-            catch { ip = null; }
-        }
-
-        _cachedPublicIp    = ip;
-        _publicIpFetchedAt = DateTime.UtcNow;
-
-        DispatcherQueue.TryEnqueue(() =>
-        {
-            if (ip is null)
-            {
-                SharePublicAddrText.Text = Lang.Share_PublicFailed;
-            }
-            else
-            {
-                SharePublicAddrText.Text =
-                    Lang.Format(nameof(Lang.Share_PublicAddress), $"{ip}:{port}");
-            }
-        });
+        // Drop any current connection and reopen the login popup to sign in
+        // (optionally to a different server).
+        ShareClient.Instance.Disconnect();
+        RefreshClientStatus();
+        ShowLoginOverlay();
     }
 
     // ── AI API settings ───────────────────────────────────────────────────────
