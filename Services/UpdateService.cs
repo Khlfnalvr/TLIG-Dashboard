@@ -42,7 +42,10 @@ public static class UpdateService
     private static readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(30) };
 
     private const string ApiUrl =
-        "https://api.github.com/repos/Khlfnalvr/TLIGDashboard/releases/latest";
+        "https://api.github.com/repos/Khlfnalvr/TLIG-Dashboard/releases/latest";
+
+    private static string ExeName =>
+        BuildInfo.IsServer ? "TLIGDashboard.Server.exe" : "TLIGDashboard.Client.exe";
 
     public static async Task<UpdateCheckInfo> CheckAsync(string currentVersion)
     {
@@ -148,20 +151,20 @@ public static class UpdateService
         sb.AppendLine("    [int]$ParentProcessId = 0");
         sb.AppendLine(")");
         sb.AppendLine("$ErrorActionPreference = 'Stop'");
-        sb.AppendLine("$exe = Join-Path $AppDir 'TLIGDashboard.exe'");
+        sb.AppendLine($"$exe = Join-Path $AppDir '{ExeName}'");
         sb.AppendLine("$logDir = Join-Path $env:TEMP 'TLIGDashboardUpdate'");
         sb.AppendLine("$logPath = Join-Path $logDir 'last-update-error.log'");
         sb.AppendLine("try {");
         sb.AppendLine("    if ($ParentProcessId -gt 0) {");
         sb.AppendLine("        Wait-Process -Id $ParentProcessId -ErrorAction SilentlyContinue");
         sb.AppendLine("    } else {");
-        sb.AppendLine("        while (Get-Process -Name TLIGDashboard -ErrorAction SilentlyContinue) {");
+        sb.AppendLine($"        while (Get-Process -Name '{Path.GetFileNameWithoutExtension(ExeName)}' -ErrorAction SilentlyContinue) {{");
         sb.AppendLine("            Start-Sleep -Milliseconds 500");
         sb.AppendLine("        }");
         sb.AppendLine("    }");
         sb.AppendLine("    Start-Sleep -Milliseconds 300");
-        sb.AppendLine("    if (-not (Test-Path (Join-Path $Payload 'TLIGDashboard.exe'))) {");
-        sb.AppendLine("        throw \"Update payload does not contain TLIGDashboard.exe: $Payload\"");
+        sb.AppendLine($"    if (-not (Test-Path (Join-Path $Payload '{ExeName}'))) {{");
+        sb.AppendLine($"        throw \"Update payload does not contain {ExeName}: $Payload\"");
         sb.AppendLine("    }");
         sb.AppendLine("    $robocopyArgs = @(");
         sb.AppendLine("        $Payload, $AppDir,");
@@ -202,18 +205,19 @@ public static class UpdateService
 
     private static string FindPayloadPath(string stagePath)
     {
-        if (File.Exists(Path.Combine(stagePath, "TLIGDashboard.exe")))
+        var exe = ExeName;
+        if (File.Exists(Path.Combine(stagePath, exe)))
             return stagePath;
 
         var payloadPath = Directory
-            .EnumerateFiles(stagePath, "TLIGDashboard.exe", SearchOption.AllDirectories)
+            .EnumerateFiles(stagePath, exe, SearchOption.AllDirectories)
             .Select(Path.GetDirectoryName)
             .Where(path => !string.IsNullOrWhiteSpace(path))
             .OrderBy(path => path!.Length)
             .FirstOrDefault();
 
         if (payloadPath is null)
-            throw new InvalidDataException("The update ZIP does not contain TLIGDashboard.exe.");
+            throw new InvalidDataException($"The update ZIP does not contain {exe}.");
 
         return payloadPath;
     }

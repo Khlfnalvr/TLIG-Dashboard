@@ -593,6 +593,11 @@ public sealed partial class MainWindow : Window
         LoginServerPanel.Visibility = Services.BuildInfo.IsClient
             ? Visibility.Visible : Visibility.Collapsed;
 
+        // Self-registration is a client→server action; the server flavor creates
+        // accounts via the User Management page, so the entry point is client-only.
+        LoginToSignupLink.Visibility = Services.BuildInfo.IsClient
+            ? Visibility.Visible : Visibility.Collapsed;
+
         var s = AppSettingsService.Load();
         if (Services.BuildInfo.IsClient)
         {
@@ -607,6 +612,10 @@ public sealed partial class MainWindow : Window
 
     private async void LoginSubmit_Click(object sender, RoutedEventArgs e)
     {
+        // The post-signup "account created" note has served its purpose once the
+        // user attempts to sign in — clear it so it can't sit next to an error.
+        LoginInfoText.Visibility = Visibility.Collapsed;
+
         string user = LoginUsernameBox.Text.Trim();
         string pass = LoginPasswordBox.Password;
 
@@ -711,6 +720,7 @@ public sealed partial class MainWindow : Window
     /// <summary>Prefills and shows the login overlay (used on logout / switch server).</summary>
     private void ShowLoginOverlay()
     {
+        ShowLoginCard();
         if (Services.BuildInfo.IsClient)
         {
             var s = AppSettingsService.Load();
@@ -719,6 +729,7 @@ public sealed partial class MainWindow : Window
         }
         LoginPasswordBox.Password = "";
         LoginErrorText.Visibility = Visibility.Collapsed;
+        LoginInfoText.Visibility  = Visibility.Collapsed;
         LoginOverlay.Visibility   = Visibility.Visible;
 
         if (Services.BuildInfo.IsClient && string.IsNullOrWhiteSpace(LoginServerBox.Text))
@@ -768,6 +779,142 @@ public sealed partial class MainWindow : Window
     private void LoginClose_Click(object sender, RoutedEventArgs e)
     {
         LoginOverlay.Visibility = Visibility.Collapsed;
+    }
+
+    // ── Signup (client self-registration, @its.ac.id) ─────────────────────
+    // Client-only: the user enters a server address + an @its.ac.id email +
+    // password; the server creates a Viewer account they can then sign in with.
+    // No email verification — a valid address + password registers immediately.
+
+    private void ShowSignupCard()
+    {
+        // Carry over whatever server address was typed on the login card.
+        SignupServerBox.Text       = LoginServerBox.Text;
+        SignupPasswordBox.Password = "";
+        SignupConfirmBox.Password  = "";
+        SignupErrorText.Visibility = Visibility.Collapsed;
+        LoginInfoText.Visibility   = Visibility.Collapsed;
+        SetSignupBusy(false);
+
+        LoginDialogCard.Visibility  = Visibility.Collapsed;
+        SignupDialogCard.Visibility = Visibility.Visible;
+        SignupEmailBox.Focus(FocusState.Programmatic);
+    }
+
+    private void ShowLoginCard()
+    {
+        SignupDialogCard.Visibility = Visibility.Collapsed;
+        LoginDialogCard.Visibility  = Visibility.Visible;
+    }
+
+    private void LoginToSignup_Click(object sender, RoutedEventArgs e) => ShowSignupCard();
+
+    private void SignupToLogin_Click(object sender, RoutedEventArgs e)
+    {
+        // Carry the server address back so it isn't lost when switching cards.
+        if (!string.IsNullOrWhiteSpace(SignupServerBox.Text))
+            LoginServerBox.Text = SignupServerBox.Text;
+        ShowLoginCard();
+    }
+
+    private async void SignupSubmit_Click(object sender, RoutedEventArgs e)
+    {
+        string host  = SignupServerBox.Text.Trim();
+        string email = SignupEmailBox.Text.Trim();
+        string pass  = SignupPasswordBox.Password;
+        string conf  = SignupConfirmBox.Password;
+
+        if (string.IsNullOrEmpty(email) || string.IsNullOrEmpty(pass))
+        {
+            SetSignupError(Lang.Signup_ErrEmpty);
+            return;
+        }
+        if (string.IsNullOrEmpty(host))
+        {
+            SetSignupError(Lang.Login_ErrorNoServer);
+            return;
+        }
+
+        // Instant client-side feedback; the server re-validates authoritatively.
+        var policyError = EmailPolicy.Validate(email);
+        if (policyError is not null)
+        {
+            SetSignupError(Lang.Get(policyError));
+            return;
+        }
+        if (pass != conf)
+        {
+            SetSignupError(Lang.Signup_ErrPasswordMismatch);
+            return;
+        }
+
+        SetSignupBusy(true);
+        var result = await AuthClient.SignUpAsync(host, email, pass);
+        SetSignupBusy(false);
+
+        if (!result.Success)
+        {
+            SetSignupError(Lang.Get(result.ErrorKey ?? "Signup_ErrUnknown"));
+            return;
+        }
+
+        // Account created. Persist host + email so the login card prefills, then
+        // bounce the user back to sign in (explicit two-step, no auto-login).
+        var s = AppSettingsService.Load();
+        s.ServerHost     = AuthClient.NormalizeHost(host);
+        s.ServerUsername = EmailPolicy.Normalize(email);
+        AppSettingsService.Save(s);
+
+        SignupPasswordBox.Password = "";
+        SignupConfirmBox.Password  = "";
+        SignupErrorText.Visibility = Visibility.Collapsed;
+
+        LoginServerBox.Text       = s.ServerHost;
+        LoginUsernameBox.Text     = s.ServerUsername;
+        LoginPasswordBox.Password = "";
+        LoginErrorText.Visibility = Visibility.Collapsed;
+        LoginInfoText.Text        = Lang.Signup_Success;
+        LoginInfoText.Visibility  = Visibility.Visible;
+
+        ShowLoginCard();
+        LoginPasswordBox.Focus(FocusState.Programmatic);
+    }
+
+    private void SetSignupError(string message)
+    {
+        SignupErrorText.Text = message;
+        SignupErrorText.Visibility = Visibility.Visible;
+    }
+
+    private void SetSignupBusy(bool busy)
+    {
+        SignupSubmitBtn.IsEnabled  = !busy;
+        SignupBusyPanel.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;
+        if (busy) SignupErrorText.Visibility = Visibility.Collapsed;
+    }
+
+    private void SignupServer_KeyDown(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e)
+    {
+        if (e.Key == Windows.System.VirtualKey.Enter)
+            SignupEmailBox.Focus(FocusState.Programmatic);
+    }
+
+    private void SignupEmail_KeyDown(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e)
+    {
+        if (e.Key == Windows.System.VirtualKey.Enter)
+            SignupPasswordBox.Focus(FocusState.Programmatic);
+    }
+
+    private void SignupPassword_KeyDown(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e)
+    {
+        if (e.Key == Windows.System.VirtualKey.Enter)
+            SignupConfirmBox.Focus(FocusState.Programmatic);
+    }
+
+    private void SignupConfirm_KeyDown(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e)
+    {
+        if (e.Key == Windows.System.VirtualKey.Enter)
+            SignupSubmit_Click(sender, new RoutedEventArgs());
     }
 
     private void AccountFlyout_Opening(object sender, object e)
@@ -1201,7 +1348,7 @@ public sealed partial class MainWindow : Window
     private async void MenuGithub_Click(object sender, RoutedEventArgs e)
     {
         await Windows.System.Launcher.LaunchUriAsync(
-            new Uri("https://github.com/Khlfnalvr/TLIGDashboard/"));
+            new Uri("https://github.com/Khlfnalvr/TLIG-Dashboard/"));
     }
 
     private void MenuOpenLogFolder_Click(object sender, RoutedEventArgs e)
@@ -1245,7 +1392,7 @@ public sealed partial class MainWindow : Window
             "1. \n2. \n3. \n\n" +
             "## Expected vs actual\n\n";
 
-        string url = "https://github.com/Khlfnalvr/TLIGDashboard/issues/new" +
+        string url = "https://github.com/Khlfnalvr/TLIG-Dashboard/issues/new" +
                      $"?title={Uri.EscapeDataString(title)}" +
                      $"&body={Uri.EscapeDataString(body)}";
 

@@ -395,6 +395,42 @@ public sealed class LocalizationManager : INotifyPropertyChanged
     public string Learn_Insight2    => T(nameof(Learn_Insight2));
     public string Learn_Insight3    => T(nameof(Learn_Insight3));
 
+    // ── Learning dashboard (client course-analytics page) ─────────────────
+    public string LearnDash_Subtitle        => T(nameof(LearnDash_Subtitle));
+    public string LearnDash_OverallPerf      => T(nameof(LearnDash_OverallPerf));
+    public string LearnDash_CompletionRate   => T(nameof(LearnDash_CompletionRate));
+    public string LearnDash_ProLearner       => T(nameof(LearnDash_ProLearner));
+    public string LearnDash_TotalEnroll      => T(nameof(LearnDash_TotalEnroll));
+    public string LearnDash_CourseCompleted  => T(nameof(LearnDash_CourseCompleted));
+    public string LearnDash_HoursSpent       => T(nameof(LearnDash_HoursSpent));
+    public string LearnDash_HoursSpentSub    => T(nameof(LearnDash_HoursSpentSub));
+    public string LearnDash_LiveAttended     => T(nameof(LearnDash_LiveAttended));
+    public string LearnDash_QuizPractised    => T(nameof(LearnDash_QuizPractised));
+    public string LearnDash_AssignmentDone   => T(nameof(LearnDash_AssignmentDone));
+    public string LearnDash_TotalCourses     => T(nameof(LearnDash_TotalCourses));
+    public string LearnDash_ColCourseName    => T(nameof(LearnDash_ColCourseName));
+    public string LearnDash_ColProgress      => T(nameof(LearnDash_ColProgress));
+    public string LearnDash_ColScore         => T(nameof(LearnDash_ColScore));
+    public string LearnDash_ColStatus        => T(nameof(LearnDash_ColStatus));
+    public string LearnDash_InProgress       => T(nameof(LearnDash_InProgress));
+    public string LearnDash_Completed        => T(nameof(LearnDash_Completed));
+    public string LearnDash_Chapter          => T(nameof(LearnDash_Chapter));
+    public string LearnDash_Lecture          => T(nameof(LearnDash_Lecture));
+    public string LearnDash_Assignment       => T(nameof(LearnDash_Assignment));
+    public string LearnDash_View             => T(nameof(LearnDash_View));
+    public string LearnDash_Upload           => T(nameof(LearnDash_Upload));
+    public string LearnDash_SubmitBefore     => T(nameof(LearnDash_SubmitBefore));
+    public string LearnDash_PendingQuizzes   => T(nameof(LearnDash_PendingQuizzes));
+    public string LearnDash_SeeAll           => T(nameof(LearnDash_SeeAll));
+    public string LearnDash_Start            => T(nameof(LearnDash_Start));
+    public string LearnDash_Question         => T(nameof(LearnDash_Question));
+    public string LearnDash_Min              => T(nameof(LearnDash_Min));
+
+    // Composed sample lines (numbers are placeholder data; words are localized).
+    public string LearnDash_CourseMeta       => $"5 {LearnDash_Chapter} · 30 {LearnDash_Lecture}";
+    public string LearnDash_QuizMeta         => $"10 {LearnDash_Question} · 15 {LearnDash_Min}";
+    public string LearnDash_SubmitBeforeSample => $"{LearnDash_SubmitBefore} : 15 Oct 2024 · 12:00 PM";
+
     // ── Control section ───────────────────────────────────────────────────
     public string Ctl_Header       => T(nameof(Ctl_Header));
     public string Ctl_Setpoint     => T(nameof(Ctl_Setpoint));
@@ -467,6 +503,25 @@ public sealed class LocalizationManager : INotifyPropertyChanged
     public string Login_Connecting         => T(nameof(Login_Connecting));
     public string Login_ErrorNoServer       => T(nameof(Login_ErrorNoServer));
     public string Login_ErrorUnreachable     => T(nameof(Login_ErrorUnreachable));
+
+    // ── Signup (client self-registration, @its.ac.id) ─────────────────────
+    public string Signup_Title               => T(nameof(Signup_Title));
+    public string Signup_Subtitle            => T(nameof(Signup_Subtitle));
+    public string Signup_Email               => T(nameof(Signup_Email));
+    public string Signup_EmailHint           => T(nameof(Signup_EmailHint));
+    public string Signup_ConfirmPassword     => T(nameof(Signup_ConfirmPassword));
+    public string Signup_ConfirmPasswordHint => T(nameof(Signup_ConfirmPasswordHint));
+    public string Signup_Submit              => T(nameof(Signup_Submit));
+    public string Signup_BackToLogin         => T(nameof(Signup_BackToLogin));
+    public string Signup_CreateAccountLink   => T(nameof(Signup_CreateAccountLink));
+    public string Signup_Success             => T(nameof(Signup_Success));
+    public string Signup_ErrEmpty            => T(nameof(Signup_ErrEmpty));
+    public string Signup_ErrEmailFormat      => T(nameof(Signup_ErrEmailFormat));
+    public string Signup_ErrEmailDomain      => T(nameof(Signup_ErrEmailDomain));
+    public string Signup_ErrExists           => T(nameof(Signup_ErrExists));
+    public string Signup_ErrPasswordMismatch => T(nameof(Signup_ErrPasswordMismatch));
+    public string Signup_ErrPasswordShort    => T(nameof(Signup_ErrPasswordShort));
+    public string Signup_ErrUnknown          => T(nameof(Signup_ErrUnknown));
 
     // ── Sharing: session / connect panel ──────────────────────────────────
     public string Share_ServerAccount  => T(nameof(Share_ServerAccount));
@@ -918,6 +973,25 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             [nameof(Login_ErrorNoServer)]     = "Please enter the server address.",
             [nameof(Login_ErrorUnreachable)]  = "Cannot reach the server. Check the address and make sure the server is running.",
 
+            // ── Signup (client self-registration) ──
+            [nameof(Signup_Title)]               = "Create account",
+            [nameof(Signup_Subtitle)]            = "Sign up with your @its.ac.id email",
+            [nameof(Signup_Email)]               = "Email",
+            [nameof(Signup_EmailHint)]           = "name@its.ac.id",
+            [nameof(Signup_ConfirmPassword)]     = "Confirm password",
+            [nameof(Signup_ConfirmPasswordHint)] = "Re-enter password",
+            [nameof(Signup_Submit)]              = "Register",
+            [nameof(Signup_BackToLogin)]         = "Back to sign in",
+            [nameof(Signup_CreateAccountLink)]   = "Don't have an account? Sign up",
+            [nameof(Signup_Success)]             = "Account created. Please sign in.",
+            [nameof(Signup_ErrEmpty)]            = "Email and password cannot be empty.",
+            [nameof(Signup_ErrEmailFormat)]      = "Enter a valid email address.",
+            [nameof(Signup_ErrEmailDomain)]      = "Email must use an @its.ac.id address (subdomains allowed).",
+            [nameof(Signup_ErrExists)]           = "An account with this email already exists.",
+            [nameof(Signup_ErrPasswordMismatch)] = "Passwords do not match.",
+            [nameof(Signup_ErrPasswordShort)]    = "Password must be at least 6 characters.",
+            [nameof(Signup_ErrUnknown)]          = "Could not create the account. Please try again.",
+
             // ── User Management ──
             [nameof(Nav_UserManagement)] = "Users",
             [nameof(Um_Title)]      = "User Management",
@@ -977,6 +1051,36 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             [nameof(Learn_Insight1)]    = "No closed-loop learning session has been recorded yet.",
             [nameof(Learn_Insight2)]    = "Connect live data to start collecting training samples.",
             [nameof(Learn_Insight3)]    = "PID response and process stability will appear here.",
+
+            [nameof(LearnDash_Subtitle)]       = "Track your learning progress",
+            [nameof(LearnDash_OverallPerf)]    = "Overall performance",
+            [nameof(LearnDash_CompletionRate)] = "Course completion rate",
+            [nameof(LearnDash_ProLearner)]     = "PRO LEARNER",
+            [nameof(LearnDash_TotalEnroll)]    = "Total enroll courses",
+            [nameof(LearnDash_CourseCompleted)] = "Course completed",
+            [nameof(LearnDash_HoursSpent)]     = "Hours spent",
+            [nameof(LearnDash_HoursSpentSub)]  = "Total hours spent in courses",
+            [nameof(LearnDash_LiveAttended)]   = "Live class attended",
+            [nameof(LearnDash_QuizPractised)]  = "Quiz practised",
+            [nameof(LearnDash_AssignmentDone)] = "Assignment done",
+            [nameof(LearnDash_TotalCourses)]   = "Total courses",
+            [nameof(LearnDash_ColCourseName)]  = "Course name",
+            [nameof(LearnDash_ColProgress)]    = "Progress",
+            [nameof(LearnDash_ColScore)]       = "Overall score",
+            [nameof(LearnDash_ColStatus)]      = "Status",
+            [nameof(LearnDash_InProgress)]     = "In progress",
+            [nameof(LearnDash_Completed)]      = "Completed",
+            [nameof(LearnDash_Chapter)]        = "chapter",
+            [nameof(LearnDash_Lecture)]        = "lecture",
+            [nameof(LearnDash_Assignment)]     = "Assignment",
+            [nameof(LearnDash_View)]           = "View",
+            [nameof(LearnDash_Upload)]         = "Upload",
+            [nameof(LearnDash_SubmitBefore)]   = "Submit before",
+            [nameof(LearnDash_PendingQuizzes)] = "Pending quizzes",
+            [nameof(LearnDash_SeeAll)]         = "See all",
+            [nameof(LearnDash_Start)]          = "Start",
+            [nameof(LearnDash_Question)]       = "question",
+            [nameof(LearnDash_Min)]            = "min",
 
             [nameof(Ctl_Header)]       = "CONTROL",
             [nameof(Ctl_Setpoint)]     = "Setpoint Temperature",
@@ -1361,6 +1465,25 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             [nameof(Login_ErrorNoServer)]     = "Masukkan alamat server terlebih dahulu.",
             [nameof(Login_ErrorUnreachable)]  = "Tidak dapat menjangkau server. Periksa alamat dan pastikan server berjalan.",
 
+            // ── Pendaftaran (registrasi mandiri klien) ──
+            [nameof(Signup_Title)]               = "Buat akun",
+            [nameof(Signup_Subtitle)]            = "Daftar dengan email @its.ac.id Anda",
+            [nameof(Signup_Email)]               = "Email",
+            [nameof(Signup_EmailHint)]           = "nama@its.ac.id",
+            [nameof(Signup_ConfirmPassword)]     = "Konfirmasi kata sandi",
+            [nameof(Signup_ConfirmPasswordHint)] = "Masukkan ulang kata sandi",
+            [nameof(Signup_Submit)]              = "Daftar",
+            [nameof(Signup_BackToLogin)]         = "Kembali ke masuk",
+            [nameof(Signup_CreateAccountLink)]   = "Belum punya akun? Daftar",
+            [nameof(Signup_Success)]             = "Akun berhasil dibuat. Silakan masuk.",
+            [nameof(Signup_ErrEmpty)]            = "Email dan kata sandi tidak boleh kosong.",
+            [nameof(Signup_ErrEmailFormat)]      = "Masukkan alamat email yang valid.",
+            [nameof(Signup_ErrEmailDomain)]      = "Email harus memakai alamat @its.ac.id (subdomain diperbolehkan).",
+            [nameof(Signup_ErrExists)]           = "Akun dengan email ini sudah terdaftar.",
+            [nameof(Signup_ErrPasswordMismatch)] = "Konfirmasi kata sandi tidak cocok.",
+            [nameof(Signup_ErrPasswordShort)]    = "Kata sandi minimal 6 karakter.",
+            [nameof(Signup_ErrUnknown)]          = "Gagal membuat akun. Silakan coba lagi.",
+
             // ── Manajemen Pengguna ──
             [nameof(Nav_UserManagement)] = "Pengguna",
             [nameof(Um_Title)]      = "Manajemen Pengguna",
@@ -1420,6 +1543,36 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             [nameof(Learn_Insight1)]    = "Sesi learning closed-loop belum direkam.",
             [nameof(Learn_Insight2)]    = "Hubungkan data live untuk mulai mengumpulkan sampel training.",
             [nameof(Learn_Insight3)]    = "Respon PID dan stabilitas proses akan tampil di sini.",
+
+            [nameof(LearnDash_Subtitle)]       = "Pantau progres belajar Anda",
+            [nameof(LearnDash_OverallPerf)]    = "Performa keseluruhan",
+            [nameof(LearnDash_CompletionRate)] = "Tingkat penyelesaian kursus",
+            [nameof(LearnDash_ProLearner)]     = "PELAJAR PRO",
+            [nameof(LearnDash_TotalEnroll)]    = "Total kursus terdaftar",
+            [nameof(LearnDash_CourseCompleted)] = "Kursus selesai",
+            [nameof(LearnDash_HoursSpent)]     = "Jam belajar",
+            [nameof(LearnDash_HoursSpentSub)]  = "Total jam belajar di kursus",
+            [nameof(LearnDash_LiveAttended)]   = "Kelas live dihadiri",
+            [nameof(LearnDash_QuizPractised)]  = "Kuis dikerjakan",
+            [nameof(LearnDash_AssignmentDone)] = "Tugas selesai",
+            [nameof(LearnDash_TotalCourses)]   = "Total kursus",
+            [nameof(LearnDash_ColCourseName)]  = "Nama kursus",
+            [nameof(LearnDash_ColProgress)]    = "Progres",
+            [nameof(LearnDash_ColScore)]       = "Nilai keseluruhan",
+            [nameof(LearnDash_ColStatus)]      = "Status",
+            [nameof(LearnDash_InProgress)]     = "Berlangsung",
+            [nameof(LearnDash_Completed)]      = "Selesai",
+            [nameof(LearnDash_Chapter)]        = "bab",
+            [nameof(LearnDash_Lecture)]        = "materi",
+            [nameof(LearnDash_Assignment)]     = "Tugas",
+            [nameof(LearnDash_View)]           = "Lihat",
+            [nameof(LearnDash_Upload)]         = "Unggah",
+            [nameof(LearnDash_SubmitBefore)]   = "Kumpulkan sebelum",
+            [nameof(LearnDash_PendingQuizzes)] = "Kuis tertunda",
+            [nameof(LearnDash_SeeAll)]         = "Lihat semua",
+            [nameof(LearnDash_Start)]          = "Mulai",
+            [nameof(LearnDash_Question)]       = "soal",
+            [nameof(LearnDash_Min)]            = "mnt",
 
             [nameof(Ctl_Header)]       = "KONTROL",
             [nameof(Ctl_Setpoint)]     = "Setpoint Temperatur",

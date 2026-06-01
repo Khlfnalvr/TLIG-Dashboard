@@ -4,9 +4,12 @@
 # Publish output (dotnet publish relative-path quirk creates ..publish/ folder)
 ..publish/
 Publish/
+publish/
 publish_output/
 # Installer output
 Publish/BMSMonitorSetup.exe
+# Cloudflare Tunnel binary — download separately, do not commit
+cloudflared.exe
 # Log / test data
 *.log
 BMS_Simulation_*.csv

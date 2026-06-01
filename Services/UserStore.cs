@@ -22,6 +22,7 @@ public sealed class UserAccount
 {
     public string    Username     { get; set; } = "";
     public string    DisplayName  { get; set; } = "";
+    public string    Email        { get; set; } = "";   // set for self-registered accounts (== Username)
     public string    Role         { get; set; } = UserRoles.Operator;
     public string    PasswordHash { get; set; } = "";   // base64 PBKDF2-SHA256 hash
     public string    Salt         { get; set; } = "";   // base64 random salt
@@ -108,6 +109,38 @@ public sealed class UserStore
         {
             if (FindLocked(username) is not null) return (false, "Um_ErrUserExists");
             _file.Users.Add(CreateUser(username, password, displayName, role));
+            SaveLocked();
+        }
+        Changed?.Invoke();
+        return (true, null);
+    }
+
+    /// <summary>
+    /// Self-registration from a remote client (the <c>/auth/signup</c> endpoint).
+    /// Creates a verified account whose username is the normalized e-mail, after
+    /// enforcing the <see cref="EmailPolicy"/> domain rule and a minimum password
+    /// length. The account is granted the least-privilege <see cref="UserRoles.Viewer"/>
+    /// role; an Admin can promote it later via the User Management page.
+    /// Returns <c>(true, null)</c> on success or <c>(false, errorKey)</c> where the
+    /// key is a localization string the client can display.
+    /// </summary>
+    public (bool ok, string? error) SignUp(string email, string password)
+    {
+        var policyError = EmailPolicy.Validate(email);
+        if (policyError is not null)             return (false, policyError);
+        if (string.IsNullOrEmpty(password))      return (false, "Um_ErrPasswordEmpty");
+        if (password.Length < 6)                 return (false, "Signup_ErrPasswordShort");
+
+        var normalized  = EmailPolicy.Normalize(email);
+        var displayName = normalized.Split('@')[0];
+
+        lock (_lock)
+        {
+            if (FindLocked(normalized) is not null) return (false, "Signup_ErrExists");
+
+            var user = CreateUser(normalized, password, displayName, UserRoles.Viewer);
+            user.Email = normalized;
+            _file.Users.Add(user);
             SaveLocked();
         }
         Changed?.Invoke();
@@ -233,6 +266,7 @@ public sealed class UserStore
     {
         Username     = u.Username,
         DisplayName  = u.DisplayName,
+        Email        = u.Email,
         Role         = u.Role,
         PasswordHash = u.PasswordHash,
         Salt         = u.Salt,

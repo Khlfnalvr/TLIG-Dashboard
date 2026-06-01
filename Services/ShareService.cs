@@ -36,6 +36,7 @@ public static class ShareProtocol
     public const string AiPath         = "/ai/chat/completions";
     public const string AuthLoginPath  = "/auth/login";
     public const string AuthLogoutPath = "/auth/logout";
+    public const string AuthSignupPath = "/auth/signup";
     public const string GuidWs         = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 
     /// <summary>Generates an opaque, high-entropy session token (URL-safe base64).</summary>
@@ -187,6 +188,10 @@ public sealed class ShareServer
             {
                 await HandleAuthLogoutAsync(stream, headers, ct);
             }
+            else if (method == "POST" && path == ShareProtocol.AuthSignupPath)
+            {
+                await HandleAuthSignupAsync(stream, headers, ct);
+            }
             else if (method == "POST" && path == ShareProtocol.AiPath)
             {
                 await HandleAiProxyAsync(stream, headers, ct);
@@ -301,6 +306,35 @@ public sealed class ShareServer
         if (headers.TryGetValue("authorization", out var auth) &&
             auth.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
             RevokeSession(auth["Bearer ".Length..].Trim());
+
+        await WriteJsonAsync(stream, "{\"ok\":true}", ct);
+    }
+
+    // ── Auth: self-registration (client signup) → create a Viewer account ───────
+
+    private async Task HandleAuthSignupAsync(
+        NetworkStream stream, Dictionary<string, string> headers, CancellationToken ct)
+    {
+        var body = await ReadBodyAsync(stream, headers, ct);
+
+        string email = "", password = "";
+        try
+        {
+            var node = JsonNode.Parse(body);
+            email    = (string?)node?["email"]    ?? "";
+            password = (string?)node?["password"] ?? "";
+        }
+        catch { /* malformed body → empty credentials → validation fails below */ }
+
+        var (ok, error) = UserStore.Instance.SignUp(email, password);
+        if (!ok)
+        {
+            // Duplicate → 409 Conflict; everything else (bad domain/format/password) → 400.
+            var status = error == "Signup_ErrExists" ? "409 Conflict" : "400 Bad Request";
+            var json   = new JsonObject { ["error"] = error ?? "Signup_ErrUnknown" }.ToJsonString();
+            await WriteSimpleAsync(stream, status, "application/json", json, ct);
+            return;
+        }
 
         await WriteJsonAsync(stream, "{\"ok\":true}", ct);
     }
@@ -767,6 +801,47 @@ public static class AuthClient
                 DisplayName = (string?)node?["displayName"] ?? username,
                 Role        = (string?)node?["role"]        ?? "",
             };
+        }
+        catch (Exception ex)
+        {
+            return new AuthResult { ErrorKey = "Login_ErrorUnreachable", Detail = ex.Message };
+        }
+    }
+
+    /// <summary>
+    /// Registers a new account on the server (the <c>/auth/signup</c> endpoint).
+    /// On success the account exists and can immediately be used with
+    /// <see cref="LoginAsync"/>. On failure <see cref="AuthResult.ErrorKey"/> carries
+    /// a localization key (e.g. <c>Signup_ErrEmailDomain</c>, <c>Signup_ErrExists</c>).
+    /// </summary>
+    public static async Task<AuthResult> SignUpAsync(
+        string host, string email, string password, CancellationToken ct = default)
+    {
+        var normalizedHost = NormalizeHost(host);
+        if (string.IsNullOrWhiteSpace(normalizedHost))
+            return new AuthResult { ErrorKey = "Login_ErrorNoServer" };
+
+        var url     = $"{BaseUrl(host)}{ShareProtocol.AuthSignupPath}";
+        var payload = new JsonObject { ["email"] = email, ["password"] = password }.ToJsonString();
+
+        using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
+        try
+        {
+            using var resp = await http.PostAsync(
+                url, new StringContent(payload, Encoding.UTF8, "application/json"), ct);
+
+            if (resp.IsSuccessStatusCode)
+                return new AuthResult { Success = true };
+
+            // The server returns the failure reason as a localization key in {"error":...}.
+            var key = "Signup_ErrUnknown";
+            try
+            {
+                var node = JsonNode.Parse(await resp.Content.ReadAsStringAsync(ct));
+                key = (string?)node?["error"] ?? key;
+            }
+            catch { /* non-JSON body → keep the generic key */ }
+            return new AuthResult { ErrorKey = key, Detail = $"HTTP {(int)resp.StatusCode}" };
         }
         catch (Exception ex)
         {
