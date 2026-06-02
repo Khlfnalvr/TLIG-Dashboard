@@ -64,6 +64,11 @@ public class AppSettings
     // UI language — persisted here so it uses the same proven save/load path
     // as every other setting. One of: "id" | "ms" | "en" | "nl" | "zh".
     public string Language               { get; set; } = "en";
+
+    // ── Developer options ─────────────────────────────────────────────────
+    // When true, the update checker uses /releases (all releases including
+    // prereleases) instead of /releases/latest (stable only).
+    public bool   EarlyAccess            { get; set; } = false;
 }
 
 public static class AppSettingsService

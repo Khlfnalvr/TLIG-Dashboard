@@ -54,6 +54,7 @@ public sealed partial class MainWindow : Window
     private string _loggedInRole = "";
 
     private bool _initializing;
+    private bool _earlyAccess;
     private IntPtr _hwnd;
     private IntPtr _oldWndProc;
     private WndProcDelegate? _newWndProc;
@@ -97,6 +98,9 @@ public sealed partial class MainWindow : Window
 
         InitOpcUaFlyout();
         InitLoginOverlay();
+
+        _earlyAccess = AppSettingsService.Load().EarlyAccess;
+        MenuEarlyAccess.IsChecked = _earlyAccess;
 
         _ = StartupUpdateCheckAsync();
     }
@@ -986,7 +990,7 @@ public sealed partial class MainWindow : Window
     {
         await Task.Delay(3000); // let the app finish loading first
 
-        var info = await Services.UpdateService.CheckAsync(AppVersion);
+        var info = await Services.UpdateService.CheckAsync(AppVersion, _earlyAccess);
         _cachedUpdateInfo = info;
 
         if (info.Result != Services.UpdateCheckResult.UpdateAvailable) return;
@@ -1053,7 +1057,7 @@ public sealed partial class MainWindow : Window
 
     private async Task RunUpdateCheckAsync()
     {
-        var info = await Services.UpdateService.CheckAsync(AppVersion);
+        var info = await Services.UpdateService.CheckAsync(AppVersion, _earlyAccess);
 
         DispatcherQueue.TryEnqueue(() =>
         {
@@ -1377,6 +1381,14 @@ public sealed partial class MainWindow : Window
             FileName = AppSettingsService.FilePath,
             UseShellExecute = true
         });
+    }
+
+    private void MenuEarlyAccess_Click(object sender, RoutedEventArgs e)
+    {
+        _earlyAccess = MenuEarlyAccess.IsChecked;
+        var s = AppSettingsService.Load();
+        s.EarlyAccess = _earlyAccess;
+        AppSettingsService.Save(s);
     }
 
     private async void MenuReportBug_Click(object sender, RoutedEventArgs e)

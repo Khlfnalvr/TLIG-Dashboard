@@ -41,17 +41,27 @@ public static class UpdateService
 {
     private static readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(30) };
 
+    // Default: only stable (non-prerelease) releases.
     private const string ApiUrl =
         "https://api.github.com/repos/Khlfnalvr/TLIG-Dashboard/releases/latest";
+
+    // Early Access: most recent release of any kind (prerelease included).
+    // Returns a JSON array; we take the first element.
+    private const string ApiUrlEarlyAccess =
+        "https://api.github.com/repos/Khlfnalvr/TLIG-Dashboard/releases?per_page=1";
 
     private static string ExeName =>
         BuildInfo.IsServer ? "TLIGDashboard.Server.exe" : "TLIGDashboard.Client.exe";
 
-    public static async Task<UpdateCheckInfo> CheckAsync(string currentVersion)
+    public static async Task<UpdateCheckInfo> CheckAsync(
+        string currentVersion, bool earlyAccess = false)
     {
         try
         {
-            using var req = new HttpRequestMessage(HttpMethod.Get, ApiUrl);
+            // Early Access mode uses the /releases list endpoint (includes prereleases).
+            // Default mode uses /releases/latest (stable only).
+            var url = earlyAccess ? ApiUrlEarlyAccess : ApiUrl;
+            using var req = new HttpRequestMessage(HttpMethod.Get, url);
             req.Headers.UserAgent.ParseAdd("TLIGDashboard/" + currentVersion);
             req.Headers.Accept.ParseAdd("application/vnd.github+json");
             req.Headers.Add("X-GitHub-Api-Version", "2022-11-28");
@@ -59,8 +69,22 @@ public static class UpdateService
             using var resp = await _http.SendAsync(req);
             resp.EnsureSuccessStatusCode();
 
-            var json    = await resp.Content.ReadAsStringAsync();
-            var release = JsonSerializer.Deserialize(json, AppJsonContext.Default.GitHubRelease);
+            var json = await resp.Content.ReadAsStringAsync();
+
+            GitHubRelease? release;
+            if (earlyAccess)
+            {
+                // /releases returns an array; take the first (most recent) element.
+                var releases = JsonSerializer.Deserialize(
+                    json, AppJsonContext.Default.GitHubReleaseArray);
+                release = releases is { Length: > 0 } ? releases[0] : null;
+            }
+            else
+            {
+                release = JsonSerializer.Deserialize(
+                    json, AppJsonContext.Default.GitHubRelease);
+            }
+
             if (release is null)
                 return Err("Invalid API response");
 

@@ -141,6 +141,7 @@ public sealed class LocalizationManager : INotifyPropertyChanged
     public string Ui_Menu_OpenLogFolder => T(nameof(Ui_Menu_OpenLogFolder));
     public string Ui_Menu_OpenSettings  => T(nameof(Ui_Menu_OpenSettings));
     public string Ui_Menu_ReportBug     => T(nameof(Ui_Menu_ReportBug));
+    public string Ui_Menu_EarlyAccess   => T(nameof(Ui_Menu_EarlyAccess));
     public string Ui_Menu_CheckUpdate   => T(nameof(Ui_Menu_CheckUpdate));
 
     // ── Update dialog ─────────────────────────────────────────────────────
@@ -678,6 +679,7 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             [nameof(Ui_Menu_OpenLogFolder)] = "Open Log Folder",
             [nameof(Ui_Menu_OpenSettings)]  = "Open settings.json",
             [nameof(Ui_Menu_ReportBug)]     = "Report Bug…",
+            [nameof(Ui_Menu_EarlyAccess)]   = "Early Access (include prereleases)",
             [nameof(Ui_Menu_CheckUpdate)]   = "Check for Updates…",
 
             [nameof(Upd_CheckingTitle)]  = "Checking for Updates",
@@ -1170,6 +1172,7 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             [nameof(Ui_Menu_OpenLogFolder)] = "Buka Folder Log",
             [nameof(Ui_Menu_OpenSettings)]  = "Buka settings.json",
             [nameof(Ui_Menu_ReportBug)]     = "Laporkan Bug…",
+            [nameof(Ui_Menu_EarlyAccess)]   = "Early Access (termasuk prerelease)",
             [nameof(Ui_Menu_CheckUpdate)]   = "Periksa Pembaruan…",
 
             [nameof(Upd_CheckingTitle)]  = "Memeriksa Pembaruan",

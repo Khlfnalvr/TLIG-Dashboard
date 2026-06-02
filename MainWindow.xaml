@@ -272,6 +272,16 @@
                                           Glyph="&#xEBE8;"/>
                             </MenuFlyoutItem.Icon>
                         </MenuFlyoutItem>
+                        <MenuFlyoutSeparator/>
+                        <ToggleMenuFlyoutItem x:Name="MenuEarlyAccess"
+                                              FontSize="12"
+                                              Text="{x:Bind Lang.Ui_Menu_EarlyAccess, Mode=OneWay}"
+                                              Click="MenuEarlyAccess_Click">
+                            <ToggleMenuFlyoutItem.Icon>
+                                <FontIcon FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                                          Glyph="&#xECAD;"/>
+                            </ToggleMenuFlyoutItem.Icon>
+                        </ToggleMenuFlyoutItem>
                     </MenuFlyoutSubItem>
                     <MenuFlyoutSeparator/>
                     <MenuFlyoutItem x:Name="MenuTour"
