@@ -67,9 +67,17 @@ public static class UpdateService
             var latestTag = release.TagName.TrimStart('v');
             var current   = currentVersion.TrimStart('v');
 
-            var zipAsset = release.Assets.FirstOrDefault(a =>
+            // Pick the ZIP that matches this flavor (Server or Client) and contains
+            // "Update" in its name. Fall back to any flavor-matched ZIP, then any ZIP.
+            var flavor   = BuildInfo.Flavor; // "Server" or "Client"
+            var zipAsset =
+                release.Assets.FirstOrDefault(a =>
                     a.Name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) &&
-                    a.Name.Contains("Update", StringComparison.OrdinalIgnoreCase))
+                    a.Name.Contains("Update", StringComparison.OrdinalIgnoreCase) &&
+                    a.Name.Contains(flavor,   StringComparison.OrdinalIgnoreCase))
+                ?? release.Assets.FirstOrDefault(a =>
+                    a.Name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) &&
+                    a.Name.Contains(flavor, StringComparison.OrdinalIgnoreCase))
                 ?? release.Assets.FirstOrDefault(a =>
                     a.Name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase));
 
