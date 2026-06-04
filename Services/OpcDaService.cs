@@ -1,13 +1,14 @@
 #pragma warning disable CA1416  // Windows-only; this app targets win-x64 exclusively.
 
+using System.Reflection;
 using System.Runtime.InteropServices;
 
 namespace TLIGDashboard.Services;
 
 /// <summary>
-/// OPC DA (Classic) client using COM automation.
-/// Connects to any local OPC DA server by ProgID (e.g. "National Instruments.NIOPCServers.V5").
-/// Requires the target OPC server to be registered on this machine.
+/// OPC DA (Classic) client using COM IDispatch via Type.InvokeMember.
+/// Avoids dynamic/DLR so it survives PublishTrimmed.
+/// Connects to any local OPC DA server by ProgID (e.g. "National Instruments.OPCFieldPoint").
 /// </summary>
 public sealed class OpcDaService : IDisposable
 {
@@ -32,15 +33,14 @@ public sealed class OpcDaService : IDisposable
             Disconnect();
             ProgId = progId.Trim();
 
-            // Activate the OPC DA COM server by ProgID.
             var type = Type.GetTypeFromProgID(ProgId, throwOnError: true)
                 ?? throw new InvalidOperationException($"ProgID '{ProgId}' not found.");
             _serverObj = Activator.CreateInstance(type)
                 ?? throw new InvalidOperationException("Failed to create COM instance.");
 
-            // Verify the server responds via the OPC Automation interface.
-            dynamic srv = _serverObj;
-            int state = (int)srv.ServerState;
+            // Read ServerState via IDispatch — no DLR/dynamic needed.
+            var stateObj = ComGet(_serverObj, "ServerState");
+            int state = stateObj is null ? 0 : Convert.ToInt32(stateObj);
             // OPC_STATUS_RUNNING = 1; warn on other states but still consider connected.
             if (state != 1)
                 FireError(LocalizationManager.Instance.Format("OpcDa_ServerNotRunning", state));
@@ -66,8 +66,9 @@ public sealed class OpcDaService : IDisposable
         {
             try
             {
-                dynamic srv = _serverObj;
-                srv.OPCGroups.RemoveAll();
+                var groups = ComGet(_serverObj, "OPCGroups");
+                if (groups is not null)
+                    ComInvoke(groups, "RemoveAll");
             }
             catch { /* best-effort cleanup */ }
 
@@ -82,6 +83,20 @@ public sealed class OpcDaService : IDisposable
             StatusChanged?.Invoke(
                 LocalizationManager.Instance.Get("OpcUa_StatusDisconnected"));
     }
+
+    // ── IDispatch helpers (no DLR, trim-safe) ────────────────────────────────
+
+    private static object? ComGet(object comObj, string member) =>
+        comObj.GetType().InvokeMember(
+            member,
+            BindingFlags.GetProperty | BindingFlags.Public | BindingFlags.Instance,
+            null, comObj, null);
+
+    private static void ComInvoke(object comObj, string method, params object[] args) =>
+        comObj.GetType().InvokeMember(
+            method,
+            BindingFlags.InvokeMethod | BindingFlags.Public | BindingFlags.Instance,
+            null, comObj, args);
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 

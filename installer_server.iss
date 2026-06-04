@@ -4,7 +4,7 @@
 ; ============================================================
 
 #define AppName      "TLIG Dashboard Server"
-#define AppVersion   "1.0.0-Echo"
+#define AppVersion   "1.0.0-Foxtrot"
 #define AppPublisher "ICO Laboratory"
 #define AppExe       "TLIGDashboard.Server.exe"
 
@@ -20,7 +20,7 @@ DefaultDirName={autopf}\TLIGDashboard\Server
 DefaultGroupName={#AppName}
 AllowNoIcons=yes
 OutputDir=publish
-OutputBaseFilename=TLIGDashboard-Server-v1.0.0-Echo-Setup
+OutputBaseFilename=TLIGDashboard-Server-v1.0.0-Foxtrot-Setup
 SetupIconFile=Assets\logo.ico
 UninstallDisplayIcon={app}\{#AppExe}
 UninstallDisplayName={#AppName}

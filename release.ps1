@@ -23,7 +23,7 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$Version      = "1.0.0-Echo"
+$Version      = "1.0.0-Foxtrot"
 $Project      = Join-Path $PSScriptRoot "TLIGDashboard.csproj"
 $PublishRoot  = Join-Path $PSScriptRoot "publish"
 $InnoCompiler = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
