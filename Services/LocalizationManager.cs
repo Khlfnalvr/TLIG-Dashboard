@@ -110,9 +110,10 @@ public sealed class LocalizationManager : INotifyPropertyChanged
     public string Ui_OpcUaUsernameAuth=> T(nameof(Ui_OpcUaUsernameAuth));
     public string Ui_OpcUaUsername    => T(nameof(Ui_OpcUaUsername));
     public string Ui_OpcUaPassword    => T(nameof(Ui_OpcUaPassword));
-    public string Ui_OpcUaSecNone     => T(nameof(Ui_OpcUaSecNone));
-    public string Ui_OpcUaSecSign     => T(nameof(Ui_OpcUaSecSign));
-    public string Ui_OpcUaSecSignEnc  => T(nameof(Ui_OpcUaSecSignEnc));
+    public string Ui_OpcUaSecNone       => T(nameof(Ui_OpcUaSecNone));
+    public string Ui_OpcUaSecSign       => T(nameof(Ui_OpcUaSecSign));
+    public string Ui_OpcUaSecSignEnc    => T(nameof(Ui_OpcUaSecSignEnc));
+    public string Ui_OpcUaOpenCertFolder => T(nameof(Ui_OpcUaOpenCertFolder));
 
     // ── Alert history ─────────────────────────────────────────────────────
     public string Ui_AlertHistory   => T(nameof(Ui_AlertHistory));
@@ -652,9 +653,10 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             [nameof(Ui_OpcUaUsernameAuth)]= "Username / Password",
             [nameof(Ui_OpcUaUsername)]    = "Username",
             [nameof(Ui_OpcUaPassword)]    = "Password",
-            [nameof(Ui_OpcUaSecNone)]     = "None (No Security)",
-            [nameof(Ui_OpcUaSecSign)]     = "Sign",
-            [nameof(Ui_OpcUaSecSignEnc)]  = "Sign & Encrypt",
+            [nameof(Ui_OpcUaSecNone)]        = "None (No Security)",
+            [nameof(Ui_OpcUaSecSign)]        = "Sign",
+            [nameof(Ui_OpcUaSecSignEnc)]     = "Sign & Encrypt",
+            [nameof(Ui_OpcUaOpenCertFolder)] = "Open Certificate Folder",
             [nameof(Ui_AlertHistory)]   = "Alert History",
             [nameof(Ui_NoAlerts)]       = "No alerts yet",
             [nameof(Ui_ClearAlerts)]    = "Clear",
@@ -1145,9 +1147,10 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             [nameof(Ui_OpcUaUsernameAuth)]= "Nama Pengguna / Kata Sandi",
             [nameof(Ui_OpcUaUsername)]    = "Nama Pengguna",
             [nameof(Ui_OpcUaPassword)]    = "Kata Sandi",
-            [nameof(Ui_OpcUaSecNone)]     = "Tidak Ada (Tanpa Keamanan)",
-            [nameof(Ui_OpcUaSecSign)]     = "Tanda Tangan",
-            [nameof(Ui_OpcUaSecSignEnc)]  = "Tanda Tangan & Enkripsi",
+            [nameof(Ui_OpcUaSecNone)]        = "Tidak Ada (Tanpa Keamanan)",
+            [nameof(Ui_OpcUaSecSign)]        = "Tanda Tangan",
+            [nameof(Ui_OpcUaSecSignEnc)]     = "Tanda Tangan & Enkripsi",
+            [nameof(Ui_OpcUaOpenCertFolder)] = "Buka Folder Sertifikat",
             [nameof(Ui_AlertHistory)]   = "Riwayat Alert",
             [nameof(Ui_NoAlerts)]       = "Belum ada alert",
             [nameof(Ui_ClearAlerts)]    = "Hapus",

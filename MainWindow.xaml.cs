@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.IO;
 using System.Reflection;
 using System.Runtime.InteropServices;
@@ -1975,6 +1976,15 @@ public sealed partial class MainWindow : Window
         OpcStatusDot.Fill = connected
             ? new SolidColorBrush(Color.FromArgb(0xFF, 0x25, 0xC6, 0x85))
             : new SolidColorBrush(Color.FromArgb(0x00, 0x00, 0x00, 0x00));
+    }
+
+    private void OpcCertFolderBtn_Click(object sender, RoutedEventArgs e)
+    {
+        var certPath = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "TLIGDashboard", "pki", "own");
+        Directory.CreateDirectory(certPath);
+        Process.Start(new ProcessStartInfo("explorer.exe", certPath) { UseShellExecute = true });
     }
 
     // ── Tab switching (OPC UA ↔ AI API) ──────────────────────────────────────

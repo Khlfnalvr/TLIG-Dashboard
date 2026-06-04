@@ -465,6 +465,12 @@
                                                TextWrapping="Wrap"
                                                Text="{x:Bind Lang.Ctrl_NotConnected, Mode=OneWay}"/>
 
+                                    <!-- Open certificate folder -->
+                                    <HyperlinkButton x:Name="OpcCertFolderBtn"
+                                                     FontSize="11" Padding="0,2,0,2"
+                                                     Content="{x:Bind Lang.Ui_OpcUaOpenCertFolder, Mode=OneWay}"
+                                                     Click="OpcCertFolderBtn_Click"/>
+
                                 </StackPanel>
 
                                 <!-- ══ AI API PANEL ══════════════════════════ -->

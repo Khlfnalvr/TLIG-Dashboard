@@ -1,4 +1,6 @@
 using System.ComponentModel;
+using System.Diagnostics;
+using System.IO;
 using Microsoft.UI;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -384,6 +386,15 @@ public sealed partial class BroadcastSettingsPage : Page
         OpcStatusText.Text = connected
             ? Lang.Format("OpcUa_StatusConnected", opc!.EndpointUrl)
             : Lang.Get("Ctrl_NotConnected");
+    }
+
+    private void OpcCertFolderBtn_Click(object sender, RoutedEventArgs e)
+    {
+        var certPath = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "TLIGDashboard", "pki", "own");
+        Directory.CreateDirectory(certPath);
+        Process.Start(new ProcessStartInfo("explorer.exe", certPath) { UseShellExecute = true });
     }
 
     private async void OpcConnectBtn_Click(object sender, RoutedEventArgs e)
