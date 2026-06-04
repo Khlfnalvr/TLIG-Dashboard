@@ -110,13 +110,8 @@ public sealed class OpcUaService : IDisposable
         await config.Validate(ApplicationType.Client);
 
         // Create self-signed client certificate on first run if it doesn't exist.
-        var appInstance = new ApplicationInstance
-        {
-            ApplicationName          = "TLIGDashboard",
-            ApplicationType          = ApplicationType.Client,
-            ApplicationConfiguration = config
-        };
-        await appInstance.CheckApplicationInstanceCertificate(false, 2048);
+        var appInstance = new ApplicationInstance(config);
+        await appInstance.CheckApplicationInstanceCertificatesAsync(false, 2048);
 
         // Accept all server certificates (appropriate for closed industrial LAN).
         config.CertificateValidator.CertificateValidation += (_, e) => e.Accept = true;
