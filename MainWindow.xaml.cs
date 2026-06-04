@@ -1843,6 +1843,9 @@ public sealed partial class MainWindow : Window
     {
         var saved = AppSettingsService.Load();
         OpcEndpointBox.Text = saved.OpcUaEndpointUrl;
+        OpcProtocolCombo.SelectedIndex = saved.OpcProtocol == "DA" ? 1 : 0;
+        OpcDaProgIdBox.Text = saved.OpcDaProgId;
+        ApplyOpcProtocolPanel();
 
         // Security combo
         OpcSecNone.Content    = Lang.Ui_OpcUaSecNone;
@@ -1881,9 +1884,16 @@ public sealed partial class MainWindow : Window
         {
             SyncOpcConnectButton();
             UpdateOpcStatusDot();
-            // PLC and field sensors are read over the OPC UA session — drive the
-            // Status System panel (green when connected, red otherwise).
             bool connected = ViewModel.OpcUa.IsConnected;
+            App.Status.PlcConnected    = connected;
+            App.Status.SensorConnected = connected;
+        });
+
+        ViewModel.OpcDa.StatusChanged += _ => DispatcherQueue.TryEnqueue(() =>
+        {
+            SyncOpcConnectButton();
+            UpdateOpcStatusDot();
+            bool connected = ViewModel.OpcDa.IsConnected;
             App.Status.PlcConnected    = connected;
             App.Status.SensorConnected = connected;
         });
@@ -1906,24 +1916,58 @@ public sealed partial class MainWindow : Window
 
     private void OpcSecurityCombo_SelectionChanged(object sender, SelectionChangedEventArgs e) { }
 
+    private void OpcProtocolCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        ApplyOpcProtocolPanel();
+        SyncOpcConnectButton();
+    }
+
+    private void ApplyOpcProtocolPanel()
+    {
+        bool isDa = OpcProtocolCombo?.SelectedIndex == 1;
+        if (OpcUaFields != null)
+            OpcUaFields.Visibility = isDa ? Visibility.Collapsed : Visibility.Visible;
+        if (OpcDaFields != null)
+            OpcDaFields.Visibility = isDa ? Visibility.Visible : Visibility.Collapsed;
+    }
+
     private void SyncOpcConnectButton()
     {
-        bool connected = ViewModel.OpcUa.IsConnected;
-        OpcConnectBtn.Content = connected
-            ? Lang.Ctrl_Disconnect
-            : Lang.Ctrl_Connect;
-        OpcEndpointBox.IsEnabled  = !connected;
-        OpcSecurityCombo.IsEnabled = !connected;
-        OpcAuthCombo.IsEnabled    = !connected;
-        OpcCredPanel.IsHitTestVisible = !connected;
+        bool isDa      = OpcProtocolCombo?.SelectedIndex == 1;
+        bool connected = isDa ? ViewModel.OpcDa.IsConnected : ViewModel.OpcUa.IsConnected;
 
-        OpcStatusText.Text = connected
-            ? LocalizationManager.Instance.Format("OpcUa_StatusConnected", ViewModel.OpcUa.EndpointUrl)
-            : LocalizationManager.Instance.Get("Ctrl_NotConnected");
+        OpcConnectBtn.Content = connected ? Lang.Ctrl_Disconnect : Lang.Ctrl_Connect;
+        if (OpcProtocolCombo != null)
+            OpcProtocolCombo.IsEnabled = !connected;
+
+        if (isDa)
+        {
+            if (OpcDaProgIdBox != null)
+                OpcDaProgIdBox.IsEnabled = !connected;
+            OpcStatusText.Text = connected
+                ? LocalizationManager.Instance.Format("OpcUa_StatusConnected", ViewModel.OpcDa.ProgId)
+                : LocalizationManager.Instance.Get("Ctrl_NotConnected");
+        }
+        else
+        {
+            OpcEndpointBox.IsEnabled       = !connected;
+            OpcSecurityCombo.IsEnabled     = !connected;
+            OpcAuthCombo.IsEnabled         = !connected;
+            OpcCredPanel.IsHitTestVisible  = !connected;
+            OpcStatusText.Text = connected
+                ? LocalizationManager.Instance.Format("OpcUa_StatusConnected", ViewModel.OpcUa.EndpointUrl)
+                : LocalizationManager.Instance.Get("Ctrl_NotConnected");
+        }
     }
 
     private async void OpcConnectBtn_Click(object sender, RoutedEventArgs e)
     {
+        if (OpcProtocolCombo?.SelectedIndex == 1)
+        {
+            await ConnectOpcDaAsync();
+            return;
+        }
+
         if (ViewModel.OpcUa.IsConnected)
         {
             ViewModel.OpcUa.Disconnect();
@@ -1954,7 +1998,6 @@ public sealed partial class MainWindow : Window
             OpcPasswordBox.Password,
             secMode);
 
-        // Persist settings on successful connect
         if (ok)
         {
             var s = AppSettingsService.Load();
@@ -1962,6 +2005,38 @@ public sealed partial class MainWindow : Window
             s.OpcUaSecurityMode = secMode.ToString();
             s.OpcUaUseAnonymous = authMode == OpcUaAuthMode.Anonymous;
             s.OpcUaUsername     = OpcUsernameBox.Text;
+            s.OpcProtocol       = "UA";
+            AppSettingsService.Save(s);
+        }
+
+        OpcConnectBtn.IsEnabled = true;
+        SyncOpcConnectButton();
+        UpdateOpcStatusDot();
+    }
+
+    private async Task ConnectOpcDaAsync()
+    {
+        if (ViewModel.OpcDa.IsConnected)
+        {
+            ViewModel.OpcDa.Disconnect();
+            SyncOpcConnectButton();
+            UpdateOpcStatusDot();
+            return;
+        }
+
+        var progId = OpcDaProgIdBox?.Text.Trim() ?? "";
+        if (string.IsNullOrEmpty(progId)) return;
+
+        OpcConnectBtn.IsEnabled = false;
+        OpcStatusText.Text      = LocalizationManager.Instance.Get("OpcUa_StatusConnecting");
+
+        bool ok = await ViewModel.OpcDa.ConnectAsync(progId);
+
+        if (ok)
+        {
+            var s = AppSettingsService.Load();
+            s.OpcProtocol = "DA";
+            s.OpcDaProgId = progId;
             AppSettingsService.Save(s);
         }
 
@@ -1972,7 +2047,7 @@ public sealed partial class MainWindow : Window
 
     private void UpdateOpcStatusDot()
     {
-        bool connected = ViewModel.OpcUa.IsConnected;
+        bool connected = ViewModel.OpcUa.IsConnected || ViewModel.OpcDa.IsConnected;
         OpcStatusDot.Fill = connected
             ? new SolidColorBrush(Color.FromArgb(0xFF, 0x25, 0xC6, 0x85))
             : new SolidColorBrush(Color.FromArgb(0x00, 0x00, 0x00, 0x00));

@@ -267,46 +267,76 @@
                     <!-- ════════════ COL 2 — OPC UA Connection ════════════ -->
                     <StackPanel x:Name="Col2" Grid.Column="2" Grid.Row="0" Spacing="16">
 
-                        <!-- ══ OPC UA CARD ══ -->
+                        <!-- ══ OPC CONNECTION CARD ══ -->
                         <Border x:Name="CardOpc" Style="{StaticResource SettingsCardStyle}">
                             <StackPanel Spacing="12">
                                 <TextBlock Text="{x:Bind Lang.Ui_OpcUaConnection, Mode=OneWay}"
                                            Style="{StaticResource CardTitleStyle}"/>
 
+                                <!-- Protocol selector -->
                                 <StackPanel Spacing="4">
-                                    <TextBlock Text="{x:Bind Lang.Ui_OpcUaEndpoint, Mode=OneWay}"
+                                    <TextBlock Text="{x:Bind Lang.Ui_OpcProtocol, Mode=OneWay}"
                                                Style="{StaticResource FieldLabelStyle}"/>
-                                    <TextBox x:Name="OpcEndpointBox" FontSize="13"
-                                             PlaceholderText="opc.tcp://host:4840"/>
-                                </StackPanel>
-
-                                <StackPanel Spacing="4">
-                                    <TextBlock Text="{x:Bind Lang.Ui_OpcUaSecurity, Mode=OneWay}"
-                                               Style="{StaticResource FieldLabelStyle}"/>
-                                    <ComboBox x:Name="OpcSecurityCombo" FontSize="13"
-                                              HorizontalAlignment="Stretch">
-                                        <ComboBoxItem x:Name="OpcSecNone"    Tag="None"/>
-                                        <ComboBoxItem x:Name="OpcSecSign"    Tag="Sign"/>
-                                        <ComboBoxItem x:Name="OpcSecSignEnc" Tag="SignAndEncrypt"/>
-                                    </ComboBox>
-                                </StackPanel>
-
-                                <StackPanel Spacing="4">
-                                    <TextBlock Text="{x:Bind Lang.Ui_OpcUaAuth, Mode=OneWay}"
-                                               Style="{StaticResource FieldLabelStyle}"/>
-                                    <ComboBox x:Name="OpcAuthCombo" FontSize="13"
+                                    <ComboBox x:Name="OpcProtocolCombo" FontSize="13"
                                               HorizontalAlignment="Stretch"
-                                              SelectionChanged="OpcAuthCombo_SelectionChanged">
-                                        <ComboBoxItem x:Name="OpcAuthAnon" Tag="Anonymous"/>
-                                        <ComboBoxItem x:Name="OpcAuthUser" Tag="Username"/>
+                                              SelectionChanged="OpcProtocolCombo_SelectionChanged">
+                                        <ComboBoxItem x:Name="OpcProtoUa" Tag="UA"  Content="OPC UA"/>
+                                        <ComboBoxItem x:Name="OpcProtoDa" Tag="DA"  Content="OPC DA (Classic)"/>
                                     </ComboBox>
                                 </StackPanel>
 
-                                <StackPanel x:Name="OpcCredPanel" Spacing="6" Visibility="Collapsed">
-                                    <TextBox x:Name="OpcUsernameBox" FontSize="13"
-                                             PlaceholderText="{x:Bind Lang.Ui_OpcUaUsername, Mode=OneWay}"/>
-                                    <PasswordBox x:Name="OpcPasswordBox" FontSize="13"
-                                                 PlaceholderText="{x:Bind Lang.Ui_OpcUaPassword, Mode=OneWay}"/>
+                                <!-- ── OPC UA fields ── -->
+                                <StackPanel x:Name="OpcUaFields" Spacing="12">
+                                    <StackPanel Spacing="4">
+                                        <TextBlock Text="{x:Bind Lang.Ui_OpcUaEndpoint, Mode=OneWay}"
+                                                   Style="{StaticResource FieldLabelStyle}"/>
+                                        <TextBox x:Name="OpcEndpointBox" FontSize="13"
+                                                 PlaceholderText="opc.tcp://host:4840"/>
+                                    </StackPanel>
+
+                                    <StackPanel Spacing="4">
+                                        <TextBlock Text="{x:Bind Lang.Ui_OpcUaSecurity, Mode=OneWay}"
+                                                   Style="{StaticResource FieldLabelStyle}"/>
+                                        <ComboBox x:Name="OpcSecurityCombo" FontSize="13"
+                                                  HorizontalAlignment="Stretch">
+                                            <ComboBoxItem x:Name="OpcSecNone"    Tag="None"/>
+                                            <ComboBoxItem x:Name="OpcSecSign"    Tag="Sign"/>
+                                            <ComboBoxItem x:Name="OpcSecSignEnc" Tag="SignAndEncrypt"/>
+                                        </ComboBox>
+                                    </StackPanel>
+
+                                    <StackPanel Spacing="4">
+                                        <TextBlock Text="{x:Bind Lang.Ui_OpcUaAuth, Mode=OneWay}"
+                                                   Style="{StaticResource FieldLabelStyle}"/>
+                                        <ComboBox x:Name="OpcAuthCombo" FontSize="13"
+                                                  HorizontalAlignment="Stretch"
+                                                  SelectionChanged="OpcAuthCombo_SelectionChanged">
+                                            <ComboBoxItem x:Name="OpcAuthAnon" Tag="Anonymous"/>
+                                            <ComboBoxItem x:Name="OpcAuthUser" Tag="Username"/>
+                                        </ComboBox>
+                                    </StackPanel>
+
+                                    <StackPanel x:Name="OpcCredPanel" Spacing="6" Visibility="Collapsed">
+                                        <TextBox x:Name="OpcUsernameBox" FontSize="13"
+                                                 PlaceholderText="{x:Bind Lang.Ui_OpcUaUsername, Mode=OneWay}"/>
+                                        <PasswordBox x:Name="OpcPasswordBox" FontSize="13"
+                                                     PlaceholderText="{x:Bind Lang.Ui_OpcUaPassword, Mode=OneWay}"/>
+                                    </StackPanel>
+
+                                    <HyperlinkButton x:Name="OpcCertFolderBtn"
+                                                     FontSize="12" Padding="0,2,0,2"
+                                                     Content="{x:Bind Lang.Ui_OpcUaOpenCertFolder, Mode=OneWay}"
+                                                     Click="OpcCertFolderBtn_Click"/>
+                                </StackPanel>
+
+                                <!-- ── OPC DA fields ── -->
+                                <StackPanel x:Name="OpcDaFields" Spacing="12" Visibility="Collapsed">
+                                    <StackPanel Spacing="4">
+                                        <TextBlock Text="{x:Bind Lang.Ui_OpcDaProgId, Mode=OneWay}"
+                                                   Style="{StaticResource FieldLabelStyle}"/>
+                                        <TextBox x:Name="OpcDaProgIdBox" FontSize="13"
+                                                 PlaceholderText="National Instruments.NIOPCServers.V5"/>
+                                    </StackPanel>
                                 </StackPanel>
 
                                 <Button x:Name="OpcConnectBtn" HorizontalAlignment="Stretch"
@@ -314,11 +344,6 @@
                                         Click="OpcConnectBtn_Click"/>
 
                                 <TextBlock x:Name="OpcStatusText" FontSize="12" Opacity="0.75" TextWrapping="Wrap"/>
-
-                                <HyperlinkButton x:Name="OpcCertFolderBtn"
-                                                 FontSize="12" Padding="0,2,0,2"
-                                                 Content="{x:Bind Lang.Ui_OpcUaOpenCertFolder, Mode=OneWay}"
-                                                 Click="OpcCertFolderBtn_Click"/>
                             </StackPanel>
                         </Border>
                     </StackPanel>

@@ -340,10 +340,17 @@ public sealed partial class BroadcastSettingsPage : Page
         TunnelCopyBtn.Content = Lang.Tunnel_CopyUrl;
     }
 
-    // ── OPC UA connection (shared service; flyout offers the same as quick config) ──
+    // ── OPC connection (UA or DA; flyout mirrors the same config) ────────────────
+
+    private bool IsOpcDaSelected => OpcProtocolCombo?.SelectedIndex == 1;
 
     private void InitOpcSection(AppSettings s)
     {
+        // Protocol selector
+        OpcProtocolCombo.SelectedIndex = s.OpcProtocol == "DA" ? 1 : 0;
+        ApplyOpcProtocolPanel();
+
+        // OPC UA fields
         OpcEndpointBox.Text = s.OpcUaEndpointUrl;
 
         OpcSecNone.Content    = Lang.Ui_OpcUaSecNone;
@@ -362,6 +369,28 @@ public sealed partial class BroadcastSettingsPage : Page
         OpcUsernameBox.Text        = s.OpcUaUsername;
         OpcCredPanel.Visibility    = s.OpcUaUseAnonymous ? Visibility.Collapsed : Visibility.Visible;
 
+        // OPC DA fields
+        OpcDaProgIdBox.Text = s.OpcDaProgId;
+
+        SyncOpcConnectButton();
+    }
+
+    private void ApplyOpcProtocolPanel()
+    {
+        bool da = IsOpcDaSelected;
+        OpcUaFields.Visibility = da ? Visibility.Collapsed : Visibility.Visible;
+        OpcDaFields.Visibility = da ? Visibility.Visible   : Visibility.Collapsed;
+    }
+
+    private void OpcProtocolCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (OpcUaFields is null) return;
+        // Disconnect the protocol being left before switching panels.
+        if (IsOpcDaSelected)
+            App.ViewModel?.OpcUa.Disconnect();
+        else
+            App.ViewModel?.OpcDa.Disconnect();
+        ApplyOpcProtocolPanel();
         SyncOpcConnectButton();
     }
 
@@ -374,18 +403,23 @@ public sealed partial class BroadcastSettingsPage : Page
 
     private void SyncOpcConnectButton()
     {
-        var  opc       = App.ViewModel?.OpcUa;
-        bool connected = opc?.IsConnected == true;
+        bool da        = IsOpcDaSelected;
+        var  opcUa     = App.ViewModel?.OpcUa;
+        var  opcDa     = App.ViewModel?.OpcDa;
+        bool connected = da ? opcDa?.IsConnected == true : opcUa?.IsConnected == true;
 
-        OpcConnectBtn.Content         = connected ? Lang.Ctrl_Disconnect : Lang.Ctrl_Connect;
+        OpcConnectBtn.Content = connected ? Lang.Ctrl_Disconnect : Lang.Ctrl_Connect;
+
         OpcEndpointBox.IsEnabled      = !connected;
         OpcSecurityCombo.IsEnabled    = !connected;
         OpcAuthCombo.IsEnabled        = !connected;
         OpcCredPanel.IsHitTestVisible = !connected;
+        OpcDaProgIdBox.IsEnabled      = !connected;
+        OpcProtocolCombo.IsEnabled    = !connected;
 
-        OpcStatusText.Text = connected
-            ? Lang.Format("OpcUa_StatusConnected", opc!.EndpointUrl)
-            : Lang.Get("Ctrl_NotConnected");
+        OpcStatusText.Text = da
+            ? (connected ? Lang.Format("OpcUa_StatusConnected", opcDa!.ProgId) : Lang.Get("Ctrl_NotConnected"))
+            : (connected ? Lang.Format("OpcUa_StatusConnected", opcUa!.EndpointUrl) : Lang.Get("Ctrl_NotConnected"));
     }
 
     private void OpcCertFolderBtn_Click(object sender, RoutedEventArgs e)
@@ -399,6 +433,8 @@ public sealed partial class BroadcastSettingsPage : Page
 
     private async void OpcConnectBtn_Click(object sender, RoutedEventArgs e)
     {
+        if (IsOpcDaSelected) { await ConnectOpcDaAsync(); return; }
+
         var opc = App.ViewModel?.OpcUa;
         if (opc is null) return;
 
@@ -431,10 +467,43 @@ public sealed partial class BroadcastSettingsPage : Page
         if (ok)
         {
             var s = AppSettingsService.Load();
+            s.OpcProtocol       = "UA";
             s.OpcUaEndpointUrl  = endpointUrl;
             s.OpcUaSecurityMode = secMode.ToString();
             s.OpcUaUseAnonymous = authMode == OpcUaAuthMode.Anonymous;
             s.OpcUaUsername     = OpcUsernameBox.Text;
+            AppSettingsService.Save(s);
+        }
+
+        OpcConnectBtn.IsEnabled = true;
+        SyncOpcConnectButton();
+    }
+
+    private async Task ConnectOpcDaAsync()
+    {
+        var opc = App.ViewModel?.OpcDa;
+        if (opc is null) return;
+
+        if (opc.IsConnected)
+        {
+            opc.Disconnect();
+            SyncOpcConnectButton();
+            return;
+        }
+
+        var progId = OpcDaProgIdBox.Text.Trim();
+        if (string.IsNullOrEmpty(progId)) return;
+
+        OpcConnectBtn.IsEnabled = false;
+        OpcStatusText.Text      = Lang.Get("OpcUa_StatusConnecting");
+
+        bool ok = await opc.ConnectAsync(progId);
+
+        if (ok)
+        {
+            var s = AppSettingsService.Load();
+            s.OpcProtocol = "DA";
+            s.OpcDaProgId = progId;
             AppSettingsService.Save(s);
         }
 

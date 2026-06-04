@@ -113,7 +113,9 @@ public sealed class LocalizationManager : INotifyPropertyChanged
     public string Ui_OpcUaSecNone       => T(nameof(Ui_OpcUaSecNone));
     public string Ui_OpcUaSecSign       => T(nameof(Ui_OpcUaSecSign));
     public string Ui_OpcUaSecSignEnc    => T(nameof(Ui_OpcUaSecSignEnc));
-    public string Ui_OpcUaOpenCertFolder => T(nameof(Ui_OpcUaOpenCertFolder));
+    public string Ui_OpcUaOpenCertFolder  => T(nameof(Ui_OpcUaOpenCertFolder));
+    public string Ui_OpcProtocol          => T(nameof(Ui_OpcProtocol));
+    public string Ui_OpcDaProgId          => T(nameof(Ui_OpcDaProgId));
 
     // ── Alert history ─────────────────────────────────────────────────────
     public string Ui_AlertHistory   => T(nameof(Ui_AlertHistory));
@@ -657,6 +659,10 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             [nameof(Ui_OpcUaSecSign)]        = "Sign",
             [nameof(Ui_OpcUaSecSignEnc)]     = "Sign & Encrypt",
             [nameof(Ui_OpcUaOpenCertFolder)] = "Open Certificate Folder",
+            [nameof(Ui_OpcProtocol)]         = "Protocol",
+            [nameof(Ui_OpcDaProgId)]         = "Server ProgID",
+            ["OpcDa_ServerNotRunning"]       = "OPC DA server state: {0} (not running)",
+            ["Ui_ServerOpcDaNotConnected"]   = "OPC DA: NOT CONNECTED",
             [nameof(Ui_AlertHistory)]   = "Alert History",
             [nameof(Ui_NoAlerts)]       = "No alerts yet",
             [nameof(Ui_ClearAlerts)]    = "Clear",
@@ -1151,6 +1157,10 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             [nameof(Ui_OpcUaSecSign)]        = "Tanda Tangan",
             [nameof(Ui_OpcUaSecSignEnc)]     = "Tanda Tangan & Enkripsi",
             [nameof(Ui_OpcUaOpenCertFolder)] = "Buka Folder Sertifikat",
+            [nameof(Ui_OpcProtocol)]         = "Protokol",
+            [nameof(Ui_OpcDaProgId)]         = "ProgID Server",
+            ["OpcDa_ServerNotRunning"]       = "Status server OPC DA: {0} (tidak berjalan)",
+            ["Ui_ServerOpcDaNotConnected"]   = "OPC DA: TIDAK TERHUBUNG",
             [nameof(Ui_AlertHistory)]   = "Riwayat Alert",
             [nameof(Ui_NoAlerts)]       = "Belum ada alert",
             [nameof(Ui_ClearAlerts)]    = "Hapus",

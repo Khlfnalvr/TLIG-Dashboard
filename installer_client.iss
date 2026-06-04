@@ -4,7 +4,7 @@
 ; ============================================================
 
 #define AppName      "TLIG Dashboard Client"
-#define AppVersion   "1.0.0-Delta"
+#define AppVersion   "1.0.0-Echo"
 #define AppPublisher "ICO Laboratory"
 #define AppExe       "TLIGDashboard.Client.exe"
 
@@ -20,7 +20,7 @@ DefaultDirName={autopf}\TLIGDashboard\Client
 DefaultGroupName={#AppName}
 AllowNoIcons=yes
 OutputDir=publish
-OutputBaseFilename=TLIGDashboard-Client-v1.0.0-Delta-Setup
+OutputBaseFilename=TLIGDashboard-Client-v1.0.0-Echo-Setup
 SetupIconFile=Assets\logo.ico
 UninstallDisplayIcon={app}\{#AppExe}
 UninstallDisplayName={#AppName}

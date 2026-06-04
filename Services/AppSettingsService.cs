@@ -5,6 +5,9 @@ namespace TLIGDashboard.Services;
 
 public class AppSettings
 {
+    // OPC protocol selection: "UA" | "DA"
+    public string OpcProtocol             { get; set; } = "UA";
+
     // OPC UA server connection settings
     public string OpcUaEndpointUrl        { get; set; } = "opc.tcp://localhost:4840";
     public string OpcUaSecurityMode       { get; set; } = "None";   // None | Sign | SignAndEncrypt
@@ -12,6 +15,9 @@ public class AppSettings
     public string OpcUaUsername           { get; set; } = "";
     public int    OpcUaPublishingIntervalMs { get; set; } = 1000;
     public OpcUaNodeConfig OpcUaNodeConfig { get; set; } = new();
+
+    // OPC DA server connection settings
+    public string OpcDaProgId             { get; set; } = "";
 
     // ── Sharing: server side ──────────────────────────────────────────────
     // The server broadcasts its camera + HMI screen and proxies AI chat.
