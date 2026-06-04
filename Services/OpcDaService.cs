@@ -26,36 +26,56 @@ public sealed class OpcDaService : IDisposable
 
     // ── Connect ───────────────────────────────────────────────────────────────
 
-    public Task<bool> ConnectAsync(string progId)
+    public async Task<bool> ConnectAsync(string progId)
     {
-        try
+        Disconnect();
+        ProgId = progId.Trim();
+
+        string? error = null;
+
+        await Task.Run(() =>
         {
-            Disconnect();
-            ProgId = progId.Trim();
+            try
+            {
+                var type = Type.GetTypeFromProgID(ProgId, throwOnError: true)
+                    ?? throw new InvalidOperationException($"ProgID '{ProgId}' not found.");
+                _serverObj = Activator.CreateInstance(type)
+                    ?? throw new InvalidOperationException("Failed to create COM instance.");
 
-            var type = Type.GetTypeFromProgID(ProgId, throwOnError: true)
-                ?? throw new InvalidOperationException($"ProgID '{ProgId}' not found.");
-            _serverObj = Activator.CreateInstance(type)
-                ?? throw new InvalidOperationException("Failed to create COM instance.");
+                // Optionally probe ServerState — skip on failure so servers that
+                // don't expose the property via IDispatch still work.
+                try
+                {
+                    var stateObj = ComGet(_serverObj, "ServerState");
+                    int state = stateObj is null ? 1 : Convert.ToInt32(stateObj);
+                    if (state != 1)
+                        error = LocalizationManager.Instance.Format("OpcDa_ServerNotRunning", state);
+                }
+                catch { /* ServerState not accessible via IDispatch — ignore */ }
+            }
+            catch (Exception ex)
+            {
+                error = ex.Message;
+                if (_serverObj is not null)
+                {
+                    try { Marshal.ReleaseComObject(_serverObj); } catch { }
+                    _serverObj = null;
+                }
+            }
+        });
 
-            // Read ServerState via IDispatch — no DLR/dynamic needed.
-            var stateObj = ComGet(_serverObj, "ServerState");
-            int state = stateObj is null ? 0 : Convert.ToInt32(stateObj);
-            // OPC_STATUS_RUNNING = 1; warn on other states but still consider connected.
-            if (state != 1)
-                FireError(LocalizationManager.Instance.Format("OpcDa_ServerNotRunning", state));
-
-            IsConnected = true;
-            StatusChanged?.Invoke(
-                LocalizationManager.Instance.Format("OpcUa_StatusConnected", ProgId));
-            return Task.FromResult(true);
-        }
-        catch (Exception ex)
+        if (_serverObj is null)
         {
             IsConnected = false;
-            FireError(ex.Message);
-            return Task.FromResult(false);
+            if (error is not null) FireError(error);
+            return false;
         }
+
+        IsConnected = true;
+        if (error is not null) FireError(error); // warn but stay connected
+        StatusChanged?.Invoke(
+            LocalizationManager.Instance.Format("OpcUa_StatusConnected", ProgId));
+        return true;
     }
 
     // ── Disconnect ────────────────────────────────────────────────────────────

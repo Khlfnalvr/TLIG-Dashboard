@@ -2030,7 +2030,11 @@ public sealed partial class MainWindow : Window
         OpcConnectBtn.IsEnabled = false;
         OpcStatusText.Text      = LocalizationManager.Instance.Get("OpcUa_StatusConnecting");
 
+        string? capturedError = null;
+        void OnError(string msg) => capturedError = msg;
+        ViewModel.OpcDa.ErrorOccurred += OnError;
         bool ok = await ViewModel.OpcDa.ConnectAsync(progId);
+        ViewModel.OpcDa.ErrorOccurred -= OnError;
 
         if (ok)
         {
@@ -2039,9 +2043,13 @@ public sealed partial class MainWindow : Window
             s.OpcDaProgId = progId;
             AppSettingsService.Save(s);
         }
+        else if (capturedError is not null)
+        {
+            OpcStatusText.Text = capturedError;
+        }
 
         OpcConnectBtn.IsEnabled = true;
-        SyncOpcConnectButton();
+        if (ok) SyncOpcConnectButton();
         UpdateOpcStatusDot();
     }
 

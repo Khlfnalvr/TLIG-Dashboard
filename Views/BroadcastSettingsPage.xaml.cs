@@ -497,7 +497,11 @@ public sealed partial class BroadcastSettingsPage : Page
         OpcConnectBtn.IsEnabled = false;
         OpcStatusText.Text      = Lang.Get("OpcUa_StatusConnecting");
 
+        string? capturedError = null;
+        void OnError(string msg) => capturedError = msg;
+        opc.ErrorOccurred += OnError;
         bool ok = await opc.ConnectAsync(progId);
+        opc.ErrorOccurred -= OnError;
 
         if (ok)
         {
@@ -506,9 +510,13 @@ public sealed partial class BroadcastSettingsPage : Page
             s.OpcDaProgId = progId;
             AppSettingsService.Save(s);
         }
+        else if (capturedError is not null)
+        {
+            OpcStatusText.Text = capturedError;
+        }
 
         OpcConnectBtn.IsEnabled = true;
-        SyncOpcConnectButton();
+        if (ok) SyncOpcConnectButton();
     }
 
     // ── AI API settings (server provider key; same as the flyout's quick config) ─
