@@ -31,38 +31,38 @@ public sealed class OpcDaService : IDisposable
         Disconnect();
         ProgId = progId.Trim();
 
-        string? error = null;
+        // Yield once so the caller's UI can render "Connecting..." before
+        // the synchronous COM call. COM STA servers must be called from an
+        // STA thread — using Task.Run (MTA) would deadlock with the UI thread.
+        await Task.Yield();
 
-        await Task.Run(() =>
+        string? error = null;
+        try
         {
+            var type = Type.GetTypeFromProgID(ProgId, throwOnError: true)
+                ?? throw new InvalidOperationException($"ProgID '{ProgId}' not found.");
+            _serverObj = Activator.CreateInstance(type)
+                ?? throw new InvalidOperationException("Failed to create COM instance.");
+
+            // Probe ServerState — skip gracefully if not exposed via IDispatch.
             try
             {
-                var type = Type.GetTypeFromProgID(ProgId, throwOnError: true)
-                    ?? throw new InvalidOperationException($"ProgID '{ProgId}' not found.");
-                _serverObj = Activator.CreateInstance(type)
-                    ?? throw new InvalidOperationException("Failed to create COM instance.");
-
-                // Optionally probe ServerState — skip on failure so servers that
-                // don't expose the property via IDispatch still work.
-                try
-                {
-                    var stateObj = ComGet(_serverObj, "ServerState");
-                    int state = stateObj is null ? 1 : Convert.ToInt32(stateObj);
-                    if (state != 1)
-                        error = LocalizationManager.Instance.Format("OpcDa_ServerNotRunning", state);
-                }
-                catch { /* ServerState not accessible via IDispatch — ignore */ }
+                var stateObj = ComGet(_serverObj, "ServerState");
+                int state = stateObj is null ? 1 : Convert.ToInt32(stateObj);
+                if (state != 1)
+                    error = LocalizationManager.Instance.Format("OpcDa_ServerNotRunning", state);
             }
-            catch (Exception ex)
+            catch { /* not all servers expose ServerState via IDispatch */ }
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+            if (_serverObj is not null)
             {
-                error = ex.Message;
-                if (_serverObj is not null)
-                {
-                    try { Marshal.ReleaseComObject(_serverObj); } catch { }
-                    _serverObj = null;
-                }
+                try { Marshal.ReleaseComObject(_serverObj); } catch { }
+                _serverObj = null;
             }
-        });
+        }
 
         if (_serverObj is null)
         {
