@@ -23,8 +23,8 @@ public sealed class UserRow
 }
 
 /// <summary>
-/// Server-only page (shown to a signed-in Administrator) for managing the user
-/// accounts that can sign in to this server. Backed by <see cref="UserStore"/>.
+/// Server-only page (shown to signed-in staff — Dosen/Asisten) for managing the
+/// user accounts that can sign in to this server. Backed by <see cref="UserStore"/>.
 /// </summary>
 public sealed partial class UserManagementPage : Page
 {
@@ -81,9 +81,9 @@ public sealed partial class UserManagementPage : Page
 
     private string RoleLabel(string role) => role switch
     {
-        UserRoles.Admin  => Lang.Um_RoleAdmin,
-        UserRoles.Viewer => Lang.Um_RoleViewer,
-        _                => Lang.Um_RoleOperator,
+        UserRoles.Dosen     => Lang.Um_RoleDosen,
+        UserRoles.Asisten   => Lang.Um_RoleAsisten,
+        _                   => Lang.Um_RoleMahasiswa,
     };
 
     // ── Add ─────────────────────────────────────────────────────────────────────
@@ -93,7 +93,7 @@ public sealed partial class UserManagementPage : Page
         var userBox   = new TextBox     { Header = Lang.Um_FieldUsername };
         var nameBox   = new TextBox     { Header = Lang.Um_FieldDisplayName };
         var passBox   = new PasswordBox { Header = Lang.Um_FieldPassword };
-        var roleCombo = BuildRoleCombo(UserRoles.Operator);
+        var roleCombo = BuildRoleCombo(UserRoles.Mahasiswa);
 
         var panel = new StackPanel { Spacing = 12, MinWidth = 320 };
         panel.Children.Add(userBox);
@@ -186,20 +186,20 @@ public sealed partial class UserManagementPage : Page
             Header = Lang.Um_FieldRole,
             HorizontalAlignment = HorizontalAlignment.Stretch,
         };
-        combo.Items.Add(new ComboBoxItem { Content = Lang.Um_RoleAdmin,    Tag = UserRoles.Admin });
-        combo.Items.Add(new ComboBoxItem { Content = Lang.Um_RoleOperator, Tag = UserRoles.Operator });
-        combo.Items.Add(new ComboBoxItem { Content = Lang.Um_RoleViewer,   Tag = UserRoles.Viewer });
+        combo.Items.Add(new ComboBoxItem { Content = Lang.Um_RoleDosen,     Tag = UserRoles.Dosen });
+        combo.Items.Add(new ComboBoxItem { Content = Lang.Um_RoleAsisten,   Tag = UserRoles.Asisten });
+        combo.Items.Add(new ComboBoxItem { Content = Lang.Um_RoleMahasiswa, Tag = UserRoles.Mahasiswa });
         combo.SelectedIndex = selectedRole switch
         {
-            UserRoles.Admin  => 0,
-            UserRoles.Viewer => 2,
-            _                => 1,
+            UserRoles.Dosen   => 0,
+            UserRoles.Asisten => 1,
+            _                 => 2,
         };
         return combo;
     }
 
     private static string SelectedRole(ComboBox combo) =>
-        (combo.SelectedItem as ComboBoxItem)?.Tag as string ?? UserRoles.Operator;
+        (combo.SelectedItem as ComboBoxItem)?.Tag as string ?? UserRoles.Mahasiswa;
 
     private static string? TagOf(object sender) => (sender as FrameworkElement)?.Tag as string;
 

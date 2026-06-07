@@ -23,6 +23,12 @@ public partial class App : Application
     /// </summary>
     public static Services.SystemStatusService Status { get; } = Services.SystemStatusService.Instance;
 
+    /// <summary>
+    /// Identity + role of the currently signed-in user. Drives the two client
+    /// access levels (staff can edit learning analytics; students are read-only).
+    /// </summary>
+    public static Services.SessionService Session { get; } = Services.SessionService.Instance;
+
     public App()
     {
         InitializeComponent();

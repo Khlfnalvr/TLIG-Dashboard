@@ -32,12 +32,15 @@ public static class ShareProtocol
     public const byte ChannelCamera = 0;
     public const byte ChannelHmi    = 1;
 
-    public const string WsPath         = "/ws";
-    public const string AiPath         = "/ai/chat/completions";
-    public const string AuthLoginPath  = "/auth/login";
-    public const string AuthLogoutPath = "/auth/logout";
-    public const string AuthSignupPath = "/auth/signup";
-    public const string GuidWs         = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
+    public const string WsPath            = "/ws";
+    public const string AiPath            = "/ai/chat/completions";
+    public const string AuthLoginPath     = "/auth/login";
+    public const string AuthLogoutPath    = "/auth/logout";
+    public const string AuthSignupPath    = "/auth/signup";
+    public const string TasksPath         = "/tasks";          // GET = list, POST = create/update
+    public const string TasksDeletePath   = "/tasks/delete";   // POST {id}
+    public const string TasksCompletePath = "/tasks/complete"; // POST {id, completed}
+    public const string GuidWs            = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 
     /// <summary>Generates an opaque, high-entropy session token (URL-safe base64).</summary>
     public static string NewSessionToken()
@@ -91,6 +94,9 @@ public sealed class ShareServer
 
     private bool ValidateSession(string? token) =>
         !string.IsNullOrEmpty(token) && _sessions.ContainsKey(token);
+
+    private Session? GetSession(string? token) =>
+        !string.IsNullOrEmpty(token) && _sessions.TryGetValue(token!, out var s) ? s : null;
 
     private void RevokeSession(string? token)
     {
@@ -195,6 +201,22 @@ public sealed class ShareServer
             else if (method == "POST" && path == ShareProtocol.AiPath)
             {
                 await HandleAiProxyAsync(stream, headers, ct);
+            }
+            else if (method == "GET" && path == ShareProtocol.TasksPath)
+            {
+                await HandleTasksGetAsync(stream, headers, ct);
+            }
+            else if (method == "POST" && path == ShareProtocol.TasksPath)
+            {
+                await HandleTasksSaveAsync(stream, headers, ct);
+            }
+            else if (method == "POST" && path == ShareProtocol.TasksDeletePath)
+            {
+                await HandleTasksDeleteAsync(stream, headers, ct);
+            }
+            else if (method == "POST" && path == ShareProtocol.TasksCompletePath)
+            {
+                await HandleTasksCompleteAsync(stream, headers, ct);
             }
             else if (method == "GET" && path == "/info")
             {
@@ -426,6 +448,148 @@ public sealed class ShareServer
             await stream.WriteAsync("0\r\n\r\n"u8.ToArray(), ct);
             await stream.FlushAsync(ct);
         }
+    }
+
+    // ── Tasks: server-backed learning-task database (authored by staff) ─────────
+
+    private static string BearerToken(Dictionary<string, string> headers) =>
+        headers.TryGetValue("authorization", out var auth) &&
+        auth.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)
+            ? auth["Bearer ".Length..].Trim() : "";
+
+    private static JsonObject TaskToJson(LearningTask t, bool completed) => new()
+    {
+        ["id"]        = t.Id,
+        ["title"]     = t.Title,
+        ["objective"] = t.Objective,
+        ["metric"]    = t.Metric,
+        ["op"]        = t.Op,
+        ["target"]    = t.Target,
+        ["tolerance"] = t.Tolerance,
+        ["createdBy"] = t.CreatedBy,
+        ["completed"] = completed,
+    };
+
+    private async Task HandleTasksGetAsync(
+        NetworkStream stream, Dictionary<string, string> headers, CancellationToken ct)
+    {
+        var session = GetSession(BearerToken(headers));
+        if (session is null)
+        {
+            await WriteSimpleAsync(stream, "401 Unauthorized", "text/plain", "Invalid or expired session", ct);
+            return;
+        }
+
+        var tasks     = TaskStore.Instance.GetTasks();
+        var completed = TaskStore.Instance.GetCompletedIds(session.Username);
+
+        var arr = new JsonArray();
+        foreach (var t in tasks) arr.Add(TaskToJson(t, completed.Contains(t.Id)));
+
+        var json = new JsonObject
+        {
+            ["tasks"]    = arr,
+            ["canEdit"]  = UserRoles.IsStaff(session.Role),
+            ["username"] = session.Username,
+        }.ToJsonString();
+        await WriteJsonAsync(stream, json, ct);
+    }
+
+    private async Task HandleTasksSaveAsync(
+        NetworkStream stream, Dictionary<string, string> headers, CancellationToken ct)
+    {
+        var session = GetSession(BearerToken(headers));
+        if (session is null)
+        {
+            await WriteSimpleAsync(stream, "401 Unauthorized", "text/plain", "Invalid or expired session", ct);
+            return;
+        }
+        if (!UserRoles.IsStaff(session.Role))
+        {
+            await WriteSimpleAsync(stream, "403 Forbidden", "text/plain", "Only staff can edit tasks", ct);
+            return;
+        }
+
+        var body = await ReadBodyAsync(stream, headers, ct);
+        LearningTask task;
+        try
+        {
+            var node = JsonNode.Parse(body);
+            task = new LearningTask
+            {
+                Id        = (string?)node?["id"]        ?? "",
+                Title     = (string?)node?["title"]     ?? "",
+                Objective = (string?)node?["objective"] ?? "",
+                Metric    = (string?)node?["metric"]    ?? "",
+                Op        = (string?)node?["op"]        ?? TaskOps.Lte,
+                Target    = (double?)node?["target"]    ?? 0,
+                Tolerance = (double?)node?["tolerance"] ?? 0,
+                CreatedBy = session.Username,
+            };
+        }
+        catch
+        {
+            await WriteSimpleAsync(stream, "400 Bad Request", "text/plain", "Malformed task", ct);
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(task.Title))
+        {
+            await WriteSimpleAsync(stream, "400 Bad Request", "application/json", "{\"error\":\"title_required\"}", ct);
+            return;
+        }
+        if (!TaskMetrics.IsValid(task.Metric)) task.Metric = TaskMetrics.None;
+        if (!TaskOps.IsValid(task.Op))         task.Op     = TaskOps.Lte;
+
+        var saved = TaskStore.Instance.Upsert(task);
+        await WriteJsonAsync(stream, new JsonObject { ["ok"] = true, ["id"] = saved.Id }.ToJsonString(), ct);
+    }
+
+    private async Task HandleTasksDeleteAsync(
+        NetworkStream stream, Dictionary<string, string> headers, CancellationToken ct)
+    {
+        var session = GetSession(BearerToken(headers));
+        if (session is null)
+        {
+            await WriteSimpleAsync(stream, "401 Unauthorized", "text/plain", "Invalid or expired session", ct);
+            return;
+        }
+        if (!UserRoles.IsStaff(session.Role))
+        {
+            await WriteSimpleAsync(stream, "403 Forbidden", "text/plain", "Only staff can delete tasks", ct);
+            return;
+        }
+
+        var body = await ReadBodyAsync(stream, headers, ct);
+        string id = "";
+        try { id = (string?)JsonNode.Parse(body)?["id"] ?? ""; } catch { }
+
+        TaskStore.Instance.Delete(id);
+        await WriteJsonAsync(stream, "{\"ok\":true}", ct);
+    }
+
+    private async Task HandleTasksCompleteAsync(
+        NetworkStream stream, Dictionary<string, string> headers, CancellationToken ct)
+    {
+        var session = GetSession(BearerToken(headers));
+        if (session is null)
+        {
+            await WriteSimpleAsync(stream, "401 Unauthorized", "text/plain", "Invalid or expired session", ct);
+            return;
+        }
+
+        var body = await ReadBodyAsync(stream, headers, ct);
+        string id = ""; bool completed = false;
+        try
+        {
+            var node  = JsonNode.Parse(body);
+            id        = (string?)node?["id"]        ?? "";
+            completed = (bool?)node?["completed"]   ?? false;
+        }
+        catch { }
+
+        TaskStore.Instance.SetCompleted(session.Username, id, completed);
+        await WriteJsonAsync(stream, "{\"ok\":true}", ct);
     }
 
     // ── HTTP parsing helpers ──────────────────────────────────────────────────

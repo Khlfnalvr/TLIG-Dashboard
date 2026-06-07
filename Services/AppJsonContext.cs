@@ -8,5 +8,6 @@ namespace TLIGDashboard.Services;
 [JsonSerializable(typeof(GitHubAsset))]
 [JsonSerializable(typeof(OpcUaNodeConfig))]
 [JsonSerializable(typeof(UsersFile))]
+[JsonSerializable(typeof(TasksFile))]
 [JsonSourceGenerationOptions(WriteIndented = true)]
 internal partial class AppJsonContext : JsonSerializerContext { }

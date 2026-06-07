@@ -579,13 +579,31 @@ public sealed partial class MainWindow : Window
         {
             if (nav.Tag is string navTag && navTag == tag)
             {
-                NavView.SelectedItem = nav;
+                // If this nav item is already selected (e.g. returning from the task
+                // detail page, which left the selection on Learning Analytic), setting
+                // SelectedItem again won't raise SelectionChanged — navigate directly.
+                if (ReferenceEquals(NavView.SelectedItem, nav))
+                {
+                    if (_pages.TryGetValue(tag, out var pt)) ContentFrame.Navigate(pt);
+                }
+                else
+                {
+                    NavView.SelectedItem = nav;
+                }
                 return;
             }
         }
         if (_pages.TryGetValue(tag, out var pageType))
             ContentFrame.Navigate(pageType);
     }
+
+    /// <summary>
+    /// Opens the task detail page for a given task id. Not a nav item — navigated
+    /// directly with the id as parameter; the detail page's Back returns to the
+    /// Learning Analytic list.
+    /// </summary>
+    public void NavigateToTaskDetail(string taskId)
+        => ContentFrame.Navigate(typeof(Views.TaskDetailPage), taskId);
 
     // ── Login ─────────────────────────────────────────────────────────────
     // The server flavor authenticates against the local user database; the client
@@ -636,6 +654,16 @@ public sealed partial class MainWindow : Window
             var account = UserStore.Instance.Verify(user, pass);
             if (account is null) { LoginFailed(); return; }
 
+            // Only staff (Dosen/Asisten) may operate the Server application. Students
+            // can use the client against a server, but never sign in to the server itself.
+            if (!UserRoles.IsStaff(account.Role))
+            {
+                SetLoginError(Lang.Login_ErrorStudentServer);
+                LoginPasswordBox.Password = "";
+                LoginPasswordBox.Focus(FocusState.Programmatic);
+                return;
+            }
+
             // Persist the last-used username so the login box is pre-filled next launch.
             var sv = AppSettingsService.Load();
             sv.ServerUsername = account.Username;
@@ -684,6 +712,7 @@ public sealed partial class MainWindow : Window
     {
         _loggedInUser = string.IsNullOrWhiteSpace(displayName) ? accountName : displayName;
         _loggedInRole = role;
+        App.Session.SignIn(accountName, displayName, role);
         UpdateAccountFlyoutText();
         ApplyRoleNavVisibility();
         LoginErrorText.Visibility = Visibility.Collapsed;
@@ -745,14 +774,16 @@ public sealed partial class MainWindow : Window
 
     /// <summary>
     /// Server-only nav items: Broadcast settings (any signed-in user) and User
-    /// Management (Administrator only). Both are hidden until the operator signs in.
+    /// Management (staff — Dosen/Asisten). Both are hidden until the operator signs
+    /// in. Note only staff can sign in to the server at all, so on the server a
+    /// signed-in user is always staff.
     /// </summary>
     private void ApplyRoleNavVisibility()
     {
         bool signedIn = !string.IsNullOrWhiteSpace(_loggedInUser);
         bool showBroadcast = Services.BuildInfo.IsServer && signedIn;
         bool showUm        = Services.BuildInfo.IsServer && signedIn &&
-                             string.Equals(_loggedInRole, UserRoles.Admin, StringComparison.OrdinalIgnoreCase);
+                             UserRoles.IsStaff(_loggedInRole);
 
         NavBroadcast.Visibility      = showBroadcast ? Visibility.Visible : Visibility.Collapsed;
         NavUserManagement.Visibility = showUm        ? Visibility.Visible : Visibility.Collapsed;
@@ -962,6 +993,7 @@ public sealed partial class MainWindow : Window
 
         _loggedInUser = "";
         _loggedInRole = "";
+        App.Session.SignOut();
         UpdateAccountFlyoutText();
         ApplyRoleNavVisibility();
         ShowLoginOverlay();

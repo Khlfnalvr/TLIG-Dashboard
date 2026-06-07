@@ -4,17 +4,57 @@ using System.Text.Json;
 
 namespace TLIGDashboard.Services;
 
-/// <summary>Roles a user account can hold. Used for capability gating.</summary>
+/// <summary>
+/// Roles a user account can hold. Used for capability gating.
+///
+/// The taxonomy maps onto the campus roles requested by the product:
+///   • <see cref="Dosen"/> (lecturer) and <see cref="Asisten"/> (assistant) are the
+///     "staff"/admin accounts — full access. They may edit the learning analytics
+///     and are the only accounts allowed to sign in to the <b>Server</b> application.
+///   • <see cref="Mahasiswa"/> (student) is the restricted, client-only role: it can
+///     use the client but only consume what the staff configure (read-only analytics).
+/// </summary>
 public static class UserRoles
 {
-    public const string Admin    = "Admin";
-    public const string Operator = "Operator";
-    public const string Viewer   = "Viewer";
+    public const string Dosen     = "Dosen";     // lecturer  — full access (staff)
+    public const string Asisten   = "Asisten";   // assistant — full access (staff)
+    public const string Mahasiswa = "Mahasiswa"; // student   — restricted, client-only
 
-    public static readonly string[] All = [Admin, Operator, Viewer];
+    public static readonly string[] All = [Dosen, Asisten, Mahasiswa];
 
-    public static bool   IsValid(string? role) => Array.IndexOf(All, role) >= 0;
-    public static string Normalize(string? role) => IsValid(role) ? role! : Operator;
+    // Legacy values that may still be present in older users.json files. Read only —
+    // never written; migrated to the current taxonomy on load (see UserStore.Load).
+    private const string LegacyAdmin    = "Admin";
+    private const string LegacyOperator = "Operator";
+    private const string LegacyViewer   = "Viewer";
+
+    public static bool IsValid(string? role) => Array.IndexOf(All, role) >= 0;
+
+    /// <summary>
+    /// Staff ("admin") roles — lecturers and assistants. They have full access
+    /// (edit analytics, manage users) and are the only accounts permitted to sign
+    /// in to the Server application.
+    /// </summary>
+    public static bool IsStaff(string? role) => role is Dosen or Asisten;
+
+    /// <summary>Students (Mahasiswa) — restricted, read-only client experience.</summary>
+    public static bool IsStudent(string? role) => !IsStaff(role);
+
+    /// <summary>Coerces any value to a valid role, defaulting to the least-privilege student role.</summary>
+    public static string Normalize(string? role) => IsValid(role) ? role! : Mahasiswa;
+
+    /// <summary>
+    /// Maps a (possibly legacy) stored role onto the current taxonomy:
+    /// Admin→Dosen, Operator→Asisten, Viewer→Mahasiswa. Already-current values pass through;
+    /// anything unrecognised falls back to the least-privilege student role.
+    /// </summary>
+    public static string Migrate(string? role) => role switch
+    {
+        LegacyAdmin    => Dosen,
+        LegacyOperator => Asisten,
+        LegacyViewer   => Mahasiswa,
+        _              => Normalize(role),
+    };
 }
 
 /// <summary>A single account stored in the server's user database.</summary>
@@ -23,7 +63,7 @@ public sealed class UserAccount
     public string    Username     { get; set; } = "";
     public string    DisplayName  { get; set; } = "";
     public string    Email        { get; set; } = "";   // set for self-registered accounts (== Username)
-    public string    Role         { get; set; } = UserRoles.Operator;
+    public string    Role         { get; set; } = UserRoles.Mahasiswa;
     public string    PasswordHash { get; set; } = "";   // base64 PBKDF2-SHA256 hash
     public string    Salt         { get; set; } = "";   // base64 random salt
     public bool      Enabled      { get; set; } = true;
@@ -119,8 +159,8 @@ public sealed class UserStore
     /// Self-registration from a remote client (the <c>/auth/signup</c> endpoint).
     /// Creates a verified account whose username is the normalized e-mail, after
     /// enforcing the <see cref="EmailPolicy"/> domain rule and a minimum password
-    /// length. The account is granted the least-privilege <see cref="UserRoles.Viewer"/>
-    /// role; an Admin can promote it later via the User Management page.
+    /// length. The account is granted the least-privilege <see cref="UserRoles.Mahasiswa"/>
+    /// role; a staff member can promote it later via the User Management page.
     /// Returns <c>(true, null)</c> on success or <c>(false, errorKey)</c> where the
     /// key is a localization string the client can display.
     /// </summary>
@@ -138,7 +178,7 @@ public sealed class UserStore
         {
             if (FindLocked(normalized) is not null) return (false, "Signup_ErrExists");
 
-            var user = CreateUser(normalized, password, displayName, UserRoles.Viewer);
+            var user = CreateUser(normalized, password, displayName, UserRoles.Mahasiswa);
             user.Email = normalized;
             _file.Users.Add(user);
             SaveLocked();
@@ -168,8 +208,8 @@ public sealed class UserStore
         {
             var u = FindLocked(username);
             if (u is null) return (false, "Um_ErrUserNotFound");
-            // Don't strip the last enabled administrator of its role.
-            if (u.Role == UserRoles.Admin && role != UserRoles.Admin && u.Enabled && EnabledAdminCountLocked() <= 1)
+            // Don't demote the last enabled staff (Dosen/Asisten) account to a student.
+            if (UserRoles.IsStaff(u.Role) && !UserRoles.IsStaff(role) && u.Enabled && EnabledStaffCountLocked() <= 1)
                 return (false, "Um_ErrLastAdmin");
             u.DisplayName = string.IsNullOrWhiteSpace(displayName) ? u.Username : displayName.Trim();
             u.Role        = role;
@@ -185,7 +225,7 @@ public sealed class UserStore
         {
             var u = FindLocked(username);
             if (u is null) return (false, "Um_ErrUserNotFound");
-            if (!enabled && u.Role == UserRoles.Admin && u.Enabled && EnabledAdminCountLocked() <= 1)
+            if (!enabled && UserRoles.IsStaff(u.Role) && u.Enabled && EnabledStaffCountLocked() <= 1)
                 return (false, "Um_ErrLastAdmin");
             u.Enabled = enabled;
             SaveLocked();
@@ -200,7 +240,7 @@ public sealed class UserStore
         {
             var u = FindLocked(username);
             if (u is null) return (false, "Um_ErrUserNotFound");
-            if (u.Role == UserRoles.Admin && u.Enabled && EnabledAdminCountLocked() <= 1)
+            if (UserRoles.IsStaff(u.Role) && u.Enabled && EnabledStaffCountLocked() <= 1)
                 return (false, "Um_ErrLastAdmin");
             _file.Users.Remove(u);
             SaveLocked();
@@ -214,8 +254,8 @@ public sealed class UserStore
     private UserAccount? FindLocked(string username) =>
         _file.Users.FirstOrDefault(x => string.Equals(x.Username, username, StringComparison.OrdinalIgnoreCase));
 
-    private int EnabledAdminCountLocked() =>
-        _file.Users.Count(x => x.Enabled && x.Role == UserRoles.Admin);
+    private int EnabledStaffCountLocked() =>
+        _file.Users.Count(x => x.Enabled && UserRoles.IsStaff(x.Role));
 
     private void Load()
     {
@@ -228,12 +268,27 @@ public sealed class UserStore
             }
             catch { _file = new(); }
 
-            // Seed a default administrator so a fresh server can be signed into.
+            // Migrate any legacy roles (Admin/Operator/Viewer) to the current
+            // taxonomy (Dosen/Asisten/Mahasiswa) so older databases keep working.
+            bool migrated = false;
+            foreach (var u in _file.Users)
+            {
+                var mapped = UserRoles.Migrate(u.Role);
+                if (!string.Equals(mapped, u.Role, StringComparison.Ordinal))
+                {
+                    u.Role = mapped;
+                    migrated = true;
+                }
+            }
+
+            // Seed a default staff account (Dosen) so a fresh server can be signed into.
             if (_file.Users.Count == 0)
             {
-                _file.Users.Add(CreateUser("admin", "admin", "Administrator", UserRoles.Admin));
-                SaveLocked();
+                _file.Users.Add(CreateUser("admin", "admin", "Administrator", UserRoles.Dosen));
+                migrated = true;
             }
+
+            if (migrated) SaveLocked();
         }
     }
 

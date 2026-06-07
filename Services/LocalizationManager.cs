@@ -317,6 +317,7 @@ public sealed class LocalizationManager : INotifyPropertyChanged
     public string Login_Submit       => T(nameof(Login_Submit));
     public string Login_ErrorEmpty   => T(nameof(Login_ErrorEmpty));
     public string Login_ErrorInvalid => T(nameof(Login_ErrorInvalid));
+    public string Login_ErrorStudentServer => T(nameof(Login_ErrorStudentServer));
 
     // ── Account flyout ────────────────────────────────────────────────────
     public string Account_LoggedInAs     => T(nameof(Account_LoggedInAs));
@@ -429,6 +430,36 @@ public sealed class LocalizationManager : INotifyPropertyChanged
     public string LearnDash_Start            => T(nameof(LearnDash_Start));
     public string LearnDash_Question         => T(nameof(LearnDash_Question));
     public string LearnDash_Min              => T(nameof(LearnDash_Min));
+    // Tasks (staff author, students complete) — see TaskStore / LearningAnalyticPage
+    public string LearnDash_TasksTitle          => T(nameof(LearnDash_TasksTitle));
+    public string LearnDash_AddTask             => T(nameof(LearnDash_AddTask));
+    public string LearnDash_NoTasks             => T(nameof(LearnDash_NoTasks));
+    public string LearnDash_ToDo                => T(nameof(LearnDash_ToDo));
+    public string LearnDash_TasksCompletedLabel => T(nameof(LearnDash_TasksCompletedLabel));
+    public string LearnDash_TotalTasks          => T(nameof(LearnDash_TotalTasks));
+    public string LearnDash_Remaining           => T(nameof(LearnDash_Remaining));
+    public string LearnDash_DlgAddTaskTitle     => T(nameof(LearnDash_DlgAddTaskTitle));
+    public string LearnDash_DlgEditTaskTitle    => T(nameof(LearnDash_DlgEditTaskTitle));
+    public string LearnDash_FieldTitle          => T(nameof(LearnDash_FieldTitle));
+    public string LearnDash_FieldObjective      => T(nameof(LearnDash_FieldObjective));
+    public string LearnDash_FieldMetric         => T(nameof(LearnDash_FieldMetric));
+    public string LearnDash_FieldOperator       => T(nameof(LearnDash_FieldOperator));
+    public string LearnDash_FieldTarget         => T(nameof(LearnDash_FieldTarget));
+    public string LearnDash_FieldTolerance      => T(nameof(LearnDash_FieldTolerance));
+    public string LearnDash_MetricNone          => T(nameof(LearnDash_MetricNone));
+    public string LearnDash_Save                => T(nameof(LearnDash_Save));
+    public string LearnDash_Cancel              => T(nameof(LearnDash_Cancel));
+    public string LearnDash_Delete              => T(nameof(LearnDash_Delete));
+    public string LearnDash_DeleteConfirm       => T(nameof(LearnDash_DeleteConfirm));
+    public string LearnDash_Back                => T(nameof(LearnDash_Back));
+    public string LearnDash_ObjectiveHeader     => T(nameof(LearnDash_ObjectiveHeader));
+    public string LearnDash_TargetHeader        => T(nameof(LearnDash_TargetHeader));
+    public string LearnDash_MarkDone            => T(nameof(LearnDash_MarkDone));
+    public string LearnDash_MarkNotDone         => T(nameof(LearnDash_MarkNotDone));
+    public string LearnDash_Edit                => T(nameof(LearnDash_Edit));
+    public string LearnDash_CreatedBy           => T(nameof(LearnDash_CreatedBy));
+    public string LearnDash_TaskNotFound        => T(nameof(LearnDash_TaskNotFound));
+    public string LearnDash_NoTarget            => T(nameof(LearnDash_NoTarget));
 
     // Composed sample lines (numbers are placeholder data; words are localized).
     public string LearnDash_CourseMeta       => $"5 {LearnDash_Chapter} · 30 {LearnDash_Lecture}";
@@ -613,9 +644,9 @@ public sealed class LocalizationManager : INotifyPropertyChanged
     public string Um_Save            => T(nameof(Um_Save));
     public string Um_Cancel          => T(nameof(Um_Cancel));
     public string Um_Confirm         => T(nameof(Um_Confirm));
-    public string Um_RoleAdmin       => T(nameof(Um_RoleAdmin));
-    public string Um_RoleOperator    => T(nameof(Um_RoleOperator));
-    public string Um_RoleViewer      => T(nameof(Um_RoleViewer));
+    public string Um_RoleDosen       => T(nameof(Um_RoleDosen));
+    public string Um_RoleAsisten     => T(nameof(Um_RoleAsisten));
+    public string Um_RoleMahasiswa   => T(nameof(Um_RoleMahasiswa));
     public string Um_Empty           => T(nameof(Um_Empty));
     public string Um_ErrUsernameEmpty => T(nameof(Um_ErrUsernameEmpty));
     public string Um_ErrPasswordEmpty => T(nameof(Um_ErrPasswordEmpty));
@@ -849,6 +880,7 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             [nameof(Login_Submit)]        = "Login",
             [nameof(Login_ErrorEmpty)]    = "Username and password cannot be empty.",
             [nameof(Login_ErrorInvalid)]  = "Invalid username or password.",
+            [nameof(Login_ErrorStudentServer)] = "Student accounts cannot sign in to the server. Use a Lecturer or Assistant account.",
 
             [nameof(Account_LoggedInAs)]     = "Logged in as",
             [nameof(Account_NotLoggedInYet)] = "Not logged in yet",
@@ -1033,15 +1065,15 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             [nameof(Um_Save)]    = "Save",
             [nameof(Um_Cancel)]  = "Cancel",
             [nameof(Um_Confirm)] = "Confirm",
-            [nameof(Um_RoleAdmin)]    = "Administrator",
-            [nameof(Um_RoleOperator)] = "Operator",
-            [nameof(Um_RoleViewer)]   = "Viewer",
+            [nameof(Um_RoleDosen)]     = "Lecturer",
+            [nameof(Um_RoleAsisten)]   = "Assistant",
+            [nameof(Um_RoleMahasiswa)] = "Student",
             [nameof(Um_Empty)]        = "No users yet.",
             [nameof(Um_ErrUsernameEmpty)] = "Username cannot be empty.",
             [nameof(Um_ErrPasswordEmpty)] = "Password cannot be empty.",
             [nameof(Um_ErrUserExists)]    = "A user with that name already exists.",
             [nameof(Um_ErrUserNotFound)]  = "User not found.",
-            [nameof(Um_ErrLastAdmin)]     = "There must be at least one enabled administrator.",
+            [nameof(Um_ErrLastAdmin)]     = "There must be at least one enabled staff account (Lecturer or Assistant).",
             [nameof(Um_ErrInvalidRole)]   = "Invalid role.",
 
             [nameof(Learn_Title)]       = "LEARNING ANALYTIC",
@@ -1091,6 +1123,35 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             [nameof(LearnDash_Start)]          = "Start",
             [nameof(LearnDash_Question)]       = "question",
             [nameof(LearnDash_Min)]            = "min",
+            [nameof(LearnDash_TasksTitle)]          = "Tasks",
+            [nameof(LearnDash_AddTask)]             = "Add task",
+            [nameof(LearnDash_NoTasks)]             = "No tasks yet.",
+            [nameof(LearnDash_ToDo)]                = "To do",
+            [nameof(LearnDash_TasksCompletedLabel)] = "tasks completed",
+            [nameof(LearnDash_TotalTasks)]          = "Total tasks",
+            [nameof(LearnDash_Remaining)]           = "Remaining",
+            [nameof(LearnDash_DlgAddTaskTitle)]     = "Add task",
+            [nameof(LearnDash_DlgEditTaskTitle)]    = "Edit task",
+            [nameof(LearnDash_FieldTitle)]          = "Title",
+            [nameof(LearnDash_FieldObjective)]      = "Objective",
+            [nameof(LearnDash_FieldMetric)]         = "Target metric",
+            [nameof(LearnDash_FieldOperator)]       = "Condition",
+            [nameof(LearnDash_FieldTarget)]         = "Target value",
+            [nameof(LearnDash_FieldTolerance)]      = "Tolerance (±)",
+            [nameof(LearnDash_MetricNone)]          = "None (description only)",
+            [nameof(LearnDash_Save)]                = "Save",
+            [nameof(LearnDash_Cancel)]              = "Cancel",
+            [nameof(LearnDash_Delete)]              = "Delete",
+            [nameof(LearnDash_DeleteConfirm)]       = "Delete this task for everyone?",
+            [nameof(LearnDash_Back)]                = "Back",
+            [nameof(LearnDash_ObjectiveHeader)]     = "Objective",
+            [nameof(LearnDash_TargetHeader)]        = "Target",
+            [nameof(LearnDash_MarkDone)]            = "Mark as complete",
+            [nameof(LearnDash_MarkNotDone)]         = "Mark as not done",
+            [nameof(LearnDash_Edit)]                = "Edit",
+            [nameof(LearnDash_CreatedBy)]           = "Created by",
+            [nameof(LearnDash_TaskNotFound)]        = "Task not found.",
+            [nameof(LearnDash_NoTarget)]            = "No measurable target — complete the objective described above.",
 
             [nameof(Ctl_Header)]       = "CONTROL",
             [nameof(Ctl_Setpoint)]     = "Setpoint Temperature",
@@ -1347,6 +1408,7 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             [nameof(Login_Submit)]        = "Masuk",
             [nameof(Login_ErrorEmpty)]    = "Username dan password tidak boleh kosong.",
             [nameof(Login_ErrorInvalid)]  = "Username atau password salah.",
+            [nameof(Login_ErrorStudentServer)] = "Akun mahasiswa tidak dapat masuk ke server. Gunakan akun Dosen atau Asisten.",
 
             [nameof(Account_LoggedInAs)]     = "Masuk sebagai",
             [nameof(Account_NotLoggedInYet)] = "Belum login",
@@ -1531,15 +1593,15 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             [nameof(Um_Save)]    = "Simpan",
             [nameof(Um_Cancel)]  = "Batal",
             [nameof(Um_Confirm)] = "Konfirmasi",
-            [nameof(Um_RoleAdmin)]    = "Administrator",
-            [nameof(Um_RoleOperator)] = "Operator",
-            [nameof(Um_RoleViewer)]   = "Pengamat",
+            [nameof(Um_RoleDosen)]     = "Dosen",
+            [nameof(Um_RoleAsisten)]   = "Asisten",
+            [nameof(Um_RoleMahasiswa)] = "Mahasiswa",
             [nameof(Um_Empty)]        = "Belum ada pengguna.",
             [nameof(Um_ErrUsernameEmpty)] = "Nama pengguna tidak boleh kosong.",
             [nameof(Um_ErrPasswordEmpty)] = "Kata sandi tidak boleh kosong.",
             [nameof(Um_ErrUserExists)]    = "Pengguna dengan nama itu sudah ada.",
             [nameof(Um_ErrUserNotFound)]  = "Pengguna tidak ditemukan.",
-            [nameof(Um_ErrLastAdmin)]     = "Harus ada minimal satu administrator aktif.",
+            [nameof(Um_ErrLastAdmin)]     = "Harus ada minimal satu akun staf aktif (Dosen atau Asisten).",
             [nameof(Um_ErrInvalidRole)]   = "Peran tidak valid.",
 
             [nameof(Learn_Title)]       = "LEARNING ANALYTIC",
@@ -1589,6 +1651,35 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             [nameof(LearnDash_Start)]          = "Mulai",
             [nameof(LearnDash_Question)]       = "soal",
             [nameof(LearnDash_Min)]            = "mnt",
+            [nameof(LearnDash_TasksTitle)]          = "Tugas",
+            [nameof(LearnDash_AddTask)]             = "Tambah tugas",
+            [nameof(LearnDash_NoTasks)]             = "Belum ada tugas.",
+            [nameof(LearnDash_ToDo)]                = "Belum",
+            [nameof(LearnDash_TasksCompletedLabel)] = "tugas selesai",
+            [nameof(LearnDash_TotalTasks)]          = "Total tugas",
+            [nameof(LearnDash_Remaining)]           = "Tersisa",
+            [nameof(LearnDash_DlgAddTaskTitle)]     = "Tambah tugas",
+            [nameof(LearnDash_DlgEditTaskTitle)]    = "Edit tugas",
+            [nameof(LearnDash_FieldTitle)]          = "Judul",
+            [nameof(LearnDash_FieldObjective)]      = "Objektif",
+            [nameof(LearnDash_FieldMetric)]         = "Metrik target",
+            [nameof(LearnDash_FieldOperator)]       = "Kondisi",
+            [nameof(LearnDash_FieldTarget)]         = "Nilai target",
+            [nameof(LearnDash_FieldTolerance)]      = "Toleransi (±)",
+            [nameof(LearnDash_MetricNone)]          = "Tidak ada (deskripsi saja)",
+            [nameof(LearnDash_Save)]                = "Simpan",
+            [nameof(LearnDash_Cancel)]              = "Batal",
+            [nameof(LearnDash_Delete)]              = "Hapus",
+            [nameof(LearnDash_DeleteConfirm)]       = "Hapus tugas ini untuk semua orang?",
+            [nameof(LearnDash_Back)]                = "Kembali",
+            [nameof(LearnDash_ObjectiveHeader)]     = "Objektif",
+            [nameof(LearnDash_TargetHeader)]        = "Target",
+            [nameof(LearnDash_MarkDone)]            = "Tandai selesai",
+            [nameof(LearnDash_MarkNotDone)]         = "Tandai belum selesai",
+            [nameof(LearnDash_Edit)]                = "Edit",
+            [nameof(LearnDash_CreatedBy)]           = "Dibuat oleh",
+            [nameof(LearnDash_TaskNotFound)]        = "Tugas tidak ditemukan.",
+            [nameof(LearnDash_NoTarget)]            = "Tidak ada target terukur — selesaikan objektif di atas.",
 
             [nameof(Ctl_Header)]       = "KONTROL",
             [nameof(Ctl_Setpoint)]     = "Setpoint Temperatur",
