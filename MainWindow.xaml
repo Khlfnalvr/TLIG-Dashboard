@@ -507,51 +507,17 @@
                                             Spacing="10"
                                             Visibility="Collapsed">
 
-                                    <!-- Server URL -->
-                                    <StackPanel Spacing="3">
-                                        <TextBlock Text="{x:Bind Lang.Ai_ApiUrl, Mode=OneWay}"
-                                                   FontSize="11" Opacity="0.65"/>
-                                        <TextBox x:Name="AiApiUrlBox"
-                                                 FontSize="12"
-                                                 PlaceholderText="https://api.deepseek.com"/>
-                                    </StackPanel>
+                                    <!-- Multi-provider config (DeepSeek / OpenAI / Anthropic) -->
+                                    <TextBlock Text="{x:Bind Lang.Ai_ProvidersHint, Mode=OneWay}"
+                                               FontSize="11" Opacity="0.65"
+                                               TextWrapping="Wrap"/>
 
-                                    <!-- API Key -->
-                                    <StackPanel Spacing="3">
-                                        <TextBlock Text="{x:Bind Lang.Ai_ApiKey, Mode=OneWay}"
-                                                   FontSize="11" Opacity="0.65"/>
-                                        <PasswordBox x:Name="AiApiKeyBox"
-                                                     FontSize="12"
-                                                     PlaceholderText="sk-..."/>
-                                    </StackPanel>
-
-                                    <!-- Model -->
-                                    <StackPanel Spacing="3">
-                                        <TextBlock Text="{x:Bind Lang.Ai_Model, Mode=OneWay}"
-                                                   FontSize="11" Opacity="0.65"/>
-                                        <TextBox x:Name="AiModelBox"
-                                                 FontSize="12"
-                                                 PlaceholderText="deepseek-chat"/>
-                                    </StackPanel>
-
-                                    <!-- System Prompt -->
-                                    <StackPanel Spacing="3">
-                                        <TextBlock Text="{x:Bind Lang.Ai_SystemPrompt, Mode=OneWay}"
-                                                   FontSize="11" Opacity="0.65"/>
-                                        <TextBox x:Name="AiSysPromptBox"
-                                                 FontSize="12"
-                                                 AcceptsReturn="True"
-                                                 TextWrapping="Wrap"
-                                                 MaxHeight="80"/>
-                                    </StackPanel>
-
-                                    <!-- Save AI Settings -->
-                                    <Button x:Name="AiSaveBtn"
+                                    <Button x:Name="AiConfigBtn"
                                             FontSize="12"
                                             HorizontalAlignment="Stretch"
                                             Style="{ThemeResource AccentButtonStyle}"
-                                            Click="AiSaveBtn_Click"
-                                            Content="{x:Bind Lang.Ai_SaveSettings, Mode=OneWay}"/>
+                                            Click="AiConfigBtn_Click"
+                                            Content="{x:Bind Lang.Ai_ConfigTitle, Mode=OneWay}"/>
 
                                     <!-- AI status indicator -->
                                     <TextBlock x:Name="AiStatusText"

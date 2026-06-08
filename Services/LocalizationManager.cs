@@ -521,6 +521,16 @@ public sealed class LocalizationManager : INotifyPropertyChanged
     public string Ai_Thinking      => T(nameof(Ai_Thinking));
     public string Ai_StopGen       => T(nameof(Ai_StopGen));
     public string Ai_ModelLabel    => T(nameof(Ai_ModelLabel));
+    // Multi-provider AI (DeepSeek / OpenAI / Anthropic)
+    public string Ai_ConfigTitle        => T(nameof(Ai_ConfigTitle));
+    public string Ai_ConfigureProviders => T(nameof(Ai_ConfigureProviders));
+    public string Ai_ProvidersHint      => T(nameof(Ai_ProvidersHint));
+    public string Ai_Models             => T(nameof(Ai_Models));
+    public string Ai_KeySaved           => T(nameof(Ai_KeySaved));
+    public string Ai_NoProvidersStaff   => T(nameof(Ai_NoProvidersStaff));
+    public string Ai_NoProvidersUser    => T(nameof(Ai_NoProvidersUser));
+    public string Ai_Save               => T(nameof(Ai_Save));
+    public string Ai_Cancel             => T(nameof(Ai_Cancel));
 
     // Supplemental UI text used by code-behind and dynamic controls.
     public string Log_FormatCsv       => T(nameof(Log_FormatCsv));
@@ -912,6 +922,15 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             [nameof(Ai_Thinking)]      = "Thinking...",
             [nameof(Ai_StopGen)]       = "Stop",
             [nameof(Ai_ModelLabel)]    = "Model: {0}",
+            [nameof(Ai_ConfigTitle)]        = "AI Providers",
+            [nameof(Ai_ConfigureProviders)] = "Configure",
+            [nameof(Ai_ProvidersHint)]      = "Choose which AI providers and models are available, and set their API keys.",
+            [nameof(Ai_Models)]             = "Models",
+            [nameof(Ai_KeySaved)]           = "•••••••• (saved — leave blank to keep)",
+            [nameof(Ai_NoProvidersStaff)]   = "No AI provider enabled yet — tap Configure to set one up.",
+            [nameof(Ai_NoProvidersUser)]    = "AI is not configured yet. Contact your lecturer or assistant.",
+            [nameof(Ai_Save)]               = "Save",
+            [nameof(Ai_Cancel)]             = "Cancel",
 
             [nameof(Live_Header)]      = "LIVE - INSTRUMENTATION CONTROL AND OPTIMIZATION LABORATORY",
             [nameof(Live_CamInfo)]     = "1080p - 30fps",
@@ -1440,6 +1459,15 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             [nameof(Ai_Thinking)]      = "Berpikir...",
             [nameof(Ai_StopGen)]       = "Berhenti",
             [nameof(Ai_ModelLabel)]    = "Model: {0}",
+            [nameof(Ai_ConfigTitle)]        = "Penyedia AI",
+            [nameof(Ai_ConfigureProviders)] = "Konfigurasi",
+            [nameof(Ai_ProvidersHint)]      = "Pilih penyedia AI dan model mana yang tersedia, serta atur kunci API-nya.",
+            [nameof(Ai_Models)]             = "Model",
+            [nameof(Ai_KeySaved)]           = "•••••••• (tersimpan — kosongkan untuk tetap)",
+            [nameof(Ai_NoProvidersStaff)]   = "Belum ada penyedia AI yang aktif — ketuk Konfigurasi untuk mengaturnya.",
+            [nameof(Ai_NoProvidersUser)]    = "AI belum dikonfigurasi. Hubungi dosen atau asisten Anda.",
+            [nameof(Ai_Save)]               = "Simpan",
+            [nameof(Ai_Cancel)]             = "Batal",
 
             [nameof(Live_Header)]      = "LIVE - LABORATORIUM INSTRUMENTASI KONTROL DAN OPTIMASI",
             [nameof(Live_CamInfo)]     = "1080p - 30fps",

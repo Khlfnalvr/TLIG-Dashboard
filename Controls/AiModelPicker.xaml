@@ -1,0 +1,49 @@
+<UserControl
+    x:Class="TLIGDashboard.Controls.AiModelPicker"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <Grid ColumnSpacing="6" VerticalAlignment="Center">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto"/>
+            <ColumnDefinition Width="Auto"/>
+            <ColumnDefinition Width="Auto"/>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="Auto"/>
+        </Grid.ColumnDefinitions>
+
+        <FontIcon Grid.Column="0"
+                  FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                  FontSize="14" Glyph="&#xE99A;"
+                  Opacity="0.7" VerticalAlignment="Center"/>
+
+        <ComboBox x:Name="ProviderCombo"
+                  Grid.Column="1"
+                  FontSize="12" MinWidth="0" MaxWidth="120"
+                  VerticalAlignment="Center"
+                  SelectionChanged="ProviderCombo_SelectionChanged"/>
+
+        <ComboBox x:Name="ModelCombo"
+                  Grid.Column="2"
+                  FontSize="12" MinWidth="0" MaxWidth="180"
+                  VerticalAlignment="Center"
+                  SelectionChanged="ModelCombo_SelectionChanged"/>
+
+        <TextBlock x:Name="PickerStatus"
+                   Grid.Column="3"
+                   FontSize="11" Opacity="0.65"
+                   VerticalAlignment="Center"
+                   TextTrimming="CharacterEllipsis"
+                   Margin="4,0,4,0"/>
+
+        <Button x:Name="ConfigBtn"
+                Grid.Column="4"
+                Width="32" Height="32" Padding="0"
+                VerticalAlignment="Center"
+                Visibility="Collapsed"
+                Click="ConfigBtn_Click">
+            <FontIcon FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                      FontSize="14" Glyph="&#xE713;"/>
+        </Button>
+    </Grid>
+</UserControl>

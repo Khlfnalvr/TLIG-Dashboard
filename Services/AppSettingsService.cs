@@ -1,7 +1,22 @@
 ﻿using System.IO;
+using System.Linq;
 using System.Text.Json;
 
 namespace TLIGDashboard.Services;
+
+/// <summary>
+/// Per-install state for one AI provider (see <see cref="AiProviders"/> for the
+/// compile-time metadata). The <see cref="ApiKey"/> only ever lives on the machine
+/// that owns the provider account — the server. Clients receive the enabled flag
+/// and model list but never the key.
+/// </summary>
+public sealed class AiProviderSettings
+{
+    public string       Id      { get; set; } = "";   // matches AiProviderInfo.Id
+    public string       ApiKey  { get; set; } = "";   // provider secret (server-side only)
+    public bool         Enabled { get; set; }         // offered to users when true
+    public List<string> Models  { get; set; } = new(); // model ids surfaced in the pickers
+}
 
 public class AppSettings
 {
@@ -42,11 +57,24 @@ public class AppSettings
     public string ServerUsername { get; set; } = "";   // last username, used to prefill the login popup
     public string ServerToken    { get; set; } = "";   // session token issued by the server on login (transient)
 
-    // AI service settings
+    // ── AI service settings ───────────────────────────────────────────────
+    // Legacy single-provider fields. Kept so older settings.json files migrate
+    // cleanly into AiProviderConfigs below; no longer the source of truth.
     public string AiApiUrl       { get; set; } = "https://api.deepseek.com";
     public string AiApiKey       { get; set; } = "";
-    public string AiModel        { get; set; } = "deepseek-v4-flash";
+    public string AiModel        { get; set; } = "deepseek-chat";
     public string AiSystemPrompt { get; set; } = "You are a helpful assistant integrated in TLIG Dashboard, an industrial HMI dashboard and AI connector.";
+
+    // Multi-provider config (DeepSeek / OpenAI / Anthropic). On the server each
+    // entry holds the real key; on the client the keys stay blank and only the
+    // enabled flag + model list are populated from the server's /ai/config.
+    public List<AiProviderSettings> AiProviderConfigs { get; set; } = new();
+
+    // The provider + model actually used for chat. On the client this is the
+    // user's pick from the enabled set; on the server it is the model the
+    // server's own AI page chats with and the proxy's fallback.
+    public string AiActiveProvider { get; set; } = AiProviders.DeepSeek;
+    public string AiActiveModel    { get; set; } = "";
 
     // Display units selected from the title-bar customize menu.
     public string TemperatureUnit         { get; set; } = "C";
@@ -123,7 +151,69 @@ public static class AppSettingsService
                 Save(settings);
         }
 
+        // Seed / migrate the multi-provider AI config. Persist only when something
+        // actually changed and we already have a settings file to update.
+        if (EnsureAiProviders(settings) && loadedSettingsFile)
+            Save(settings);
+
         return settings;
+    }
+
+    /// <summary>
+    /// Guarantees <see cref="AppSettings.AiProviderConfigs"/> has an entry for every
+    /// provider in the registry and migrates the legacy single-provider fields into
+    /// the matching provider on first run. Returns true when it mutated settings.
+    /// </summary>
+    private static bool EnsureAiProviders(AppSettings s)
+    {
+        bool changed = false;
+
+        if (s.AiProviderConfigs.Count == 0)
+        {
+            // First run (or pre-multi-provider settings.json): seed from the registry.
+            foreach (var p in AiProviders.All)
+                s.AiProviderConfigs.Add(new AiProviderSettings { Id = p.Id, Models = p.Models.ToList() });
+
+            // Carry the old single-provider config into whichever provider its URL matched.
+            var legacyInfo = AiProviders.All.FirstOrDefault(p =>
+                s.AiApiUrl.TrimEnd('/').StartsWith(p.BaseUrl.TrimEnd('/'), StringComparison.OrdinalIgnoreCase));
+            var legacyId = legacyInfo?.Id ?? AiProviders.DeepSeek;
+            var legacy   = s.AiProviderConfigs.First(c => c.Id == legacyId);
+
+            if (!string.IsNullOrWhiteSpace(s.AiApiKey))
+            {
+                legacy.ApiKey  = s.AiApiKey;
+                legacy.Enabled = true;
+            }
+            if (!string.IsNullOrWhiteSpace(s.AiModel) && !legacy.Models.Contains(s.AiModel))
+                legacy.Models.Insert(0, s.AiModel);
+
+            s.AiActiveProvider = legacyId;
+            s.AiActiveModel    = !string.IsNullOrWhiteSpace(s.AiModel)
+                ? s.AiModel
+                : (legacy.Models.FirstOrDefault() ?? "");
+            changed = true;
+        }
+        else
+        {
+            // Add providers introduced in a later app version.
+            foreach (var p in AiProviders.All)
+            {
+                if (!s.AiProviderConfigs.Any(c => c.Id == p.Id))
+                {
+                    s.AiProviderConfigs.Add(new AiProviderSettings { Id = p.Id, Models = p.Models.ToList() });
+                    changed = true;
+                }
+            }
+        }
+
+        if (!AiProviders.IsValid(s.AiActiveProvider))
+        {
+            s.AiActiveProvider = AiProviders.DeepSeek;
+            changed = true;
+        }
+
+        return changed;
     }
 
     public static void Save(AppSettings settings)

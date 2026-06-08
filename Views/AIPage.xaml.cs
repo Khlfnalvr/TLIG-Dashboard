@@ -56,7 +56,7 @@ public sealed partial class AIPage : Page
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
         ApplyLocalization();
-        ReloadSettings();
+        _ = ModelPicker.ReloadAsync();
         if (!_initialized)
         {
             _initialized = true;
@@ -85,6 +85,7 @@ public sealed partial class AIPage : Page
             _renderedCount = 0;
         }
         SyncBubblesWithHistory();
+        _ = ModelPicker.ReloadAsync();
     }
 
     /// <summary>
@@ -122,33 +123,12 @@ public sealed partial class AIPage : Page
         ToolTipService.SetToolTip(StopBtn, Lang.Ai_StopGen);
     }
 
-    /// <summary>Called by MainWindow when AI settings are saved.</summary>
-    public void ReloadSettings()
-    {
-        var s = AppSettingsService.Load();
-        _ai.SystemPrompt = s.AiSystemPrompt;
-
-        if (BuildInfo.IsServer)
-        {
-            // Server talks to the provider directly with its own key.
-            _ai.ApiUrl = s.AiApiUrl;
-            _ai.ApiKey = s.AiApiKey;
-            _ai.Model  = s.AiModel;
-        }
-        else
-        {
-            // Client routes chat through the server's /ai proxy. The access token
-            // stands in for the Bearer key; the server overrides the model, but
-            // AiService still requires a non-empty model string.
-            // Use the same TLS-detection as AuthClient so Cloudflare-Tunnel URLs
-            // get https:// and direct LAN:port URLs get http://.
-            var baseUrl = AuthClient.BaseUrl(s.ServerHost);
-            _ai.ApiUrl  = string.IsNullOrWhiteSpace(AuthClient.NormalizeHost(s.ServerHost))
-                ? "" : $"{baseUrl}/ai";
-            _ai.ApiKey  = s.ServerToken;
-            _ai.Model   = "(server)";
-        }
-    }
+    /// <summary>
+    /// Re-points the shared <see cref="AiService"/> at the active provider/model.
+    /// The provider-aware logic lives in <see cref="AiConfigService.ApplyActive"/>
+    /// so the AI page and the Dashboard chat stay in sync.
+    /// </summary>
+    public void ReloadSettings() => AiConfigService.ApplyActive(_ai);
 
     // ── Send / stop ───────────────────────────────────────────────────────────
 

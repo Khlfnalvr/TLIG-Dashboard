@@ -98,6 +98,7 @@ public sealed partial class DashboardPage : Page
         if (_renderedCount > 0 && _renderedTheme != ActualTheme)
             ClearChatPanel();
         SyncBubblesWithHistory();
+        _ = ModelPicker.ReloadAsync();
 
         if (_clientMode)
             EnterDashboardCameraClientMode();
@@ -673,12 +674,8 @@ public sealed partial class DashboardPage : Page
         string text = ChatInput.Text.Trim();
         if (string.IsNullOrEmpty(text)) return;
 
-        // Reload settings from disk (same as AIPage does)
-        var s = AppSettingsService.Load();
-        _ai.ApiUrl       = s.AiApiUrl;
-        _ai.ApiKey       = s.AiApiKey;
-        _ai.Model        = s.AiModel;
-        _ai.SystemPrompt = s.AiSystemPrompt;
+        // Re-point the shared AI service at the active provider/model (same as AIPage).
+        AiConfigService.ApplyActive(_ai);
 
         if (string.IsNullOrEmpty(_ai.ApiKey))
         {

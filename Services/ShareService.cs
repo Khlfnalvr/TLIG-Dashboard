@@ -34,6 +34,7 @@ public static class ShareProtocol
 
     public const string WsPath            = "/ws";
     public const string AiPath            = "/ai/chat/completions";
+    public const string AiConfigPath      = "/ai/config";       // GET = list providers, POST = save (staff)
     public const string AuthLoginPath     = "/auth/login";
     public const string AuthLogoutPath    = "/auth/logout";
     public const string AuthSignupPath    = "/auth/signup";
@@ -202,6 +203,14 @@ public sealed class ShareServer
             {
                 await HandleAiProxyAsync(stream, headers, ct);
             }
+            else if (method == "GET" && path == ShareProtocol.AiConfigPath)
+            {
+                await HandleAiConfigGetAsync(stream, headers, ct);
+            }
+            else if (method == "POST" && path == ShareProtocol.AiConfigPath)
+            {
+                await HandleAiConfigSaveAsync(stream, headers, ct);
+            }
             else if (method == "GET" && path == ShareProtocol.TasksPath)
             {
                 await HandleTasksGetAsync(stream, headers, ct);
@@ -361,55 +370,62 @@ public sealed class ShareServer
         await WriteJsonAsync(stream, "{\"ok\":true}", ct);
     }
 
-    // ── AI proxy: inject the real provider key, override the model, stream back ─
+    // ── AI proxy: resolve the chosen provider, inject its key, stream back ──────
+    // The client always POSTs an OpenAI-shaped body. For OpenAI-protocol providers
+    // we forward it (overriding the model); for Anthropic we translate the request
+    // and translate the Anthropic SSE reply back into OpenAI SSE so the client's
+    // parser is unchanged.
 
     private async Task HandleAiProxyAsync(
         NetworkStream stream, Dictionary<string, string> headers, CancellationToken ct)
     {
-        // Validate the session token the client presented as the Bearer credential.
-        string presented = "";
-        if (headers.TryGetValue("authorization", out var auth) &&
-            auth.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
-            presented = auth["Bearer ".Length..].Trim();
-
-        if (!ValidateSession(presented))
+        var session = GetSession(BearerToken(headers));
+        if (session is null)
         {
             await WriteSimpleAsync(stream, "401 Unauthorized", "text/plain", "Invalid or expired session", ct);
             return;
         }
 
-        // Read the request body (Content-Length).
-        var body = await ReadBodyAsync(stream, headers, ct);
-
+        var body     = await ReadBodyAsync(stream, headers, ct);
         var settings = AppSettingsService.Load();
-        if (string.IsNullOrWhiteSpace(settings.AiApiKey))
+
+        // Which provider? Prefer the client's X-Ai-Provider hint, else the server default.
+        string providerId = headers.TryGetValue("x-ai-provider", out var ph) && AiProviders.IsValid(ph)
+            ? ph : settings.AiActiveProvider;
+        var info   = AiProviders.Resolve(providerId);
+        var config = settings.AiProviderConfigs.FirstOrDefault(c => c.Id == info.Id);
+
+        if (config is null || !config.Enabled || string.IsNullOrWhiteSpace(config.ApiKey))
         {
             await WriteSimpleAsync(stream, "503 Service Unavailable", "text/plain",
-                "Server has no AI API key configured.", ct);
+                $"Provider '{info.Name}' is not enabled or has no API key on the server.", ct);
             return;
         }
 
-        // Override the model with the server's configured model.
-        string forwardBody = body;
-        try
-        {
-            var node = JsonNode.Parse(body);
-            if (node is not null)
-            {
-                node["model"] = settings.AiModel;
-                forwardBody = node.ToJsonString();
-            }
-        }
-        catch { /* forward as-is if it isn't valid JSON */ }
+        string model       = ResolveModel(body, config, settings, info);
+        bool   isAnthropic = info.Protocol == AiProtocols.Anthropic;
+        string providerUrl = isAnthropic
+            ? $"{info.BaseUrl.TrimEnd('/')}/v1/messages"
+            : $"{info.BaseUrl.TrimEnd('/')}/chat/completions";
+        string forwardBody = isAnthropic
+            ? OpenAiToAnthropicBody(body, model)
+            : OverrideModel(body, model);
 
-        var providerUrl = $"{settings.AiApiUrl.TrimEnd('/')}/chat/completions";
         using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(120) };
         using var req  = new HttpRequestMessage(HttpMethod.Post, providerUrl)
         {
             Content = new StringContent(forwardBody, Encoding.UTF8, "application/json")
         };
-        req.Headers.TryAddWithoutValidation("Authorization", $"Bearer {settings.AiApiKey}");
         req.Headers.TryAddWithoutValidation("Accept", "text/event-stream");
+        if (isAnthropic)
+        {
+            req.Headers.TryAddWithoutValidation("x-api-key", config.ApiKey);
+            req.Headers.TryAddWithoutValidation("anthropic-version", "2023-06-01");
+        }
+        else
+        {
+            req.Headers.TryAddWithoutValidation("Authorization", $"Bearer {config.ApiKey}");
+        }
 
         HttpResponseMessage resp;
         try
@@ -425,29 +441,289 @@ public sealed class ShareServer
 
         using (resp)
         {
-            // Stream the upstream response back to the client using chunked transfer.
             int status = (int)resp.StatusCode;
+
+            // Relay an upstream error verbatim so the client surfaces the real reason.
+            if (!resp.IsSuccessStatusCode)
+            {
+                var err = await resp.Content.ReadAsStringAsync(ct);
+                await WriteSimpleAsync(stream, $"{status} {resp.ReasonPhrase}", "application/json", err, ct);
+                return;
+            }
+
             var header =
-                $"HTTP/1.1 {status} {resp.ReasonPhrase}\r\n" +
+                "HTTP/1.1 200 OK\r\n" +
                 "Content-Type: text/event-stream\r\n" +
                 "Cache-Control: no-cache\r\n" +
                 "Transfer-Encoding: chunked\r\n\r\n";
             await stream.WriteAsync(Encoding.ASCII.GetBytes(header), ct);
 
             await using var upstream = await resp.Content.ReadAsStreamAsync(ct);
-            var buf = new byte[8192];
-            int n;
-            while ((n = await upstream.ReadAsync(buf, ct)) > 0)
-            {
-                var sizeLine = Encoding.ASCII.GetBytes($"{n:X}\r\n");
-                await stream.WriteAsync(sizeLine, ct);
-                await stream.WriteAsync(buf.AsMemory(0, n), ct);
-                await stream.WriteAsync("\r\n"u8.ToArray(), ct);
-                await stream.FlushAsync(ct);
-            }
+            if (isAnthropic)
+                await RelayAnthropicAsOpenAiAsync(upstream, stream, ct);
+            else
+                await RelayRawChunkedAsync(upstream, stream, ct);
+
             await stream.WriteAsync("0\r\n\r\n"u8.ToArray(), ct);
             await stream.FlushAsync(ct);
         }
+    }
+
+    /// <summary>Forwards OpenAI SSE bytes unchanged, framed as HTTP chunks.</summary>
+    private static async Task RelayRawChunkedAsync(Stream upstream, NetworkStream stream, CancellationToken ct)
+    {
+        var buf = new byte[8192];
+        int n;
+        while ((n = await upstream.ReadAsync(buf, ct)) > 0)
+        {
+            var sizeLine = Encoding.ASCII.GetBytes($"{n:X}\r\n");
+            await stream.WriteAsync(sizeLine, ct);
+            await stream.WriteAsync(buf.AsMemory(0, n), ct);
+            await stream.WriteAsync("\r\n"u8.ToArray(), ct);
+            await stream.FlushAsync(ct);
+        }
+    }
+
+    /// <summary>
+    /// Translates an Anthropic Messages SSE stream into OpenAI chat-completion SSE
+    /// (<c>choices[].delta.content</c> + a terminal <c>[DONE]</c>) so the client's
+    /// OpenAI parser handles it without knowing the provider.
+    /// </summary>
+    private static async Task RelayAnthropicAsOpenAiAsync(Stream upstream, NetworkStream stream, CancellationToken ct)
+    {
+        using var reader = new StreamReader(upstream);
+        string? line;
+        while ((line = await reader.ReadLineAsync(ct)) != null)
+        {
+            if (!line.StartsWith("data: ")) continue;
+            var data = line[6..].Trim();
+            if (data.Length == 0) continue;
+
+            string? text = null;
+            try
+            {
+                var node = JsonNode.Parse(data);
+                if ((string?)node?["type"] == "content_block_delta")
+                    text = (string?)node?["delta"]?["text"];
+            }
+            catch { }
+
+            if (string.IsNullOrEmpty(text)) continue;
+
+            var chunk = new JsonObject
+            {
+                ["choices"] = new JsonArray
+                {
+                    new JsonObject { ["index"] = 0, ["delta"] = new JsonObject { ["content"] = text } }
+                }
+            }.ToJsonString();
+
+            await WriteSseChunkAsync(stream, $"data: {chunk}\n\n", ct);
+        }
+        await WriteSseChunkAsync(stream, "data: [DONE]\n\n", ct);
+    }
+
+    private static async Task WriteSseChunkAsync(NetworkStream stream, string text, CancellationToken ct)
+    {
+        var payload  = Encoding.UTF8.GetBytes(text);
+        var sizeLine = Encoding.ASCII.GetBytes($"{payload.Length:X}\r\n");
+        await stream.WriteAsync(sizeLine, ct);
+        await stream.WriteAsync(payload, ct);
+        await stream.WriteAsync("\r\n"u8.ToArray(), ct);
+        await stream.FlushAsync(ct);
+    }
+
+    private static string ResolveModel(string body, AiProviderSettings config, AppSettings settings, AiProviderInfo info)
+    {
+        string requested = "";
+        try { requested = (string?)JsonNode.Parse(body)?["model"] ?? ""; } catch { }
+
+        if (!string.IsNullOrWhiteSpace(requested) && config.Models.Contains(requested))
+            return requested;
+        if (config.Id == settings.AiActiveProvider &&
+            !string.IsNullOrWhiteSpace(settings.AiActiveModel) &&
+            config.Models.Contains(settings.AiActiveModel))
+            return settings.AiActiveModel;
+        if (config.Models.Count > 0) return config.Models[0];
+        return info.Models.Length > 0 ? info.Models[0] : requested;
+    }
+
+    private static string OverrideModel(string body, string model)
+    {
+        try
+        {
+            var node = JsonNode.Parse(body);
+            if (node is not null) { node["model"] = model; return node.ToJsonString(); }
+        }
+        catch { }
+        return body;
+    }
+
+    private static string OpenAiToAnthropicBody(string openAiBody, string model)
+    {
+        var system    = new StringBuilder();
+        var outMsgs   = new JsonArray();
+        int maxTokens = 4096;
+
+        try
+        {
+            var node = JsonNode.Parse(openAiBody)?.AsObject();
+            if ((int?)node?["max_tokens"] is int mi && mi > 0) maxTokens = mi;
+            if (node?["messages"] is JsonArray msgs)
+            {
+                foreach (var m in msgs)
+                {
+                    var role    = (string?)m?["role"]    ?? "";
+                    var content = (string?)m?["content"] ?? "";
+                    if (role == "system")
+                    {
+                        if (system.Length > 0) system.Append("\n\n");
+                        system.Append(content);
+                    }
+                    else if (role is "user" or "assistant")
+                    {
+                        outMsgs.Add(new JsonObject { ["role"] = role, ["content"] = content });
+                    }
+                }
+            }
+        }
+        catch { }
+
+        var body = new JsonObject
+        {
+            ["model"]      = model,
+            ["max_tokens"] = maxTokens,
+            ["stream"]     = true,
+            ["messages"]   = outMsgs,
+        };
+        if (system.Length > 0) body["system"] = system.ToString();
+        return body.ToJsonString();
+    }
+
+    // ── AI config: which providers/models are enabled (authored by staff) ───────
+
+    private async Task HandleAiConfigGetAsync(
+        NetworkStream stream, Dictionary<string, string> headers, CancellationToken ct)
+    {
+        var session = GetSession(BearerToken(headers));
+        if (session is null)
+        {
+            await WriteSimpleAsync(stream, "401 Unauthorized", "text/plain", "Invalid or expired session", ct);
+            return;
+        }
+
+        var settings = AppSettingsService.Load();
+        var arr = new JsonArray();
+        foreach (var info in AiProviders.All)
+        {
+            var cfg = settings.AiProviderConfigs.FirstOrDefault(c => c.Id == info.Id);
+
+            var models = new JsonArray();
+            foreach (var m in cfg?.Models ?? new List<string>()) models.Add(m);
+            var allModels = new JsonArray();
+            foreach (var m in info.Models) allModels.Add(m);
+
+            arr.Add(new JsonObject
+            {
+                ["id"]        = info.Id,
+                ["name"]      = info.Name,
+                ["protocol"]  = info.Protocol,
+                ["enabled"]   = cfg?.Enabled ?? false,
+                ["hasKey"]    = !string.IsNullOrWhiteSpace(cfg?.ApiKey),
+                ["models"]    = models,
+                ["allModels"] = allModels,
+            });
+        }
+
+        var json = new JsonObject
+        {
+            ["providers"]      = arr,
+            ["canEdit"]        = UserRoles.IsStaff(session.Role),
+            ["activeProvider"] = settings.AiActiveProvider,
+            ["activeModel"]    = settings.AiActiveModel,
+            ["systemPrompt"]   = settings.AiSystemPrompt,
+        }.ToJsonString();
+        await WriteJsonAsync(stream, json, ct);
+    }
+
+    private async Task HandleAiConfigSaveAsync(
+        NetworkStream stream, Dictionary<string, string> headers, CancellationToken ct)
+    {
+        var session = GetSession(BearerToken(headers));
+        if (session is null)
+        {
+            await WriteSimpleAsync(stream, "401 Unauthorized", "text/plain", "Invalid or expired session", ct);
+            return;
+        }
+        if (!UserRoles.IsStaff(session.Role))
+        {
+            await WriteSimpleAsync(stream, "403 Forbidden", "text/plain", "Only staff can edit AI settings", ct);
+            return;
+        }
+
+        var body     = await ReadBodyAsync(stream, headers, ct);
+        var settings = AppSettingsService.Load();
+
+        try
+        {
+            var node = JsonNode.Parse(body);
+
+            if (node?["providers"] is JsonArray provs)
+            {
+                foreach (var p in provs)
+                {
+                    var id   = (string?)p?["id"] ?? "";
+                    var info = AiProviders.Find(id);
+                    if (info is null) continue;
+
+                    var cfg = settings.AiProviderConfigs.FirstOrDefault(c => c.Id == id);
+                    if (cfg is null)
+                    {
+                        cfg = new AiProviderSettings { Id = id };
+                        settings.AiProviderConfigs.Add(cfg);
+                    }
+
+                    if (p?["enabled"] is JsonNode en) cfg.Enabled = (bool?)en ?? cfg.Enabled;
+
+                    // Models: keep only ids that exist in the registry catalogue.
+                    if (p?["models"] is JsonArray ms)
+                    {
+                        var picked = new List<string>();
+                        foreach (var m in ms)
+                        {
+                            var mid = (string?)m ?? "";
+                            if (info.Models.Contains(mid) && !picked.Contains(mid)) picked.Add(mid);
+                        }
+                        cfg.Models = picked;
+                    }
+
+                    // Key: a blank apiKey preserves the existing key; clearKey wipes it.
+                    if ((bool?)p?["clearKey"] == true) cfg.ApiKey = "";
+                    else
+                    {
+                        var key = (string?)p?["apiKey"] ?? "";
+                        if (!string.IsNullOrWhiteSpace(key)) cfg.ApiKey = key.Trim();
+                    }
+                }
+            }
+
+            if ((string?)node?["systemPrompt"] is string sp && sp.Length > 0)
+                settings.AiSystemPrompt = sp;
+
+            var ap = (string?)node?["activeProvider"] ?? "";
+            if (AiProviders.IsValid(ap)) settings.AiActiveProvider = ap;
+
+            var am = (string?)node?["activeModel"] ?? "";
+            if (!string.IsNullOrWhiteSpace(am)) settings.AiActiveModel = am;
+        }
+        catch
+        {
+            await WriteSimpleAsync(stream, "400 Bad Request", "text/plain", "Malformed config", ct);
+            return;
+        }
+
+        AppSettingsService.Save(settings);
+        await WriteJsonAsync(stream, "{\"ok\":true}", ct);
     }
 
     // ── Tasks: server-backed learning-task database (authored by staff) ─────────

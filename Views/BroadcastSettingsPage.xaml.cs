@@ -523,35 +523,35 @@ public sealed partial class BroadcastSettingsPage : Page
 
     private void InitAiSection(AppSettings s)
     {
-        AiApiUrlBox.Text     = s.AiApiUrl;
-        AiApiKeyBox.Password = s.AiApiKey;
-        AiModelBox.Text      = s.AiModel;
-        AiSysPromptBox.Text  = s.AiSystemPrompt;
-        RefreshAiStatus(s.AiApiKey);
+        RefreshAiStatus();
     }
 
-    private void RefreshAiStatus(string key)
+    private void RefreshAiStatus()
     {
-        bool configured = !string.IsNullOrWhiteSpace(key);
+        var s    = AppSettingsService.Load();
+        var info = Services.AiProviders.Resolve(s.AiActiveProvider);
+        var cfg  = s.AiProviderConfigs.FirstOrDefault(c => c.Id == info.Id);
+        bool configured = cfg is { Enabled: true } && !string.IsNullOrWhiteSpace(cfg.ApiKey);
+
         App.Status.AiConnected = configured;
+
+        var model = !string.IsNullOrWhiteSpace(s.AiActiveModel)
+            ? s.AiActiveModel
+            : (cfg?.Models.FirstOrDefault() ?? "");
         AiStatusText.Text = configured
-            ? Lang.Format("Ai_ModelLabel", AppSettingsService.Load().AiModel)
+            ? $"✓  {info.Name} · {model}"
             : Lang.Get("Ai_ErrorNoKey");
         AiStatusText.Foreground = new SolidColorBrush(configured
             ? Color.FromArgb(0xFF, 0x25, 0xC6, 0x85)
             : Color.FromArgb(0xFF, 0xCC, 0x6E, 0x00));
     }
 
-    private void AiSaveBtn_Click(object sender, RoutedEventArgs e)
+    private async void AiConfigBtn_Click(object sender, RoutedEventArgs e)
     {
-        var s = AppSettingsService.Load();
-        s.AiApiUrl       = AiApiUrlBox.Text.Trim();
-        s.AiApiKey       = AiApiKeyBox.Password.Trim();
-        s.AiModel        = AiModelBox.Text.Trim();
-        s.AiSystemPrompt = AiSysPromptBox.Text.Trim();
-        AppSettingsService.Save(s);
+        bool saved = await AiConfigUi.ShowProviderConfigAsync(XamlRoot);
+        if (!saved) return;
 
-        RefreshAiStatus(s.AiApiKey);
+        RefreshAiStatus();
 
         // Notify a loaded AIPage so it picks up the new settings immediately.
         if (App.CurrentWindow?.GetContentFrame()?.Content is AIPage aiPage)

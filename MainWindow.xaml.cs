@@ -2209,39 +2209,42 @@ public sealed partial class MainWindow : Window
 
     private void InitAiPanel()
     {
-        var s = AppSettingsService.Load();
-        AiApiUrlBox.Text     = s.AiApiUrl;
-        AiApiKeyBox.Password = s.AiApiKey;
-        AiModelBox.Text      = s.AiModel;
-        AiSysPromptBox.Text  = s.AiSystemPrompt;
-        RefreshAiStatus(s.AiApiKey);
+        RefreshAiStatus();
     }
 
-    private void RefreshAiStatus(string key)
+    /// <summary>
+    /// Reflects the active provider/model in the flyout status line. "Configured"
+    /// means the active provider is enabled and has a key — that's when the AI
+    /// Assistant counts as active in the Status System panel.
+    /// </summary>
+    private void RefreshAiStatus()
     {
-        bool configured = !string.IsNullOrWhiteSpace(key);
-        // AI Assistant counts as "active" in the Status System panel once a key is set.
+        var s    = AppSettingsService.Load();
+        var info = Services.AiProviders.Resolve(s.AiActiveProvider);
+        var cfg  = s.AiProviderConfigs.FirstOrDefault(c => c.Id == info.Id);
+        bool configured = cfg is { Enabled: true } && !string.IsNullOrWhiteSpace(cfg.ApiKey);
+
         App.Status.AiConnected = configured;
-        AiStatusText.Text      = configured
-            ? $"✓  {LocalizationManager.Instance.Format("Ai_ModelLabel", AppSettingsService.Load().AiModel)}"
+
+        var model = !string.IsNullOrWhiteSpace(s.AiActiveModel)
+            ? s.AiActiveModel
+            : (cfg?.Models.FirstOrDefault() ?? "");
+        AiStatusText.Text = configured
+            ? $"✓  {info.Name} · {model}"
             : LocalizationManager.Instance.Get("Ai_ErrorNoKey");
         AiStatusText.Foreground = configured
             ? new SolidColorBrush(Color.FromArgb(0xFF, 0x25, 0xC6, 0x85))
             : new SolidColorBrush(Color.FromArgb(0xFF, 0xCC, 0x6E, 0x00));
     }
 
-    private void AiSaveBtn_Click(object sender, RoutedEventArgs e)
+    private async void AiConfigBtn_Click(object sender, RoutedEventArgs e)
     {
-        var s = AppSettingsService.Load();
-        s.AiApiUrl       = AiApiUrlBox.Text.Trim();
-        s.AiApiKey       = AiApiKeyBox.Password.Trim();
-        s.AiModel        = AiModelBox.Text.Trim();
-        s.AiSystemPrompt = AiSysPromptBox.Text.Trim();
-        AppSettingsService.Save(s);
+        bool saved = await Views.AiConfigUi.ShowProviderConfigAsync(Content.XamlRoot);
+        if (!saved) return;
 
-        RefreshAiStatus(s.AiApiKey);
+        RefreshAiStatus();
 
-        // Notify AIPage if it's currently loaded so it picks up new settings immediately
+        // Notify AIPage if it's currently loaded so it picks up new settings immediately.
         if (ContentFrame?.Content is Views.AIPage aiPage)
             aiPage.ReloadSettings();
     }

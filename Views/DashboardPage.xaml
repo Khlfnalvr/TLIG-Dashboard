@@ -806,14 +806,23 @@
                     CornerRadius="8">
                 <Grid>
                     <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>    <!-- model picker -->
                         <RowDefinition Height="*"/>       <!-- chat history -->
                         <RowDefinition Height="Auto"/>    <!-- quick suggestions -->
                         <RowDefinition Height="Auto"/>    <!-- input bar -->
                     </Grid.RowDefinitions>
 
+                    <!-- Provider / model picker (shared control) -->
+                    <Border Grid.Row="0"
+                            BorderThickness="0,0,0,1"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                            Padding="8,6,8,6">
+                        <controls:AiModelPicker x:Name="ModelPicker"/>
+                    </Border>
+
                     <!-- Chat history -->
                     <ScrollViewer x:Name="ChatScroll"
-                                  Grid.Row="0"
+                                  Grid.Row="1"
                                   VerticalScrollBarVisibility="Auto"
                                   HorizontalScrollBarVisibility="Disabled"
                                   Padding="12,10,12,10">
@@ -821,7 +830,7 @@
                     </ScrollViewer>
 
                     <!-- Quick Suggestions (above input) -->
-                    <Border Grid.Row="1"
+                    <Border Grid.Row="2"
                             BorderThickness="0,1,0,0"
                             BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                             Padding="8,8,8,6">
@@ -866,7 +875,7 @@
                     </Border>
 
                     <!-- Input bar -->
-                    <Border Grid.Row="2"
+                    <Border Grid.Row="3"
                             BorderThickness="0,1,0,0"
                             BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                             Padding="8">

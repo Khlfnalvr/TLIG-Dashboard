@@ -224,40 +224,16 @@
                         <!-- ══ AI API CARD ══ -->
                         <Border x:Name="CardAi" Style="{StaticResource SettingsCardStyle}">
                             <StackPanel Spacing="12">
-                                <TextBlock Text="{x:Bind Lang.Ai_Settings, Mode=OneWay}"
+                                <TextBlock Text="{x:Bind Lang.Ai_ConfigTitle, Mode=OneWay}"
                                            Style="{StaticResource CardTitleStyle}"/>
 
-                                <StackPanel Spacing="4">
-                                    <TextBlock Text="{x:Bind Lang.Ai_ApiUrl, Mode=OneWay}"
-                                               Style="{StaticResource FieldLabelStyle}"/>
-                                    <TextBox x:Name="AiApiUrlBox" FontSize="13"
-                                             PlaceholderText="https://api.deepseek.com"/>
-                                </StackPanel>
+                                <TextBlock Text="{x:Bind Lang.Ai_ProvidersHint, Mode=OneWay}"
+                                           FontSize="12" Opacity="0.75" TextWrapping="Wrap"/>
 
-                                <StackPanel Spacing="4">
-                                    <TextBlock Text="{x:Bind Lang.Ai_ApiKey, Mode=OneWay}"
-                                               Style="{StaticResource FieldLabelStyle}"/>
-                                    <PasswordBox x:Name="AiApiKeyBox" FontSize="13" PlaceholderText="sk-..."/>
-                                </StackPanel>
-
-                                <StackPanel Spacing="4">
-                                    <TextBlock Text="{x:Bind Lang.Ai_Model, Mode=OneWay}"
-                                               Style="{StaticResource FieldLabelStyle}"/>
-                                    <TextBox x:Name="AiModelBox" FontSize="13"
-                                             PlaceholderText="deepseek-chat"/>
-                                </StackPanel>
-
-                                <StackPanel Spacing="4">
-                                    <TextBlock Text="{x:Bind Lang.Ai_SystemPrompt, Mode=OneWay}"
-                                               Style="{StaticResource FieldLabelStyle}"/>
-                                    <TextBox x:Name="AiSysPromptBox" FontSize="13"
-                                             AcceptsReturn="True" TextWrapping="Wrap" MinHeight="72"/>
-                                </StackPanel>
-
-                                <Button x:Name="AiSaveBtn" HorizontalAlignment="Stretch"
+                                <Button x:Name="AiConfigBtn" HorizontalAlignment="Stretch"
                                         Style="{ThemeResource AccentButtonStyle}"
-                                        Click="AiSaveBtn_Click"
-                                        Content="{x:Bind Lang.Ai_SaveSettings, Mode=OneWay}"/>
+                                        Click="AiConfigBtn_Click"
+                                        Content="{x:Bind Lang.Ai_ConfigTitle, Mode=OneWay}"/>
 
                                 <TextBlock x:Name="AiStatusText" FontSize="12" Opacity="0.75" TextWrapping="Wrap"/>
                             </StackPanel>

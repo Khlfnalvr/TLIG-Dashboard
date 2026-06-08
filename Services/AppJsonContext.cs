@@ -1,8 +1,11 @@
-﻿using System.Text.Json.Serialization;
+﻿using System.Collections.Generic;
+using System.Text.Json.Serialization;
 
 namespace TLIGDashboard.Services;
 
 [JsonSerializable(typeof(AppSettings))]
+[JsonSerializable(typeof(AiProviderSettings))]
+[JsonSerializable(typeof(List<AiProviderSettings>))]
 [JsonSerializable(typeof(GitHubRelease))]
 [JsonSerializable(typeof(GitHubRelease[]))]
 [JsonSerializable(typeof(GitHubAsset))]

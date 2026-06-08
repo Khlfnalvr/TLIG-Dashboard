@@ -2,27 +2,41 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace TLIGDashboard.Services;
 
 /// <summary>
-/// OpenAI-compatible AI chat client.
+/// Streaming AI chat client supporting two wire protocols (see <see cref="AiProtocols"/>):
 ///
-/// DeepSeek endpoint : https://api.deepseek.com/chat/completions
-/// OpenAI endpoint   : https://api.openai.com/v1/chat/completions
-/// Ollama endpoint   : http://localhost:11434/v1/chat/completions
+/// <list type="bullet">
+/// <item><b>openai</b> — DeepSeek, OpenAI, Ollama, and the server's own <c>/ai</c> proxy.
+///   POSTs to <c>{ApiUrl}/chat/completions</c>, Bearer auth, <c>choices[].delta.content</c> SSE.</item>
+/// <item><b>anthropic</b> — Anthropic Messages API. POSTs to <c>{ApiUrl}/v1/messages</c>,
+///   <c>x-api-key</c> auth, system prompt as a top-level field, <c>content_block_delta</c> SSE.</item>
+/// </list>
 ///
-/// The service appends "/chat/completions" to ApiUrl as-is.
+/// On the client flavor the service always speaks <b>openai</b> to the server proxy;
+/// the server does any Anthropic translation. On the server flavor the protocol is
+/// the active provider's protocol.
 /// </summary>
 public sealed class AiService : IDisposable
 {
     // ── Configuration ─────────────────────────────────────────────────────────
     public string ApiUrl       { get; set; } = "https://api.deepseek.com";
     public string ApiKey       { get; set; } = "";
-    public string Model        { get; set; } = "deepseek-v4-flash";
+    public string Model        { get; set; } = "deepseek-chat";
+    public string Protocol     { get; set; } = AiProtocols.OpenAi;
     public string SystemPrompt { get; set; } =
         "You are a helpful assistant integrated in TLIG Dashboard, " +
         "an industrial HMI dashboard and AI connector.";
+
+    // Optional provider hint sent to the server proxy so it knows which configured
+    // provider/key to use (the client always posts an OpenAI-shaped body). Ignored
+    // when talking to a provider directly.
+    public string ProviderId   { get; set; } = "";
+
+    private const string AnthropicVersion = "2023-06-01";
 
     // ── History ───────────────────────────────────────────────────────────────
     public IReadOnlyList<ChatMessage> History => _history;
@@ -32,8 +46,12 @@ public sealed class AiService : IDisposable
     // ── HTTP ──────────────────────────────────────────────────────────────────
     private readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(120) };
 
-    // ── Chat completions endpoint ─────────────────────────────────────────────
-    private string Endpoint() => $"{ApiUrl.TrimEnd('/')}/chat/completions";
+    private bool IsAnthropic => Protocol == AiProtocols.Anthropic;
+
+    // ── Endpoint per protocol ──────────────────────────────────────────────────
+    private string Endpoint() => IsAnthropic
+        ? $"{ApiUrl.TrimEnd('/')}/v1/messages"
+        : $"{ApiUrl.TrimEnd('/')}/chat/completions";
 
     // ── Streaming chat (callback-based, no IAsyncEnumerable) ─────────────────
     /// <summary>
@@ -61,8 +79,20 @@ public sealed class AiService : IDisposable
         {
             Content = new StringContent(body, Encoding.UTF8, "application/json")
         };
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", ApiKey);
         request.Headers.Accept.ParseAdd("text/event-stream");
+
+        if (IsAnthropic)
+        {
+            request.Headers.TryAddWithoutValidation("x-api-key", ApiKey);
+            request.Headers.TryAddWithoutValidation("anthropic-version", AnthropicVersion);
+        }
+        else
+        {
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", ApiKey);
+            // Tell the proxy which configured provider to route to (no-op for direct providers).
+            if (!string.IsNullOrWhiteSpace(ProviderId))
+                request.Headers.TryAddWithoutValidation("X-Ai-Provider", ProviderId);
+        }
 
         // ── Send, read headers first ─────────────────────────────────────────
         var response = await _http.SendAsync(
@@ -90,7 +120,7 @@ public sealed class AiService : IDisposable
             if (!line.StartsWith("data: "))       continue;
 
             var data = line[6..].Trim();
-            if (data == "[DONE]") break;
+            if (data == "[DONE]") break;           // OpenAI sentinel (Anthropic ends on stream close)
 
             var token = ExtractToken(data);
             if (string.IsNullOrEmpty(token)) continue;
@@ -108,25 +138,51 @@ public sealed class AiService : IDisposable
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    private string BuildBody()
-    {
-        var msgs = new List<object>();
-        if (!string.IsNullOrWhiteSpace(SystemPrompt))
-            msgs.Add(new { role = "system", content = SystemPrompt });
-        foreach (var m in _history)
-            msgs.Add(new { role = m.Role, content = m.Content });
+    private string BuildBody() => IsAnthropic ? BuildAnthropicBody() : BuildOpenAiBody();
 
-        return JsonSerializer.Serialize(new
+    // NOTE: built with JsonObject/JsonArray (not JsonSerializer.Serialize(new {...})) —
+    // the Release publish runs with reflection-based JSON serialization disabled
+    // (trim-friendly default), which throws NotSupportedException for anonymous types.
+
+    private string BuildOpenAiBody()
+    {
+        var msgs = new JsonArray();
+        if (!string.IsNullOrWhiteSpace(SystemPrompt))
+            msgs.Add(new JsonObject { ["role"] = "system", ["content"] = SystemPrompt });
+        foreach (var m in _history)
+            msgs.Add(new JsonObject { ["role"] = m.Role, ["content"] = m.Content });
+
+        return new JsonObject
         {
-            model       = Model,
-            messages    = msgs,
-            stream      = true,
-            max_tokens  = 4096,
-            temperature = 0.7
-        });
+            ["model"]       = Model,
+            ["messages"]    = msgs,
+            ["stream"]      = true,
+            ["max_tokens"]  = 4096,
+            ["temperature"] = 0.7
+        }.ToJsonString();
     }
 
-    private static string? ExtractToken(string data)
+    private string BuildAnthropicBody()
+    {
+        // Anthropic carries the system prompt as a top-level field, not a message.
+        var msgs = new JsonArray();
+        foreach (var m in _history)
+            msgs.Add(new JsonObject { ["role"] = m.Role, ["content"] = m.Content });
+
+        return new JsonObject
+        {
+            ["model"]      = Model,
+            ["system"]     = SystemPrompt ?? "",
+            ["messages"]   = msgs,
+            ["stream"]     = true,
+            ["max_tokens"] = 4096
+        }.ToJsonString();
+    }
+
+    private string? ExtractToken(string data) =>
+        IsAnthropic ? ExtractAnthropicToken(data) : ExtractOpenAiToken(data);
+
+    private static string? ExtractOpenAiToken(string data)
     {
         try
         {
@@ -136,6 +192,22 @@ public sealed class AiService : IDisposable
             var delta = choices[0].GetProperty("delta");
             if (delta.TryGetProperty("content", out var c))
                 return c.GetString();
+        }
+        catch { }
+        return null;
+    }
+
+    private static string? ExtractAnthropicToken(string data)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(data);
+            var root = doc.RootElement;
+            if (!root.TryGetProperty("type", out var t) ||
+                t.GetString() != "content_block_delta") return null;
+            if (root.TryGetProperty("delta", out var delta) &&
+                delta.TryGetProperty("text", out var text))
+                return text.GetString();
         }
         catch { }
         return null;
