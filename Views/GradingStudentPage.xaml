@@ -1,0 +1,542 @@
+<!-- Views/GradingStudentPage.xaml -->
+<!-- Tambahkan file ini ke folder Views/ di project TLIG-Dashboard -->
+<!-- Akses dari navigasi: role = Mahasiswa -->
+
+<Page
+    x:Class="TLIGDashboard.Views.GradingStudentPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:TLIGDashboard.Views"
+    Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- ── Header ──────────────────────────────────────────────────────── -->
+        <Border Grid.Row="0"
+                Padding="28,20,28,16"
+                BorderThickness="0,0,0,1"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Column="0" Spacing="4">
+                    <TextBlock Text="Penilaian Mahasiswa"
+                               Style="{ThemeResource TitleTextBlockStyle}"
+                               FontWeight="SemiBold"/>
+                    <TextBlock x:Name="SubtitleText"
+                               Text="Nilai teman sekelompokmu dan lihat nilai yang kamu terima"
+                               Style="{ThemeResource CaptionTextBlockStyle}"
+                               Opacity="0.6"/>
+                </StackPanel>
+
+                <!-- Assignment selector -->
+                <ComboBox x:Name="AssignmentCombo"
+                          Grid.Column="1"
+                          MinWidth="250"
+                          VerticalAlignment="Center"
+                          Header="Pilih Tugas"
+                          SelectionChanged="AssignmentCombo_SelectionChanged"/>
+            </Grid>
+        </Border>
+
+        <!-- ── Body ────────────────────────────────────────────────────────── -->
+        <ScrollViewer Grid.Row="1"
+                      VerticalScrollBarVisibility="Auto"
+                      Padding="28,20,28,28">
+            <StackPanel Spacing="20">
+
+                <!-- Pivot: Beri Nilai / Nilai yang Diterima / Nilai Sistem -->
+                <Pivot x:Name="MainPivot" SelectionChanged="MainPivot_SelectionChanged">
+
+                    <!-- ── Tab 1: Beri Penilaian Peer ───────────────────── -->
+                    <PivotItem Header="Nilai Rekan Kelompok">
+                        <StackPanel Spacing="16" Margin="0,16,0,0">
+
+                            <InfoBar x:Name="PeerInfoBar"
+                                     IsOpen="False"
+                                     IsClosable="True"/>
+
+                            <!-- Daftar mahasiswa dalam kelompok -->
+                            <TextBlock Text="Anggota Kelompokmu"
+                                       Style="{ThemeResource BodyStrongTextBlockStyle}"/>
+
+                            <ItemsRepeater x:Name="GroupMembersRepeater">
+                                <ItemsRepeater.Layout>
+                                    <StackLayout Spacing="12"/>
+                                </ItemsRepeater.Layout>
+                                <ItemsRepeater.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                                BorderThickness="1"
+                                                CornerRadius="8"
+                                                Padding="20,16">
+                                            <StackPanel Spacing="14">
+                                                <!-- Student header -->
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                    </Grid.ColumnDefinitions>
+
+                                                    <PersonPicture Grid.Column="0"
+                                                                   Width="42" Height="42"
+                                                                   Initials="{Binding Initials}"/>
+
+                                                    <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
+                                                        <TextBlock Text="{Binding StudentName}"
+                                                                   Style="{ThemeResource BodyStrongTextBlockStyle}"/>
+                                                        <TextBlock Text="{Binding StudentId}"
+                                                                   Style="{ThemeResource CaptionTextBlockStyle}"
+                                                                   Opacity="0.6"/>
+                                                    </StackPanel>
+
+                                                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                                        <Border x:Name="AlreadyRatedBadge"
+                                                                Background="{ThemeResource SystemFillColorSuccessBackgroundBrush}"
+                                                                BorderBrush="{ThemeResource SystemFillColorSuccessBrush}"
+                                                                BorderThickness="1"
+                                                                CornerRadius="4"
+                                                                Padding="8,3"
+                                                                Visibility="{Binding AlreadyRatedVisibility}">
+                                                            <TextBlock Text="Sudah Dinilai"
+                                                                       Foreground="{ThemeResource SystemFillColorSuccessBrush}"
+                                                                       Style="{ThemeResource CaptionTextBlockStyle}"
+                                                                       FontWeight="SemiBold"/>
+                                                        </Border>
+                                                        <Button Tag="{Binding StudentId}"
+                                                                Style="{ThemeResource AccentButtonStyle}"
+                                                                Content="Nilai Sekarang"
+                                                                Click="NilaiSekarang_Click"/>
+                                                    </StackPanel>
+                                                </Grid>
+                                            </StackPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsRepeater.ItemTemplate>
+                            </ItemsRepeater>
+
+                            <!-- Form penilaian (tersembunyi, muncul saat klik "Nilai Sekarang") -->
+                            <Border x:Name="PeerFormCard"
+                                    Visibility="Collapsed"
+                                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                    BorderBrush="{ThemeResource AccentFillColorDefaultBrush}"
+                                    BorderThickness="2"
+                                    CornerRadius="10"
+                                    Padding="24,20">
+                                <StackPanel Spacing="16">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock x:Name="FormTargetName"
+                                                   Grid.Column="0"
+                                                   Text="Menilai: —"
+                                                   Style="{ThemeResource SubtitleTextBlockStyle}"
+                                                   FontWeight="SemiBold"/>
+                                        <Button Grid.Column="1"
+                                                Content="Tutup"
+                                                Click="CloseForm_Click"/>
+                                    </Grid>
+
+                                    <Rectangle Height="1" Fill="{ThemeResource CardStrokeColorDefaultBrush}" Opacity="0.5"/>
+
+                                    <!-- Kriteria slider -->
+                                    <Grid ColumnSpacing="24" RowSpacing="16">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
+
+                                        <!-- Kontribusi -->
+                                        <StackPanel Grid.Row="0" Grid.Column="0" Spacing="6">
+                                            <Grid>
+                                                <TextBlock Text="Kontribusi Kerja"
+                                                           Style="{ThemeResource BodyTextBlockStyle}" FontWeight="SemiBold"/>
+                                                <TextBlock x:Name="ContribScore"
+                                                           HorizontalAlignment="Right"
+                                                           Text="75"
+                                                           Style="{ThemeResource BodyStrongTextBlockStyle}"
+                                                           Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
+                                            </Grid>
+                                            <Slider x:Name="SliderContrib"
+                                                    Minimum="0" Maximum="100" Value="75"
+                                                    StepFrequency="1"
+                                                    TickFrequency="10"
+                                                    ValueChanged="Slider_ValueChanged"
+                                                    Tag="Contrib"/>
+                                        </StackPanel>
+
+                                        <!-- Kerjasama -->
+                                        <StackPanel Grid.Row="0" Grid.Column="1" Spacing="6">
+                                            <Grid>
+                                                <TextBlock Text="Kerjasama Tim"
+                                                           Style="{ThemeResource BodyTextBlockStyle}" FontWeight="SemiBold"/>
+                                                <TextBlock x:Name="CoopScore"
+                                                           HorizontalAlignment="Right"
+                                                           Text="75"
+                                                           Style="{ThemeResource BodyStrongTextBlockStyle}"
+                                                           Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
+                                            </Grid>
+                                            <Slider x:Name="SliderCoop"
+                                                    Minimum="0" Maximum="100" Value="75"
+                                                    StepFrequency="1"
+                                                    TickFrequency="10"
+                                                    ValueChanged="Slider_ValueChanged"
+                                                    Tag="Coop"/>
+                                        </StackPanel>
+
+                                        <!-- Tanggung Jawab -->
+                                        <StackPanel Grid.Row="1" Grid.Column="0" Spacing="6">
+                                            <Grid>
+                                                <TextBlock Text="Tanggung Jawab"
+                                                           Style="{ThemeResource BodyTextBlockStyle}" FontWeight="SemiBold"/>
+                                                <TextBlock x:Name="RespScore"
+                                                           HorizontalAlignment="Right"
+                                                           Text="75"
+                                                           Style="{ThemeResource BodyStrongTextBlockStyle}"
+                                                           Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
+                                            </Grid>
+                                            <Slider x:Name="SliderResp"
+                                                    Minimum="0" Maximum="100" Value="75"
+                                                    StepFrequency="1"
+                                                    TickFrequency="10"
+                                                    ValueChanged="Slider_ValueChanged"
+                                                    Tag="Resp"/>
+                                        </StackPanel>
+
+                                        <!-- Kreativitas -->
+                                        <StackPanel Grid.Row="1" Grid.Column="1" Spacing="6">
+                                            <Grid>
+                                                <TextBlock Text="Kreativitas"
+                                                           Style="{ThemeResource BodyTextBlockStyle}" FontWeight="SemiBold"/>
+                                                <TextBlock x:Name="CreatScore"
+                                                           HorizontalAlignment="Right"
+                                                           Text="75"
+                                                           Style="{ThemeResource BodyStrongTextBlockStyle}"
+                                                           Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
+                                            </Grid>
+                                            <Slider x:Name="SliderCreat"
+                                                    Minimum="0" Maximum="100" Value="75"
+                                                    StepFrequency="1"
+                                                    TickFrequency="10"
+                                                    ValueChanged="Slider_ValueChanged"
+                                                    Tag="Creat"/>
+                                        </StackPanel>
+                                    </Grid>
+
+                                    <!-- Rata-rata preview -->
+                                    <Border Background="{ThemeResource AccentFillColorTertiaryBrush}"
+                                            CornerRadius="6"
+                                            Padding="16,10">
+                                        <Grid>
+                                            <TextBlock Text="Rata-rata Nilai"
+                                                       Style="{ThemeResource BodyStrongTextBlockStyle}"/>
+                                            <TextBlock x:Name="AveragePreview"
+                                                       HorizontalAlignment="Right"
+                                                       Text="75.0"
+                                                       Style="{ThemeResource SubtitleTextBlockStyle}"
+                                                       FontWeight="Bold"
+                                                       Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
+                                        </Grid>
+                                    </Border>
+
+                                    <!-- Komentar -->
+                                    <TextBox x:Name="PeerCommentBox"
+                                             Header="Komentar (opsional)"
+                                             PlaceholderText="Tulis komentar tentang kontribusi rekan ini..."
+                                             AcceptsReturn="True"
+                                             TextWrapping="Wrap"
+                                             MinHeight="70"
+                                             MaxLength="500"/>
+
+                                    <!-- Tombol submit -->
+                                    <Button x:Name="SubmitPeerBtn"
+                                            Content="Kirim Penilaian"
+                                            Style="{ThemeResource AccentButtonStyle}"
+                                            HorizontalAlignment="Right"
+                                            MinWidth="160"
+                                            Click="SubmitPeer_Click"/>
+                                </StackPanel>
+                            </Border>
+
+                        </StackPanel>
+                    </PivotItem>
+
+                    <!-- ── Tab 2: Nilai yang Kamu Terima ─────────────────── -->
+                    <PivotItem Header="Nilai yang Kamu Terima">
+                        <StackPanel Spacing="20" Margin="0,16,0,0">
+
+                            <!-- Summary card -->
+                            <Grid ColumnSpacing="16">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+
+                                <!-- Peer avg -->
+                                <Border Grid.Column="0"
+                                        Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                        BorderThickness="1" CornerRadius="8" Padding="16,14">
+                                    <StackPanel Spacing="4">
+                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                            <FontIcon FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                                                      Glyph="&#xE716;" FontSize="16"
+                                                      Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
+                                            <TextBlock Text="Nilai Peer"
+                                                       Style="{ThemeResource CaptionTextBlockStyle}"
+                                                       Opacity="0.7"/>
+                                        </StackPanel>
+                                        <TextBlock x:Name="MyPeerScore"
+                                                   Text="—"
+                                                   Style="{ThemeResource TitleTextBlockStyle}"
+                                                   FontWeight="Bold"/>
+                                        <TextBlock x:Name="MyPeerCount"
+                                                   Text="0 penilai"
+                                                   Style="{ThemeResource CaptionTextBlockStyle}"
+                                                   Opacity="0.5"/>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- System score -->
+                                <Border Grid.Column="1"
+                                        Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                        BorderThickness="1" CornerRadius="8" Padding="16,14">
+                                    <StackPanel Spacing="4">
+                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                            <FontIcon FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                                                      Glyph="&#xE9D9;" FontSize="16"
+                                                      Foreground="#0078D4"/>
+                                            <TextBlock Text="Nilai Sistem"
+                                                       Style="{ThemeResource CaptionTextBlockStyle}"
+                                                       Opacity="0.7"/>
+                                        </StackPanel>
+                                        <TextBlock x:Name="MySystemScore"
+                                                   Text="—"
+                                                   Style="{ThemeResource TitleTextBlockStyle}"
+                                                   FontWeight="Bold"/>
+                                        <TextBlock Text="Berdasarkan aktivitas"
+                                                   Style="{ThemeResource CaptionTextBlockStyle}"
+                                                   Opacity="0.5"/>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- Lecturer score -->
+                                <Border Grid.Column="2"
+                                        Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                        BorderThickness="1" CornerRadius="8" Padding="16,14">
+                                    <StackPanel Spacing="4">
+                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                            <FontIcon FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                                                      Glyph="&#xE7EF;" FontSize="16"
+                                                      Foreground="#107C10"/>
+                                            <TextBlock Text="Nilai Dosen"
+                                                       Style="{ThemeResource CaptionTextBlockStyle}"
+                                                       Opacity="0.7"/>
+                                        </StackPanel>
+                                        <TextBlock x:Name="MyLecturerScore"
+                                                   Text="Belum"
+                                                   Style="{ThemeResource TitleTextBlockStyle}"
+                                                   FontWeight="Bold"/>
+                                        <TextBlock Text="Dari dosen pengampu"
+                                                   Style="{ThemeResource CaptionTextBlockStyle}"
+                                                   Opacity="0.5"/>
+                                    </StackPanel>
+                                </Border>
+                            </Grid>
+
+                            <!-- Detail peer evaluations diterima -->
+                            <TextBlock Text="Detail Penilaian dari Rekan"
+                                       Style="{ThemeResource BodyStrongTextBlockStyle}"/>
+
+                            <ItemsRepeater x:Name="ReceivedEvalRepeater">
+                                <ItemsRepeater.Layout>
+                                    <StackLayout Spacing="10"/>
+                                </ItemsRepeater.Layout>
+                                <ItemsRepeater.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                                BorderThickness="1" CornerRadius="8" Padding="16,14">
+                                            <Grid ColumnSpacing="16">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+
+                                                <PersonPicture Grid.Column="0"
+                                                               Width="38" Height="38"
+                                                               Initials="{Binding EvaluatorInitials}"/>
+
+                                                <StackPanel Grid.Column="1" Margin="0" VerticalAlignment="Center" Spacing="3">
+                                                    <TextBlock Text="{Binding EvaluatorName}"
+                                                               Style="{ThemeResource BodyStrongTextBlockStyle}"/>
+                                                    <TextBlock Text="{Binding Comment}"
+                                                               Style="{ThemeResource CaptionTextBlockStyle}"
+                                                               Opacity="0.6"
+                                                               MaxLines="2"
+                                                               TextTrimming="CharacterEllipsis"/>
+                                                    <TextBlock Text="{Binding EvaluatedAtStr}"
+                                                               Style="{ThemeResource CaptionTextBlockStyle}"
+                                                               Opacity="0.4"/>
+                                                </StackPanel>
+
+                                                <Border Grid.Column="2"
+                                                        CornerRadius="6"
+                                                        Background="{ThemeResource AccentFillColorTertiaryBrush}"
+                                                        Padding="12,6"
+                                                        VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding ScoreStr}"
+                                                               Style="{ThemeResource SubtitleTextBlockStyle}"
+                                                               FontWeight="Bold"
+                                                               Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
+                                                </Border>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsRepeater.ItemTemplate>
+                            </ItemsRepeater>
+
+                            <!-- Sistem breakdown -->
+                            <TextBlock Text="Detail Penilaian Sistem"
+                                       Style="{ThemeResource BodyStrongTextBlockStyle}"
+                                       Margin="0,8,0,0"/>
+
+                            <Border x:Name="SystemBreakdownCard"
+                                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                    BorderThickness="1" CornerRadius="8" Padding="20,16">
+                                <StackPanel Spacing="12">
+                                    <Grid ColumnSpacing="32">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
+
+                                        <StackPanel Grid.Row="0" Grid.Column="0">
+                                            <TextBlock Text="Jumlah Submit"
+                                                       Style="{ThemeResource CaptionTextBlockStyle}" Opacity="0.6"/>
+                                            <TextBlock x:Name="SysCommits" Text="—"
+                                                       Style="{ThemeResource BodyStrongTextBlockStyle}"/>
+                                        </StackPanel>
+                                        <StackPanel Grid.Row="0" Grid.Column="1">
+                                            <TextBlock Text="File Dimodifikasi"
+                                                       Style="{ThemeResource CaptionTextBlockStyle}" Opacity="0.6"/>
+                                            <TextBlock x:Name="SysFiles" Text="—"
+                                                       Style="{ThemeResource BodyStrongTextBlockStyle}"/>
+                                        </StackPanel>
+                                        <StackPanel Grid.Row="1" Grid.Column="0" Margin="0,8,0,0">
+                                            <TextBlock Text="Tepat Waktu"
+                                                       Style="{ThemeResource CaptionTextBlockStyle}" Opacity="0.6"/>
+                                            <TextBlock x:Name="SysOnTime" Text="—"
+                                                       Style="{ThemeResource BodyStrongTextBlockStyle}"/>
+                                        </StackPanel>
+                                        <StackPanel Grid.Row="1" Grid.Column="1" Margin="0,8,0,0">
+                                            <TextBlock Text="Tasks Selesai"
+                                                       Style="{ThemeResource CaptionTextBlockStyle}" Opacity="0.6"/>
+                                            <TextBlock x:Name="SysTasks" Text="—"
+                                                       Style="{ThemeResource BodyStrongTextBlockStyle}"/>
+                                        </StackPanel>
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+
+                        </StackPanel>
+                    </PivotItem>
+
+                    <!-- ── Tab 3: Recent Activities Kelompok ──────────────── -->
+                    <PivotItem Header="Aktivitas Kelompok">
+                        <StackPanel Spacing="16" Margin="0,16,0,0">
+                            <Grid>
+                                <TextBlock Text="Aktivitas Terbaru Kelompok"
+                                           Style="{ThemeResource BodyStrongTextBlockStyle}"
+                                           VerticalAlignment="Center"/>
+                                <Button HorizontalAlignment="Right"
+                                        Content="Segarkan"
+                                        Click="RefreshActivities_Click"/>
+                            </Grid>
+
+                            <ItemsRepeater x:Name="ActivitiesRepeater">
+                                <ItemsRepeater.Layout>
+                                    <StackLayout Spacing="8"/>
+                                </ItemsRepeater.Layout>
+                                <ItemsRepeater.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                                BorderThickness="1" CornerRadius="7" Padding="14,12">
+                                            <Grid ColumnSpacing="12">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+
+                                                <Border Grid.Column="0"
+                                                        Width="36" Height="36"
+                                                        CornerRadius="18"
+                                                        Background="{ThemeResource AccentFillColorTertiaryBrush}">
+                                                    <FontIcon FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                                                              Glyph="{Binding ActivityIcon}"
+                                                              FontSize="16"
+                                                              Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"
+                                                              HorizontalAlignment="Center"
+                                                              VerticalAlignment="Center"/>
+                                                </Border>
+
+                                                <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                                        <TextBlock Text="{Binding StudentName}"
+                                                                   Style="{ThemeResource BodyStrongTextBlockStyle}"/>
+                                                        <Border Background="{ThemeResource SubtleFillColorSecondaryBrush}"
+                                                                CornerRadius="3" Padding="6,2">
+                                                            <TextBlock Text="{Binding ActivityType}"
+                                                                       Style="{ThemeResource CaptionTextBlockStyle}"
+                                                                       FontWeight="SemiBold"/>
+                                                        </Border>
+                                                    </StackPanel>
+                                                    <TextBlock Text="{Binding Description}"
+                                                               Style="{ThemeResource CaptionTextBlockStyle}"
+                                                               Opacity="0.6"/>
+                                                </StackPanel>
+
+                                                <TextBlock Grid.Column="2"
+                                                           Text="{Binding TimeAgo}"
+                                                           Style="{ThemeResource CaptionTextBlockStyle}"
+                                                           Opacity="0.4"
+                                                           VerticalAlignment="Center"/>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsRepeater.ItemTemplate>
+                            </ItemsRepeater>
+                        </StackPanel>
+                    </PivotItem>
+
+                </Pivot>
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</Page>
