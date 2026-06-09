@@ -189,8 +189,9 @@ namespace TLIGDashboard.Views
 
             var grade = new LecturerGrade
             {
-                LecturerId = "LEC001",
-                LecturerName = "Dosen Pengampu",
+                LecturerId = App.Session.IsSignedIn ? App.Session.Username : "LEC001",
+                LecturerName = App.Session.IsSignedIn && !string.IsNullOrWhiteSpace(App.Session.DisplayName)
+                                   ? App.Session.DisplayName : "Dosen Pengampu",
                 StudentId = _gradingStudentId,
                 StudentName = s?.StudentName ?? _gradingStudentId,
                 AssignmentId = _currentAssignmentId,

@@ -15,18 +15,13 @@ namespace TLIGDashboard.Views
     {
         // ── State ─────────────────────────────────────────────────────────────
         private readonly GradingService _grading = GradingService.Instance;
-        private string _currentStudentId = "STU001";   // Ganti dari sesi login aktif
+        // Gunakan username dari sesi login; fallback ke STU001 untuk demo
+        private string _currentStudentId = App.Session.IsSignedIn ? App.Session.Username : "STU001";
         private string _currentAssignmentId = "ASGN-001";
         private string? _targetStudentId;               // Mahasiswa yang sedang dinilai
 
-        // Demo group members — ganti dengan data kelompok aktual dari DB
-        private readonly List<GroupMemberVM> _groupMembers = new()
-        {
-            new("STU002", "Siti Nurhaliza"),
-            new("STU003", "Ahmad Fauzi"),
-            new("STU004", "Dewi Anggraini"),
-            new("STU005", "Budi Santoso"),
-        };
+        // Group members — loaded from StudentService (excludes current user)
+        private List<GroupMemberVM> _groupMembers = new();
 
         // Demo assignments
         private readonly List<(string Id, string Title)> _assignments = new()
@@ -55,6 +50,12 @@ namespace TLIGDashboard.Views
 
         private async void LoadPageData()
         {
+            await StudentService.Instance.EnsureLoadedAsync();
+            _groupMembers = StudentService.Instance.GetAll()
+                .Where(s => s.Id != _currentStudentId)
+                .Select(s => new GroupMemberVM(s.Id, s.Name))
+                .ToList();
+
             await RefreshPeerTab();
             await RefreshReceivedTab();
             await RefreshActivitiesTab();
@@ -142,7 +143,8 @@ namespace TLIGDashboard.Views
             var eval = new PeerEvaluation
             {
                 EvaluatorId   = _currentStudentId,
-                EvaluatorName = "Saya",   // Dari sesi login
+                EvaluatorName = App.Session.IsSignedIn && !string.IsNullOrWhiteSpace(App.Session.DisplayName)
+                                    ? App.Session.DisplayName : _currentStudentId,
                 EvaluateeId   = _targetStudentId,
                 EvaluateeName = target.StudentName,
                 AssignmentId  = _currentAssignmentId,

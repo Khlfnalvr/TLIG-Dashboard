@@ -47,6 +47,8 @@ public sealed partial class MainWindow : Window
         { "LiveView",  typeof(LiveViewPage) },
         { "LearningAnalytic", typeof(LearningAnalyticPage) },
         { "AI",        typeof(AIPage) },
+        { "GradingStudent",  typeof(GradingStudentPage) },
+        { "GradingLecturer", typeof(GradingLecturerPage) },
         { "Broadcast", typeof(BroadcastSettingsPage) },
         { "UserManagement", typeof(UserManagementPage) }
     };
@@ -781,16 +783,28 @@ public sealed partial class MainWindow : Window
     private void ApplyRoleNavVisibility()
     {
         bool signedIn = !string.IsNullOrWhiteSpace(_loggedInUser);
-        bool showBroadcast = Services.BuildInfo.IsServer && signedIn;
-        bool showUm        = Services.BuildInfo.IsServer && signedIn &&
-                             UserRoles.IsStaff(_loggedInRole);
+        bool isStaff  = UserRoles.IsStaff(_loggedInRole);
 
-        NavBroadcast.Visibility      = showBroadcast ? Visibility.Visible : Visibility.Collapsed;
-        NavUserManagement.Visibility = showUm        ? Visibility.Visible : Visibility.Collapsed;
+        bool showBroadcast = Services.BuildInfo.IsServer && signedIn;
+        bool showUm        = Services.BuildInfo.IsServer && signedIn && isStaff;
+
+        // Penilaian Mahasiswa: hanya tampil saat signed-in sebagai Mahasiswa (client)
+        bool showGradingStudent  = signedIn && !isStaff;
+        // Manajemen Penilaian: hanya tampil saat signed-in sebagai Dosen/Asisten
+        bool showGradingLecturer = signedIn && isStaff;
+
+        NavBroadcast.Visibility        = showBroadcast      ? Visibility.Visible : Visibility.Collapsed;
+        NavUserManagement.Visibility   = showUm             ? Visibility.Visible : Visibility.Collapsed;
+        NavGradingStudent.Visibility   = showGradingStudent  ? Visibility.Visible : Visibility.Collapsed;
+        NavGradingLecturer.Visibility  = showGradingLecturer ? Visibility.Visible : Visibility.Collapsed;
 
         if (!showBroadcast && ReferenceEquals(NavView.SelectedItem, NavBroadcast))
             NavView.SelectedItem = FirstVisibleNavItem();
         if (!showUm && ReferenceEquals(NavView.SelectedItem, NavUserManagement))
+            NavView.SelectedItem = FirstVisibleNavItem();
+        if (!showGradingStudent && ReferenceEquals(NavView.SelectedItem, NavGradingStudent))
+            NavView.SelectedItem = FirstVisibleNavItem();
+        if (!showGradingLecturer && ReferenceEquals(NavView.SelectedItem, NavGradingLecturer))
             NavView.SelectedItem = FirstVisibleNavItem();
     }
 

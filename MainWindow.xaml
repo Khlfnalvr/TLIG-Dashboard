@@ -101,6 +101,28 @@
                     </TextBlock>
                 </NavigationViewItem>
                 <!--
+                    Penilaian Mahasiswa — hanya untuk role Mahasiswa (client).
+                    Disembunyikan saat login sebagai Dosen/Asisten oleh ApplyRoleNavVisibility().
+                -->
+                <NavigationViewItem x:Name="NavGradingStudent" Tag="GradingStudent" MinWidth="0" MinHeight="32" Height="32" Padding="0,0,0,2" VerticalContentAlignment="Center">
+                    <TextBlock Text="Penilaian" FontSize="12" VerticalAlignment="Center">
+                        <TextBlock.RenderTransform>
+                            <TranslateTransform Y="-3"/>
+                        </TextBlock.RenderTransform>
+                    </TextBlock>
+                </NavigationViewItem>
+                <!--
+                    Manajemen Penilaian — hanya untuk role Dosen/Asisten.
+                    Disembunyikan saat login sebagai Mahasiswa oleh ApplyRoleNavVisibility().
+                -->
+                <NavigationViewItem x:Name="NavGradingLecturer" Tag="GradingLecturer" MinWidth="0" MinHeight="32" Height="32" Padding="0,0,0,2" VerticalContentAlignment="Center">
+                    <TextBlock Text="Penilaian" FontSize="12" VerticalAlignment="Center">
+                        <TextBlock.RenderTransform>
+                            <TranslateTransform Y="-3"/>
+                        </TextBlock.RenderTransform>
+                    </TextBlock>
+                </NavigationViewItem>
+                <!--
                     Settings (broadcast + OPC UA + AI) — server flavor only. Declared
                     Visible (see NavUserManagement note) and hidden at load by
                     ApplyRoleNavVisibility().

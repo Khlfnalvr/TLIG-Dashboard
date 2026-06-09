@@ -213,15 +213,8 @@ namespace TLIGDashboard.Services
         //  DEMO DATA SEED
         // ─────────────────────────────────────────────────────────────────────
 
-        private static string GetDemoStudentName(string id) => id switch
-        {
-            "STU001" => "Rizky Pratama",
-            "STU002" => "Siti Nurhaliza",
-            "STU003" => "Ahmad Fauzi",
-            "STU004" => "Dewi Anggraini",
-            "STU005" => "Budi Santoso",
-            _ => id
-        };
+        private static string GetDemoStudentName(string id) =>
+            StudentService.Instance.GetName(id);
 
         private void SeedDemoData()
         {
