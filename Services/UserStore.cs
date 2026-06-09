@@ -219,6 +219,32 @@ public sealed class UserStore
         return (true, null);
     }
 
+    /// <summary>
+    /// Updates the logged-in user's own display name and / or email.
+    /// Email is validated via <see cref="EmailPolicy"/> before being stored.
+    /// Pass <c>null</c> for any field you don't want to change.
+    /// </summary>
+    public (bool ok, string? error) UpdateProfile(string username, string? displayName, string? email)
+    {
+        if (email != null)
+        {
+            var domainErr = EmailPolicy.Validate(email);
+            if (domainErr != null) return (false, domainErr);
+        }
+        lock (_lock)
+        {
+            var u = FindLocked(username);
+            if (u is null) return (false, "Um_ErrUserNotFound");
+            if (!string.IsNullOrWhiteSpace(displayName))
+                u.DisplayName = displayName.Trim();
+            if (email != null)
+                u.Email = EmailPolicy.Normalize(email);
+            SaveLocked();
+        }
+        Changed?.Invoke();
+        return (true, null);
+    }
+
     public (bool ok, string? error) SetEnabled(string username, bool enabled)
     {
         lock (_lock)

@@ -361,15 +361,30 @@
                         <Flyout x:Name="AccountFlyout"
                                 Placement="Bottom"
                                 Opening="AccountFlyout_Opening">
-                            <StackPanel Width="200" Spacing="12">
-                                <StackPanel Spacing="2">
+                            <StackPanel Width="220" Spacing="10">
+                                <!-- User info -->
+                                <StackPanel Spacing="1">
                                     <TextBlock Text="{x:Bind Lang.Account_LoggedInAs, Mode=OneWay}"
-                                               FontSize="11"
-                                               Opacity="0.6"/>
+                                               FontSize="11" Opacity="0.6"/>
                                     <TextBlock x:Name="AccountUsernameText"
-                                               FontSize="13"
-                                               FontWeight="SemiBold"/>
+                                               FontSize="13" FontWeight="SemiBold"/>
+                                    <TextBlock x:Name="AccountEmailText"
+                                               FontSize="11" Opacity="0.5"
+                                               TextTrimming="CharacterEllipsis"/>
                                 </StackPanel>
+                                <Rectangle Height="1" Fill="{ThemeResource CardStrokeColorDefaultBrush}" Opacity="0.5"/>
+                                <!-- Edit profile -->
+                                <Button x:Name="EditProfileBtn"
+                                        HorizontalAlignment="Stretch"
+                                        FontSize="12"
+                                        Click="EditProfileBtn_Click">
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <FontIcon FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                                                  Glyph="&#xE70F;" FontSize="12"/>
+                                        <TextBlock Text="{x:Bind Lang.Profile_EditBtn, Mode=OneWay}"/>
+                                    </StackPanel>
+                                </Button>
+                                <!-- Logout -->
                                 <Button x:Name="LogoutBtn"
                                         HorizontalAlignment="Stretch"
                                         FontSize="12"

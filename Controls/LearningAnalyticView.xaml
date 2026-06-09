@@ -553,7 +553,7 @@
                                                 <ColumnDefinition Width="80"/>
                                                 <ColumnDefinition Width="80"/>
                                                 <ColumnDefinition Width="55"/>
-                                                <ColumnDefinition Width="90"/>
+                                                <ColumnDefinition Width="Auto"/>
                                             </Grid.ColumnDefinitions>
                                             <TextBlock Grid.Column="0" Text="Mahasiswa" FontSize="11" FontWeight="SemiBold"/>
                                             <TextBlock Grid.Column="1" Text="Kelompok" FontSize="11" FontWeight="SemiBold"/>
@@ -579,7 +579,7 @@
                                                             <ColumnDefinition Width="80"/>
                                                             <ColumnDefinition Width="80"/>
                                                             <ColumnDefinition Width="55"/>
-                                                            <ColumnDefinition Width="90"/>
+                                                            <ColumnDefinition Width="Auto"/>
                                                         </Grid.ColumnDefinitions>
                                                         <StackPanel Grid.Column="0" VerticalAlignment="Center">
                                                             <TextBlock Text="{Binding StudentName}" FontSize="13" FontWeight="SemiBold"/>
@@ -594,9 +594,16 @@
                                                                 Background="{Binding GradeBadgeColor}" CornerRadius="4" Padding="7,2">
                                                             <TextBlock Text="{Binding LetterGrade}" FontSize="11" FontWeight="Bold" Foreground="White"/>
                                                         </Border>
-                                                        <Button Grid.Column="7" Tag="{Binding StudentId}" Content="Nilai"
-                                                                HorizontalAlignment="Center" Style="{ThemeResource AccentButtonStyle}"
-                                                                FontSize="12" Padding="10,4" Click="GLecGradeStudent_Click"/>
+                                                        <!-- Aksi: Detail + Nilai -->
+                                                        <StackPanel Grid.Column="7" Orientation="Horizontal" Spacing="6" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                            <Button Tag="{Binding StudentId}" Content="Detail"
+                                                                    FontSize="12" Padding="10,4"
+                                                                    Click="GLecShowDetail_Click"/>
+                                                            <Button Tag="{Binding StudentId}" Content="Nilai"
+                                                                    Style="{ThemeResource AccentButtonStyle}"
+                                                                    FontSize="12" Padding="10,4"
+                                                                    Click="GLecGradeStudent_Click"/>
+                                                        </StackPanel>
                                                     </Grid>
                                                 </DataTemplate>
                                             </ItemsRepeater.ItemTemplate>

@@ -665,6 +665,34 @@ public sealed class LocalizationManager : INotifyPropertyChanged
     public string Um_ErrLastAdmin     => T(nameof(Um_ErrLastAdmin));
     public string Um_ErrInvalidRole   => T(nameof(Um_ErrInvalidRole));
 
+    // ── User Performance page ──────────────────────────────────────────────
+    public string Up_Title           => T(nameof(Up_Title));
+    public string Up_Subtitle        => T(nameof(Up_Subtitle));
+    public string Up_Refresh         => T(nameof(Up_Refresh));
+    public string Up_StatTotalUsers  => T(nameof(Up_StatTotalUsers));
+    public string Up_StatAvgTasks    => T(nameof(Up_StatAvgTasks));
+    public string Up_StatAvgScore    => T(nameof(Up_StatAvgScore));
+    public string Up_StatGraded      => T(nameof(Up_StatGraded));
+    public string Up_ColUser         => T(nameof(Up_ColUser));
+    public string Up_ColProgress     => T(nameof(Up_ColProgress));
+    public string Up_ColSimulation   => T(nameof(Up_ColSimulation));
+    public string Up_ColSystem       => T(nameof(Up_ColSystem));
+    public string Up_ColLecturer     => T(nameof(Up_ColLecturer));
+    public string Up_ColFinal        => T(nameof(Up_ColFinal));
+    public string Up_ColGrade        => T(nameof(Up_ColGrade));
+    public string Up_Empty           => T(nameof(Up_Empty));
+    public string Up_PeerLabel       => T(nameof(Up_PeerLabel));
+
+    // ── Profile edit ──────────────────────────────────────────────────────
+    public string Profile_Title      => T(nameof(Profile_Title));
+    public string Profile_FullName   => T(nameof(Profile_FullName));
+    public string Profile_Email      => T(nameof(Profile_Email));
+    public string Profile_EmailHint  => T(nameof(Profile_EmailHint));
+    public string Profile_Save       => T(nameof(Profile_Save));
+    public string Profile_ErrDomain  => T(nameof(Profile_ErrDomain));
+    public string Profile_Saved      => T(nameof(Profile_Saved));
+    public string Profile_EditBtn    => T(nameof(Profile_EditBtn));
+
     // ══════════════════════════════════════════════════════════════════════
     // Translation table
     // ══════════════════════════════════════════════════════════════════════
@@ -1094,6 +1122,34 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             [nameof(Um_ErrUserNotFound)]  = "User not found.",
             [nameof(Um_ErrLastAdmin)]     = "There must be at least one enabled staff account (Lecturer or Assistant).",
             [nameof(Um_ErrInvalidRole)]   = "Invalid role.",
+
+            // User Performance page
+            [nameof(Up_Title)]          = "User Performance",
+            [nameof(Up_Subtitle)]       = "Simulation results and overall scores per student",
+            [nameof(Up_Refresh)]        = "Refresh",
+            [nameof(Up_StatTotalUsers)] = "Total Users",
+            [nameof(Up_StatAvgTasks)]   = "Avg Task Progress",
+            [nameof(Up_StatAvgScore)]   = "Avg Final Score",
+            [nameof(Up_StatGraded)]     = "Graded",
+            [nameof(Up_ColUser)]        = "User",
+            [nameof(Up_ColProgress)]    = "Task Progress",
+            [nameof(Up_ColSimulation)]  = "Peer / Simulation",
+            [nameof(Up_ColSystem)]      = "System",
+            [nameof(Up_ColLecturer)]    = "Lecturer",
+            [nameof(Up_ColFinal)]       = "Final",
+            [nameof(Up_ColGrade)]       = "Grade",
+            [nameof(Up_Empty)]          = "No users found.",
+            [nameof(Up_PeerLabel)]      = "peer simulation",
+
+            // Profile edit
+            [nameof(Profile_Title)]     = "Edit Profile",
+            [nameof(Profile_FullName)]  = "Full Name",
+            [nameof(Profile_Email)]     = "Email",
+            [nameof(Profile_EmailHint)] = "e.g. name@mhs.its.ac.id or name@ep.itc.ac.id",
+            [nameof(Profile_Save)]      = "Save",
+            [nameof(Profile_ErrDomain)] = "Email must use @its.ac.id or @ep.itc.ac.id domain.",
+            [nameof(Profile_Saved)]     = "Profile updated successfully.",
+            [nameof(Profile_EditBtn)]   = "Edit Profile",
 
             [nameof(Learn_Title)]       = "LEARNING ANALYTIC",
             [nameof(Learn_Status)]      = "Learning Status",
@@ -1631,6 +1687,34 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             [nameof(Um_ErrUserNotFound)]  = "Pengguna tidak ditemukan.",
             [nameof(Um_ErrLastAdmin)]     = "Harus ada minimal satu akun staf aktif (Dosen atau Asisten).",
             [nameof(Um_ErrInvalidRole)]   = "Peran tidak valid.",
+
+            // User Performance page
+            [nameof(Up_Title)]          = "Performa Pengguna",
+            [nameof(Up_Subtitle)]       = "Hasil simulasi dan nilai keseluruhan per mahasiswa",
+            [nameof(Up_Refresh)]        = "Muat Ulang",
+            [nameof(Up_StatTotalUsers)] = "Total Pengguna",
+            [nameof(Up_StatAvgTasks)]   = "Rata-rata Progres Tugas",
+            [nameof(Up_StatAvgScore)]   = "Rata-rata Nilai Akhir",
+            [nameof(Up_StatGraded)]     = "Sudah Dinilai",
+            [nameof(Up_ColUser)]        = "Pengguna",
+            [nameof(Up_ColProgress)]    = "Progres Tugas",
+            [nameof(Up_ColSimulation)]  = "Peer / Simulasi",
+            [nameof(Up_ColSystem)]      = "Sistem",
+            [nameof(Up_ColLecturer)]    = "Dosen",
+            [nameof(Up_ColFinal)]       = "Akhir",
+            [nameof(Up_ColGrade)]       = "Grade",
+            [nameof(Up_Empty)]          = "Tidak ada pengguna ditemukan.",
+            [nameof(Up_PeerLabel)]      = "simulasi peer",
+
+            // Profile edit
+            [nameof(Profile_Title)]     = "Edit Profil",
+            [nameof(Profile_FullName)]  = "Nama Lengkap",
+            [nameof(Profile_Email)]     = "Email",
+            [nameof(Profile_EmailHint)] = "cth. nama@mhs.its.ac.id atau nama@ep.itc.ac.id",
+            [nameof(Profile_Save)]      = "Simpan",
+            [nameof(Profile_ErrDomain)] = "Email harus menggunakan domain @its.ac.id atau @ep.itc.ac.id.",
+            [nameof(Profile_Saved)]     = "Profil berhasil diperbarui.",
+            [nameof(Profile_EditBtn)]   = "Edit Profil",
 
             [nameof(Learn_Title)]       = "LEARNING ANALYTIC",
             [nameof(Learn_Status)]      = "Status Learning",

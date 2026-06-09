@@ -979,6 +979,103 @@ public sealed partial class MainWindow : Window
             ? _loggedInUser
             : Lang.Account_NotLoggedInYet;
         LogoutBtn.Content = isLoggedIn ? (object)Lang.Account_Logout : Lang.Login_Submit;
+
+        // Show email in flyout if available
+        if (App.Session.IsSignedIn)
+        {
+            var u = UserStore.Instance.GetUsers()
+                        .FirstOrDefault(x => x.Username == App.Session.Username);
+            AccountEmailText.Text = string.IsNullOrWhiteSpace(u?.Email) ? "" : u.Email;
+        }
+        else
+        {
+            AccountEmailText.Text = "";
+        }
+
+        EditProfileBtn.IsEnabled = isLoggedIn;
+    }
+
+    private async void EditProfileBtn_Click(object sender, RoutedEventArgs e)
+    {
+        AccountFlyout.Hide();
+
+        if (!App.Session.IsSignedIn) return;
+
+        var user = UserStore.Instance.GetUsers()
+                       .FirstOrDefault(u => u.Username == App.Session.Username);
+        if (user == null) return;
+
+        // ── Build dialog ────────────────────────────────────────────────
+        var nameBox = new TextBox
+        {
+            Header      = Lang.Profile_FullName,
+            Text        = user.DisplayName,
+            PlaceholderText = "Nama Lengkap",
+            Margin      = new Microsoft.UI.Xaml.Thickness(0, 0, 0, 12),
+        };
+
+        var emailBox = new TextBox
+        {
+            Header          = Lang.Profile_Email,
+            Text            = user.Email,
+            PlaceholderText = Lang.Profile_EmailHint,
+            InputScope      = new Microsoft.UI.Xaml.Input.InputScope
+            {
+                Names = { new Microsoft.UI.Xaml.Input.InputScopeName(
+                    Microsoft.UI.Xaml.Input.InputScopeNameValue.EmailSmtpAddress) },
+            },
+        };
+
+        var infoBar = new InfoBar { IsClosable = false, IsOpen = false };
+
+        var content = new StackPanel { Width = 380, Spacing = 0 };
+        content.Children.Add(nameBox);
+        content.Children.Add(emailBox);
+        content.Children.Add(infoBar);
+
+        var dialog = new ContentDialog
+        {
+            Title             = Lang.Profile_Title,
+            Content           = content,
+            PrimaryButtonText = Lang.Profile_Save,
+            CloseButtonText   = Lang.Um_Cancel,
+            DefaultButton     = ContentDialogButton.Primary,
+            XamlRoot          = Content.XamlRoot,
+        };
+
+        var result = await dialog.ShowAsync();
+        if (result != ContentDialogResult.Primary) return;
+
+        string newName  = nameBox.Text.Trim();
+        string newEmail = emailBox.Text.Trim();
+
+        // (email domain validation is also done in UpdateProfile — skip early check here)
+
+        // Apply changes via UserStore (validates + persists)
+        string? nameArg  = string.IsNullOrWhiteSpace(newName)  ? null : newName;
+        string? emailArg = string.IsNullOrWhiteSpace(newEmail) ? null : newEmail;
+
+        var (ok, err) = UserStore.Instance.UpdateProfile(App.Session.Username, nameArg, emailArg);
+        if (!ok)
+        {
+            // Show error — re-open dialog
+            infoBar.Severity = InfoBarSeverity.Error;
+            infoBar.Title    = err == "Signup_ErrEmailDomain" ? Lang.Profile_ErrDomain : (err ?? "Error");
+            infoBar.IsOpen   = true;
+            dialog.Content   = new StackPanel { Width = 380, Spacing = 0,
+                Children = { nameBox, emailBox, infoBar } };
+            await dialog.ShowAsync();
+            return;
+        }
+
+        // Update session display name
+        if (!string.IsNullOrEmpty(nameArg))
+        {
+            _loggedInUser = nameArg;
+            App.Session.UpdateDisplayName(nameArg);
+        }
+
+        UpdateAccountFlyoutText();
     }
 
     private void LogoutBtn_Click(object sender, RoutedEventArgs e)

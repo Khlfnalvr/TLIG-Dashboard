@@ -243,6 +243,33 @@ namespace TLIGDashboard.Models
     }
 
     // ─────────────────────────────────────────────────────────────────────────
+    //  SimulationResult — hasil sesi simulasi plant per mahasiswa
+    // ─────────────────────────────────────────────────────────────────────────
+
+    public class SimulationResult
+    {
+        public string   Id             { get; set; } = Guid.NewGuid().ToString();
+        public string   StudentId      { get; set; } = "";
+        public string   StudentName    { get; set; } = "";
+        public string   SessionName    { get; set; } = "";
+        public string   AssignmentId   { get; set; } = "";
+        public DateTime StartedAt      { get; set; } = DateTime.Now;
+        public DateTime FinishedAt     { get; set; } = DateTime.Now;
+        public double   Score          { get; set; }            // 0–100
+        public int      ParametersHit  { get; set; }
+        public int      ParametersTotal { get; set; }
+        public double   StabilityIndex { get; set; }            // 0–1
+        public string   Notes          { get; set; } = "";
+
+        public TimeSpan Duration      => FinishedAt > StartedAt ? FinishedAt - StartedAt : TimeSpan.Zero;
+        public string   DurationStr   => $"{(int)Duration.TotalMinutes}m {Duration.Seconds}s";
+        public string   ScoreStr      => Score.ToString("F1");
+        public string   ParameterStr  => $"{ParametersHit}/{ParametersTotal}";
+        public string   StartedAtStr  => StartedAt.ToString("dd MMM yyyy");
+        public string   StabilityStr  => $"{StabilityIndex * 100:F0}%";
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
     //  GroupActivity — aktivitas per mahasiswa dalam tugas kelompok
     // ─────────────────────────────────────────────────────────────────────────
 

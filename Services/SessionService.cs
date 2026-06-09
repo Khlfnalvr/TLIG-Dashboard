@@ -49,6 +49,14 @@ public sealed class SessionService
         Changed?.Invoke();
     }
 
+    /// <summary>Updates display name in-place without re-authenticating.</summary>
+    public void UpdateDisplayName(string displayName)
+    {
+        if (!IsSignedIn) return;
+        DisplayName = string.IsNullOrWhiteSpace(displayName) ? Username : displayName.Trim();
+        Changed?.Invoke();
+    }
+
     public void SignOut()
     {
         Username = DisplayName = Role = "";

@@ -25,6 +25,7 @@ namespace TLIGDashboard.Services
         private readonly List<SystemEvaluation> _systemEvaluations = new();
         private readonly List<LecturerGrade> _lecturerGrades = new();
         private readonly List<GroupActivity> _groupActivities = new();
+        private readonly List<SimulationResult> _simulationResults = new();
 
         private GradingService()
         {
@@ -210,6 +211,13 @@ namespace TLIGDashboard.Services
         }
 
         // ─────────────────────────────────────────────────────────────────────
+        //  SIMULATION RESULTS
+        // ─────────────────────────────────────────────────────────────────────
+
+        public Task<List<SimulationResult>> GetSimulationResultsForStudentAsync(string studentId)
+            => Task.FromResult(_simulationResults.Where(r => r.StudentId == studentId).ToList());
+
+        // ─────────────────────────────────────────────────────────────────────
         //  DEMO DATA SEED
         // ─────────────────────────────────────────────────────────────────────
 
@@ -273,6 +281,41 @@ namespace TLIGDashboard.Services
                     TasksTotal = acts.Count + rnd.Next(0, 3),
                     GeneratedAt = DateTime.Now.AddHours(-2)
                 });
+            }
+
+            // ── Simulation Results ───────────────────────────────────────────
+            var sessions = new[]
+            {
+                ("PID Control — Sesi 1",      6, 8, 0.85, -48),
+                ("Heat Exchanger Simulation",  4, 6, 0.72, -72),
+                ("PID Control — Sesi 2",      7, 8, 0.91, -24),
+                ("Level Control",             5, 6, 0.78, -96),
+                ("Pressure Control",          3, 6, 0.60, -120),
+            };
+
+            foreach (var sid in students)
+            {
+                int sessCount = rnd.Next(1, 4);
+                var picked = sessions.OrderBy(_ => rnd.Next()).Take(sessCount);
+                foreach (var (name, hit, total, stab, hoursAgo) in picked)
+                {
+                    var start = DateTime.Now.AddHours(hoursAgo + rnd.Next(-4, 4));
+                    int durMin = rnd.Next(18, 55);
+                    double score = 55 + rnd.NextDouble() * 40;
+                    _simulationResults.Add(new SimulationResult
+                    {
+                        StudentId      = sid,
+                        StudentName    = GetDemoStudentName(sid),
+                        SessionName    = name,
+                        AssignmentId   = assignId,
+                        StartedAt      = start,
+                        FinishedAt     = start.AddMinutes(durMin),
+                        Score          = score,
+                        ParametersHit  = hit,
+                        ParametersTotal = total,
+                        StabilityIndex = stab + rnd.NextDouble() * 0.08 - 0.04,
+                    });
+                }
             }
 
             // ── Peer Evaluations (sebagian sudah ada) ────────────────────────

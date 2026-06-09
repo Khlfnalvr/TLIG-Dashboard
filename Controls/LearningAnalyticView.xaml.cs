@@ -445,6 +445,19 @@ public sealed partial class LearningAnalyticView : UserControl
         }).ToList();
     }
 
+    private async void GLecShowDetail_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button btn) return;
+        string? studentId = btn.Tag?.ToString();
+        if (string.IsNullOrEmpty(studentId)) return;
+
+        var summaries = await _grading.GetGradeSummaryByAssignmentAsync(_gradingAssignmentId);
+        string studentName = summaries.FirstOrDefault(s => s.StudentId == studentId)?.StudentName
+                             ?? studentId;
+
+        await StudentDetailDialog.ShowAsync(XamlRoot, studentId, studentName, _gradingAssignmentId);
+    }
+
     private async void GLecGradeStudent_Click(object sender, RoutedEventArgs e)
     {
         if (sender is not Button btn) return;
