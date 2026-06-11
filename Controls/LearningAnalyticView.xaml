@@ -754,6 +754,97 @@
                 </StackPanel>
             </Border>
 
+            <!-- ═══ DAFTAR KELAS (Class Roster) — visible to all ═══ -->
+            <Border Style="{StaticResource LDCard}">
+                <StackPanel Spacing="12">
+                    <!-- Header -->
+                    <Grid>
+                        <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                            <Border Width="38" Height="38" CornerRadius="10" Background="{StaticResource TintPurple}">
+                                <FontIcon FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" Glyph="&#xE902;"
+                                          FontSize="17" Foreground="{StaticResource AccentPurple}"/>
+                            </Border>
+                            <StackPanel VerticalAlignment="Center" Spacing="1">
+                                <TextBlock Text="{x:Bind Lang.Roster_Title, Mode=OneWay}" Style="{StaticResource LDCardTitle}"/>
+                                <TextBlock x:Name="RosterSubtitle" Text="" Style="{StaticResource LDMuted}"/>
+                            </StackPanel>
+                        </StackPanel>
+                        <Button HorizontalAlignment="Right" VerticalAlignment="Center"
+                                FontSize="12" Padding="10,4" Click="RosterRefresh_Click">
+                            <FontIcon FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" Glyph="&#xE72C;" FontSize="12"/>
+                        </Button>
+                    </Grid>
+
+                    <!-- Table -->
+                    <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                            BorderThickness="1" CornerRadius="8">
+                        <StackPanel>
+                            <!-- Column header -->
+                            <Grid Padding="14,10" Background="{ThemeResource SubtleFillColorSecondaryBrush}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="36"/>
+                                    <ColumnDefinition Width="180"/>
+                                    <ColumnDefinition Width="100"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="90"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="{x:Bind Lang.Roster_ColNo, Mode=OneWay}"    FontSize="11" FontWeight="SemiBold"/>
+                                <TextBlock Grid.Column="1" Text="{x:Bind Lang.Roster_ColName, Mode=OneWay}"  FontSize="11" FontWeight="SemiBold"/>
+                                <TextBlock Grid.Column="2" Text="{x:Bind Lang.Roster_ColClass, Mode=OneWay}" FontSize="11" FontWeight="SemiBold"/>
+                                <TextBlock Grid.Column="3" Text="{x:Bind Lang.Roster_ColEmail, Mode=OneWay}" FontSize="11" FontWeight="SemiBold"/>
+                                <TextBlock Grid.Column="4" Text="{x:Bind Lang.Roster_ColSystem, Mode=OneWay}" FontSize="11" FontWeight="SemiBold" HorizontalAlignment="Center"/>
+                            </Grid>
+                            <Rectangle Height="1" Fill="{ThemeResource CardStrokeColorDefaultBrush}"/>
+
+                            <!-- Rows -->
+                            <ItemsRepeater x:Name="RosterRepeater">
+                                <ItemsRepeater.Layout><StackLayout/></ItemsRepeater.Layout>
+                                <ItemsRepeater.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid Padding="14,10" BorderThickness="0,0,0,1"
+                                              BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="36"/>
+                                                <ColumnDefinition Width="180"/>
+                                                <ColumnDefinition Width="100"/>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="90"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="{Binding RowNumber}"
+                                                       FontSize="12" Opacity="0.5" VerticalAlignment="Center"/>
+                                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
+                                                <TextBlock Text="{Binding DisplayName}" FontSize="13" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                                                <TextBlock Text="{Binding Username}"    FontSize="11" Opacity="0.5"/>
+                                            </StackPanel>
+                                            <TextBlock Grid.Column="2" Text="{Binding Kelas}"
+                                                       FontSize="13" VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Column="3" Text="{Binding Email}"
+                                                       FontSize="12" Opacity="0.7" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                            <Border Grid.Column="4" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                    Background="{ThemeResource AccentFillColorTertiaryBrush}"
+                                                    CornerRadius="6" Padding="10,4">
+                                                <TextBlock Text="{Binding SystemScoreStr}"
+                                                           FontSize="13" FontWeight="SemiBold"
+                                                           HorizontalAlignment="Center"
+                                                           Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
+                                            </Border>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsRepeater.ItemTemplate>
+                            </ItemsRepeater>
+
+                            <!-- Empty state -->
+                            <TextBlock x:Name="RosterEmptyText"
+                                       Text="{x:Bind Lang.Roster_NoData, Mode=OneWay}"
+                                       FontSize="13" Opacity="0.6"
+                                       Visibility="Collapsed"
+                                       Margin="14,12"/>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </Border>
+
         </StackPanel>
     </ScrollViewer>
 </UserControl>
