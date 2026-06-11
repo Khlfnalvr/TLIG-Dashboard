@@ -11,9 +11,17 @@ public sealed class UserRow
 {
     public string Username      { get; init; } = "";
     public string DisplayName   { get; init; } = "";
+    public string Nrp           { get; init; } = "";
+    public string Kelas         { get; init; } = "";
+    public string NrpKelasLabel { get; init; } = "";   // combined display string
     public string RoleLabel     { get; init; } = "";
     public string StatusLabel   { get; init; } = "";
     public string LastLoginText { get; init; } = "";
+
+    // Visibility helpers for XAML x:Bind
+    public Visibility NrpVisible          { get; init; } = Visibility.Collapsed;
+    public Visibility KelasVisible        { get; init; } = Visibility.Collapsed;
+    public Visibility EmptyNrpKelasVisible { get; init; } = Visibility.Visible;
 
     // Action button captions (resolved at build time, re-resolved on language change).
     public string ResetLabel    { get; init; } = "";
@@ -61,10 +69,22 @@ public sealed partial class UserManagementPage : Page
         foreach (var u in UserStore.Instance.GetUsers()
                      .OrderBy(u => u.Username, StringComparer.OrdinalIgnoreCase))
         {
+            var nrpKelas = new System.Text.StringBuilder();
+            if (!string.IsNullOrWhiteSpace(u.Nrp))   nrpKelas.Append(u.Nrp);
+            if (!string.IsNullOrWhiteSpace(u.Kelas))  nrpKelas.Append(nrpKelas.Length > 0 ? $" · {u.Kelas}" : u.Kelas);
+
+            bool hasNrp   = !string.IsNullOrWhiteSpace(u.Nrp);
+            bool hasKelas = !string.IsNullOrWhiteSpace(u.Kelas);
             _rows.Add(new UserRow
             {
                 Username      = u.Username,
                 DisplayName   = u.DisplayName,
+                Nrp           = u.Nrp,
+                Kelas         = u.Kelas,
+                NrpKelasLabel = nrpKelas.ToString(),
+                NrpVisible            = hasNrp   ? Visibility.Visible : Visibility.Collapsed,
+                KelasVisible          = hasKelas ? Visibility.Visible : Visibility.Collapsed,
+                EmptyNrpKelasVisible  = (!hasNrp && !hasKelas) ? Visibility.Visible : Visibility.Collapsed,
                 RoleLabel     = RoleLabel(u.Role),
                 StatusLabel   = u.Enabled ? Lang.Um_Enabled : Lang.Um_Disabled,
                 LastLoginText = u.LastLoginUtc is null
@@ -93,18 +113,30 @@ public sealed partial class UserManagementPage : Page
         var userBox   = new TextBox     { Header = Lang.Um_FieldUsername };
         var nameBox   = new TextBox     { Header = Lang.Um_FieldDisplayName };
         var passBox   = new PasswordBox { Header = Lang.Um_FieldPassword };
+        var nrpBox    = new TextBox     { Header = "NRP (Nomor Registrasi Pokok)", PlaceholderText = "mis. 05211940000001" };
+        var kelasBox  = new TextBox     { Header = "Kelas", PlaceholderText = "mis. TK-3A" };
         var roleCombo = BuildRoleCombo(UserRoles.Mahasiswa);
 
-        var panel = new StackPanel { Spacing = 12, MinWidth = 320 };
+        var nrpKelasRow = new Grid { ColumnSpacing = 12 };
+        nrpKelasRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new Microsoft.UI.Xaml.GridLength(1, Microsoft.UI.Xaml.GridUnitType.Star) });
+        nrpKelasRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new Microsoft.UI.Xaml.GridLength(1, Microsoft.UI.Xaml.GridUnitType.Star) });
+        Grid.SetColumn(nrpBox,   0);
+        Grid.SetColumn(kelasBox, 1);
+        nrpKelasRow.Children.Add(nrpBox);
+        nrpKelasRow.Children.Add(kelasBox);
+
+        var panel = new StackPanel { Spacing = 12, MinWidth = 360 };
         panel.Children.Add(userBox);
         panel.Children.Add(nameBox);
         panel.Children.Add(passBox);
+        panel.Children.Add(nrpKelasRow);
         panel.Children.Add(roleCombo);
 
         if (await ShowFormAsync(Lang.Um_DlgAddTitle, panel) != ContentDialogResult.Primary) return;
 
         var (ok, err) = UserStore.Instance.AddUser(
-            userBox.Text, passBox.Password, nameBox.Text, SelectedRole(roleCombo));
+            userBox.Text, passBox.Password, nameBox.Text, SelectedRole(roleCombo),
+            nrpBox.Text, kelasBox.Text);
         if (!ok) await ShowErrorAsync(err);
     }
 
@@ -131,15 +163,27 @@ public sealed partial class UserManagementPage : Page
         if (u is null) return;
 
         var nameBox   = new TextBox { Header = Lang.Um_FieldDisplayName, Text = u.DisplayName };
+        var nrpBox    = new TextBox { Header = "NRP", Text = u.Nrp,   PlaceholderText = "mis. 05211940000001" };
+        var kelasBox  = new TextBox { Header = "Kelas", Text = u.Kelas, PlaceholderText = "mis. TK-3A" };
         var roleCombo = BuildRoleCombo(u.Role);
 
-        var panel = new StackPanel { Spacing = 12, MinWidth = 320 };
+        var nrpKelasRow = new Grid { ColumnSpacing = 12 };
+        nrpKelasRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new Microsoft.UI.Xaml.GridLength(1, Microsoft.UI.Xaml.GridUnitType.Star) });
+        nrpKelasRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new Microsoft.UI.Xaml.GridLength(1, Microsoft.UI.Xaml.GridUnitType.Star) });
+        Grid.SetColumn(nrpBox,   0);
+        Grid.SetColumn(kelasBox, 1);
+        nrpKelasRow.Children.Add(nrpBox);
+        nrpKelasRow.Children.Add(kelasBox);
+
+        var panel = new StackPanel { Spacing = 12, MinWidth = 360 };
         panel.Children.Add(nameBox);
+        panel.Children.Add(nrpKelasRow);
         panel.Children.Add(roleCombo);
 
         if (await ShowFormAsync(Lang.Um_DlgEditTitle, panel) != ContentDialogResult.Primary) return;
 
-        var (ok, err) = UserStore.Instance.UpdateUser(username, nameBox.Text, SelectedRole(roleCombo));
+        var (ok, err) = UserStore.Instance.UpdateUser(
+            username, nameBox.Text, SelectedRole(roleCombo), nrpBox.Text, kelasBox.Text);
         if (!ok) await ShowErrorAsync(err);
     }
 

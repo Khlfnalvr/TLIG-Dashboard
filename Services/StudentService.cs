@@ -6,8 +6,12 @@ namespace TLIGDashboard.Services;
 
 public sealed class StudentInfo
 {
-    public string Id   { get; set; } = "";
-    public string Name { get; set; } = "";
+    public string Id      { get; set; } = "";
+    public string Name    { get; set; } = "";
+    /// <summary>Nomor Registrasi Pokok, e.g. "05211940000001".</summary>
+    public string Nrp     { get; set; } = "";
+    /// <summary>Class / cohort, e.g. "TK-3A".</summary>
+    public string Kelas   { get; set; } = "";
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? GroupId { get; set; }
 }
@@ -32,11 +36,11 @@ public sealed class StudentService
     // ── Default seed data ────────────────────────────────────────────────────
     private static readonly List<StudentInfo> _defaults = new()
     {
-        new() { Id = "STU001", Name = "Rizky Pratama",   GroupId = "GRP-01" },
-        new() { Id = "STU002", Name = "Siti Nurhaliza",  GroupId = "GRP-01" },
-        new() { Id = "STU003", Name = "Ahmad Fauzi",     GroupId = "GRP-01" },
-        new() { Id = "STU004", Name = "Dewi Anggraini",  GroupId = "GRP-01" },
-        new() { Id = "STU005", Name = "Budi Santoso",    GroupId = "GRP-01" },
+        new() { Id = "STU001", Name = "Rizky Pratama",   Nrp = "05211940000001", Kelas = "TK-3A", GroupId = "GRP-01" },
+        new() { Id = "STU002", Name = "Siti Nurhaliza",  Nrp = "05211940000002", Kelas = "TK-3A", GroupId = "GRP-01" },
+        new() { Id = "STU003", Name = "Ahmad Fauzi",     Nrp = "05211940000003", Kelas = "TK-3B", GroupId = "GRP-01" },
+        new() { Id = "STU004", Name = "Dewi Anggraini",  Nrp = "05211940000004", Kelas = "TK-3B", GroupId = "GRP-01" },
+        new() { Id = "STU005", Name = "Budi Santoso",    Nrp = "05211940000005", Kelas = "TK-3A", GroupId = "GRP-01" },
     };
 
     // ── Load / Save ──────────────────────────────────────────────────────────
@@ -57,7 +61,7 @@ public sealed class StudentService
         if (_students == null || _students.Count == 0)
         {
             _students = new(_defaults.Select(s => new StudentInfo
-                { Id = s.Id, Name = s.Name, GroupId = s.GroupId }));
+                { Id = s.Id, Name = s.Name, Nrp = s.Nrp, Kelas = s.Kelas, GroupId = s.GroupId }));
             await SaveAsync();
         }
     }
@@ -80,6 +84,18 @@ public sealed class StudentService
 
     public IReadOnlyList<StudentInfo> GetByGroup(string groupId) =>
         GetAll().Where(s => s.GroupId == groupId).ToList();
+
+    public IReadOnlyList<StudentInfo> GetByKelas(string kelas) =>
+        GetAll().Where(s => string.Equals(s.Kelas, kelas, StringComparison.OrdinalIgnoreCase)).ToList();
+
+    /// <summary>Returns all distinct kelas values, sorted alphabetically.</summary>
+    public IReadOnlyList<string> GetDistinctKelas() =>
+        GetAll()
+            .Select(s => s.Kelas)
+            .Where(k => !string.IsNullOrWhiteSpace(k))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(k => k)
+            .ToList();
 
     public string GetName(string id)
     {

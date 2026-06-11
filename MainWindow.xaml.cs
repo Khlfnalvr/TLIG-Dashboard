@@ -672,7 +672,7 @@ public sealed partial class MainWindow : Window
             sv.ServerUsername = account.Username;
             AppSettingsService.Save(sv);
 
-            OnLoginSucceeded(account.Username, account.DisplayName, account.Role);
+            OnLoginSucceeded(account.Username, account.DisplayName, account.Role, account.Nrp, account.Kelas);
             return;
         }
 
@@ -711,11 +711,12 @@ public sealed partial class MainWindow : Window
         _ = ConnectClientStreamAsync(s.ServerHost, result.Token);
     }
 
-    private void OnLoginSucceeded(string accountName, string displayName, string role)
+    private void OnLoginSucceeded(string accountName, string displayName, string role,
+                                   string nrp = "", string kelas = "")
     {
         _loggedInUser = string.IsNullOrWhiteSpace(displayName) ? accountName : displayName;
         _loggedInRole = role;
-        App.Session.SignIn(accountName, displayName, role);
+        App.Session.SignIn(accountName, displayName, role, nrp, kelas);
         UpdateAccountFlyoutText();
         ApplyRoleNavVisibility();
         LoginErrorText.Visibility = Visibility.Collapsed;

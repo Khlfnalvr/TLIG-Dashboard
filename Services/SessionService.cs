@@ -23,6 +23,10 @@ public sealed class SessionService
     public string Username    { get; private set; } = "";
     public string DisplayName { get; private set; } = "";
     public string Role        { get; private set; } = "";
+    /// <summary>Nomor Registrasi Pokok (NRP) of the signed-in user. Empty for staff.</summary>
+    public string Nrp         { get; private set; } = "";
+    /// <summary>Class / cohort of the signed-in user, e.g. "TK-3A". Empty for staff.</summary>
+    public string Kelas       { get; private set; } = "";
 
     public bool IsSignedIn => !string.IsNullOrWhiteSpace(Username);
 
@@ -41,11 +45,14 @@ public sealed class SessionService
     /// <summary>Raised whenever the signed-in identity changes (sign in / sign out).</summary>
     public event Action? Changed;
 
-    public void SignIn(string username, string displayName, string role)
+    public void SignIn(string username, string displayName, string role,
+                       string nrp = "", string kelas = "")
     {
         Username    = (username ?? "").Trim();
         DisplayName = string.IsNullOrWhiteSpace(displayName) ? Username : displayName.Trim();
-        Role        = role ?? "";
+        Role        = role  ?? "";
+        Nrp         = (nrp   ?? "").Trim();
+        Kelas       = (kelas  ?? "").Trim();
         Changed?.Invoke();
     }
 
@@ -59,7 +66,7 @@ public sealed class SessionService
 
     public void SignOut()
     {
-        Username = DisplayName = Role = "";
+        Username = DisplayName = Role = Nrp = Kelas = "";
         Changed?.Invoke();
     }
 }

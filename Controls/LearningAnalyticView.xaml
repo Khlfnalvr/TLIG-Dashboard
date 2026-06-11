@@ -217,6 +217,11 @@
                             </StackPanel>
                         </StackPanel>
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" VerticalAlignment="Center">
+                            <!-- Kelas filter (hanya tampil untuk Dosen) -->
+                            <ComboBox x:Name="KelasFilterCombo" MinWidth="110" FontSize="12"
+                                      Visibility="Collapsed"
+                                      SelectionChanged="KelasFilterCombo_SelectionChanged"
+                                      ToolTipService.ToolTip="Filter berdasarkan kelas"/>
                             <ComboBox x:Name="GradingAssignmentCombo" MinWidth="220" FontSize="12"
                                       SelectionChanged="GradingAssignmentCombo_SelectionChanged"/>
                             <Button x:Name="ManageStudentsBtn" FontSize="12" Padding="10,4"

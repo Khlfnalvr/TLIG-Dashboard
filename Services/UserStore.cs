@@ -69,6 +69,11 @@ public sealed class UserAccount
     public bool      Enabled      { get; set; } = true;
     public DateTime  CreatedUtc   { get; set; } = DateTime.UtcNow;
     public DateTime? LastLoginUtc { get; set; }
+
+    /// <summary>Nomor Registrasi Pokok — student ID number (optional for staff).</summary>
+    public string Nrp   { get; set; } = "";
+    /// <summary>Class / cohort the student belongs to, e.g. "TK-3A".</summary>
+    public string Kelas { get; set; } = "";
 }
 
 /// <summary>On-disk envelope for the user database (allows future migrations).</summary>
@@ -139,7 +144,9 @@ public sealed class UserStore
     // ── Management operations (used by the User Management page) ────────────────
     // Each returns (ok, errorKey) where errorKey is a localization key on failure.
 
-    public (bool ok, string? error) AddUser(string username, string password, string displayName, string role)
+    public (bool ok, string? error) AddUser(
+        string username, string password, string displayName, string role,
+        string nrp = "", string kelas = "")
     {
         username = (username ?? "").Trim();
         if (string.IsNullOrWhiteSpace(username)) return (false, "Um_ErrUsernameEmpty");
@@ -148,7 +155,10 @@ public sealed class UserStore
         lock (_lock)
         {
             if (FindLocked(username) is not null) return (false, "Um_ErrUserExists");
-            _file.Users.Add(CreateUser(username, password, displayName, role));
+            var u = CreateUser(username, password, displayName, role);
+            u.Nrp   = (nrp   ?? "").Trim();
+            u.Kelas = (kelas  ?? "").Trim();
+            _file.Users.Add(u);
             SaveLocked();
         }
         Changed?.Invoke();
@@ -201,7 +211,9 @@ public sealed class UserStore
         return (true, null);
     }
 
-    public (bool ok, string? error) UpdateUser(string username, string displayName, string role)
+    public (bool ok, string? error) UpdateUser(
+        string username, string displayName, string role,
+        string nrp = "", string kelas = "")
     {
         if (!UserRoles.IsValid(role)) return (false, "Um_ErrInvalidRole");
         lock (_lock)
@@ -213,6 +225,8 @@ public sealed class UserStore
                 return (false, "Um_ErrLastAdmin");
             u.DisplayName = string.IsNullOrWhiteSpace(displayName) ? u.Username : displayName.Trim();
             u.Role        = role;
+            u.Nrp         = (nrp   ?? "").Trim();
+            u.Kelas       = (kelas  ?? "").Trim();
             SaveLocked();
         }
         Changed?.Invoke();
@@ -354,6 +368,8 @@ public sealed class UserStore
         Enabled      = u.Enabled,
         CreatedUtc   = u.CreatedUtc,
         LastLoginUtc = u.LastLoginUtc,
+        Nrp          = u.Nrp,
+        Kelas        = u.Kelas,
     };
 
     // ── Password hashing (PBKDF2-SHA256, per-user random salt) ──────────────────

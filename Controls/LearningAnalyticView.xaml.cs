@@ -34,6 +34,8 @@ public sealed partial class LearningAnalyticView : UserControl
     private string _gradingAssignmentId = "ASGN-001";
     private string? _peerTargetStudentId;
     private string? _lecGradingStudentId;
+    /// <summary>Currently selected kelas filter; null = semua kelas.</summary>
+    private string? _selectedKelas;
 
     private readonly List<(string Id, string Title)> _assignments = new()
     {
@@ -169,6 +171,11 @@ public sealed partial class LearningAnalyticView : UserControl
             StudentGradingPivot.Visibility  = Visibility.Collapsed;
             LecturerGradingPivot.Visibility = Visibility.Visible;
             ManageStudentsBtn.Visibility    = Visibility.Visible;
+
+            // Populate kelas filter combo
+            PopulateKelasCombo();
+            KelasFilterCombo.Visibility = Visibility.Visible;
+
             await LoadLecturerGradingAsync();
         }
         else
@@ -177,6 +184,7 @@ public sealed partial class LearningAnalyticView : UserControl
             LecturerGradingPivot.Visibility = Visibility.Collapsed;
             StudentGradingPivot.Visibility  = Visibility.Visible;
             ManageStudentsBtn.Visibility    = Visibility.Collapsed;
+            KelasFilterCombo.Visibility     = Visibility.Collapsed;
 
             // Load group members excluding the current user
             _groupMembers = StudentService.Instance.GetAll()
@@ -199,6 +207,48 @@ public sealed partial class LearningAnalyticView : UserControl
 
     private void GradingRefresh_Click(object sender, RoutedEventArgs e)
         => _ = LoadGradingSectionAsync();
+
+    private void PopulateKelasCombo()
+    {
+        // Detach event to avoid recursive calls while populating
+        KelasFilterCombo.SelectionChanged -= KelasFilterCombo_SelectionChanged;
+        KelasFilterCombo.Items.Clear();
+
+        KelasFilterCombo.Items.Add(new ComboBoxItem { Content = "Semua Kelas", Tag = (string?)null });
+        foreach (var k in StudentService.Instance.GetDistinctKelas())
+            KelasFilterCombo.Items.Add(new ComboBoxItem { Content = k, Tag = k });
+
+        // Re-select previously chosen kelas, or default to "Semua"
+        int idx = 0;
+        if (_selectedKelas != null)
+        {
+            for (int i = 1; i < KelasFilterCombo.Items.Count; i++)
+            {
+                if ((KelasFilterCombo.Items[i] as ComboBoxItem)?.Tag as string == _selectedKelas)
+                { idx = i; break; }
+            }
+        }
+        KelasFilterCombo.SelectedIndex = idx;
+        KelasFilterCombo.SelectionChanged += KelasFilterCombo_SelectionChanged;
+    }
+
+    private void KelasFilterCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        _selectedKelas = (KelasFilterCombo.SelectedItem as ComboBoxItem)?.Tag as string;
+        _ = LoadLecturerGradingAsync();
+    }
+
+    /// <summary>
+    /// Returns the filtered student list for lecturer view.
+    /// If _selectedKelas is null, returns all students.
+    /// </summary>
+    private IReadOnlyList<StudentInfo> GetFilteredStudents()
+    {
+        var all = StudentService.Instance.GetAll();
+        return _selectedKelas == null
+            ? all
+            : all.Where(s => string.Equals(s.Kelas, _selectedKelas, StringComparison.OrdinalIgnoreCase)).ToList();
+    }
 
     // ═══════════════════════════════════════════════════════════════════
     //  MAHASISWA — student grading
@@ -383,7 +433,16 @@ public sealed partial class LearningAnalyticView : UserControl
 
     private async System.Threading.Tasks.Task RefreshLecSummaryAsync()
     {
-        var summaries = await _grading.GetGradeSummaryByAssignmentAsync(_gradingAssignmentId);
+        var allSummaries = await _grading.GetGradeSummaryByAssignmentAsync(_gradingAssignmentId);
+
+        // Apply kelas filter: keep only students in selected kelas
+        var filteredIds = _selectedKelas == null
+            ? null
+            : GetFilteredStudents().Select(s => s.Id).ToHashSet();
+        var summaries = filteredIds == null
+            ? allSummaries
+            : allSummaries.Where(s => filteredIds.Contains(s.StudentId)).ToList();
+
         GLecStatTotal.Text  = summaries.Count.ToString();
         GLecStatGraded.Text = summaries.Count(s => s.LecturerScore.HasValue).ToString();
         var withFinal = summaries.Where(s => s.FinalScore.HasValue).ToList();
@@ -394,7 +453,14 @@ public sealed partial class LearningAnalyticView : UserControl
 
     private async System.Threading.Tasks.Task RefreshLecPeerAsync()
     {
-        var evals = await _grading.GetPeerEvaluationsByAssignmentAsync(_gradingAssignmentId);
+        var allEvals = await _grading.GetPeerEvaluationsByAssignmentAsync(_gradingAssignmentId);
+        var filteredIds = _selectedKelas == null
+            ? null
+            : GetFilteredStudents().Select(s => s.Id).ToHashSet();
+        var evals = filteredIds == null
+            ? allEvals
+            : allEvals.Where(e => filteredIds.Contains(e.EvaluateeId)).ToList();
+
         GLecPeerRepeater.ItemsSource = evals
             .OrderByDescending(e => e.EvaluatedAt)
             .Select(e => new GLecPeerVm
@@ -410,7 +476,14 @@ public sealed partial class LearningAnalyticView : UserControl
 
     private async System.Threading.Tasks.Task RefreshLecSystemAsync()
     {
-        var evals = await _grading.GetSystemEvaluationsByAssignmentAsync(_gradingAssignmentId);
+        var allEvals = await _grading.GetSystemEvaluationsByAssignmentAsync(_gradingAssignmentId);
+        var filteredIds = _selectedKelas == null
+            ? null
+            : GetFilteredStudents().Select(s => s.Id).ToHashSet();
+        var evals = filteredIds == null
+            ? allEvals
+            : allEvals.Where(e => filteredIds.Contains(e.StudentId)).ToList();
+
         GLecSystemRepeater.ItemsSource = evals
             .OrderByDescending(e => e.Score)
             .Select(e => new GLecSystemVm
@@ -433,7 +506,13 @@ public sealed partial class LearningAnalyticView : UserControl
 
     private async System.Threading.Tasks.Task RefreshLecActivitiesAsync()
     {
-        var acts = await _grading.GetGroupActivitiesAsync(_gradingAssignmentId, 50);
+        var allActs = await _grading.GetGroupActivitiesAsync(_gradingAssignmentId, 50);
+        var filteredIds = _selectedKelas == null
+            ? null
+            : GetFilteredStudents().Select(s => s.Id).ToHashSet();
+        var acts = filteredIds == null
+            ? allActs
+            : allActs.Where(a => filteredIds.Contains(a.StudentId)).ToList();
         GLecActivitiesRepeater.ItemsSource = acts.Select(a => new GLecActivityVm
         {
             StudentName   = a.StudentName,
