@@ -162,7 +162,8 @@
                                         BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                                         BorderThickness="1" CornerRadius="4"
                                         MinHeight="30" HorizontalAlignment="Stretch">
-                                    <TextBlock Text="{x:Bind Lang.Blk_Setpoint, Mode=OneWay}"
+                                    <TextBlock x:Name="BlkSetpointLabel"
+                                               Text="{x:Bind Lang.Blk_Setpoint, Mode=OneWay}"
                                                FontSize="10" Opacity="0.72"
                                                HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                 </Border>
@@ -182,7 +183,8 @@
                                         BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                                         BorderThickness="1" CornerRadius="4"
                                         MinHeight="30" HorizontalAlignment="Stretch">
-                                    <TextBlock Text="{x:Bind Lang.Blk_Plant, Mode=OneWay}"
+                                    <TextBlock x:Name="BlkPlantLabel"
+                                               Text="{x:Bind Lang.Blk_Plant, Mode=OneWay}"
                                                FontSize="10" Opacity="0.72"
                                                HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                 </Border>
@@ -356,7 +358,8 @@
 
                         <!-- Setpoint -->
                         <StackPanel Grid.Column="0" Spacing="8" VerticalAlignment="Top">
-                            <TextBlock Text="{x:Bind Lang.Ctl_Setpoint, Mode=OneWay}"
+                            <TextBlock x:Name="CtlSetpointLabel"
+                                       Text="{x:Bind Lang.Ctl_Setpoint, Mode=OneWay}"
                                        FontSize="11" FontWeight="SemiBold" Opacity="0.65"/>
                             <Grid ColumnSpacing="8">
                                 <Grid.ColumnDefinitions>

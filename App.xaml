@@ -180,6 +180,17 @@
                 </Setter>
             </Style>
 
+            <!-- System Model Selector flyout presenter — dark themed popup -->
+            <Style x:Key="SmsFlyoutStyle" TargetType="FlyoutPresenter">
+                <Setter Property="Background"      Value="#12121F"/>
+                <Setter Property="BorderBrush"     Value="#7c3aed"/>
+                <Setter Property="BorderThickness" Value="1"/>
+                <Setter Property="CornerRadius"    Value="12"/>
+                <Setter Property="Padding"         Value="12"/>
+                <Setter Property="MinWidth"        Value="320"/>
+                <Setter Property="MaxWidth"        Value="380"/>
+            </Style>
+
             <!-- Dashboard semantic colours — intentionally fixed (same in both themes) -->
             <SolidColorBrush x:Key="DashRunBrush"       Color="#FF0B7F14"/>
             <SolidColorBrush x:Key="DashStopBrush"      Color="#FFC5221F"/>

@@ -80,6 +80,26 @@ public sealed partial class DashboardPage : Page
         }
 
         ActualThemeChanged += OnActualThemeChanged;
+
+        // Subscribe to simulation type changes so all HMI labels update.
+        App.SimType.SimulationTypeChanged += OnSimulationTypeChanged;
+        ApplySimulationType(App.SimType.CurrentType);
+    }
+
+    private void OnSimulationTypeChanged(object? sender, Services.SimulationType type)
+        => DispatcherQueue.TryEnqueue(() => ApplySimulationType(type));
+
+    private void ApplySimulationType(Services.SimulationType type)
+    {
+        var svc = App.SimType;
+        // Block diagram labels
+        if (BlkSetpointLabel != null) BlkSetpointLabel.Text = svc.SetpointLabel;
+        if (BlkPlantLabel    != null) BlkPlantLabel.Text    = svc.PlantLabel;
+        // Control panel label + unit
+        if (CtlSetpointLabel != null) CtlSetpointLabel.Text = svc.SetpointLabel;
+        if (CtlSetpointUnit  != null) CtlSetpointUnit.Text  = svc.ProcessVariableUnit;
+        // Transfer function with actual K and tau
+        if (TransferFunctionText != null) TransferFunctionText.Text = svc.TransferFunctionText;
     }
 
     private void OnActualThemeChanged(FrameworkElement sender, object args)
@@ -111,6 +131,7 @@ public sealed partial class DashboardPage : Page
     {
         base.OnNavigatedFrom(e);
         _isDashboardPageActive = false;
+        App.SimType.SimulationTypeChanged -= OnSimulationTypeChanged;
 
         if (_clientMode)
         {

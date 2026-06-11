@@ -13,7 +13,7 @@ namespace TLIGDashboard.Services;
 /// compiled in both flavors; <c>#if SERVER/CLIENT</c> is used only for branding.
 /// </summary>
 internal static class BuildInfo
-{
+{  
 #if SERVER
     public const bool   IsServer    = true;
     public const string Flavor      = "Server";

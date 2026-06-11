@@ -29,6 +29,16 @@ public partial class App : Application
     /// </summary>
     public static Services.SessionService Session { get; } = Services.SessionService.Instance;
 
+    /// <summary>
+    /// Active simulation type (Flow / Level / Temperature). All HMI pages
+    /// subscribe to <see cref="Services.SimulationTypeService.SimulationTypeChanged"/>
+    /// so they update their labels and units whenever the user switches process.
+    /// </summary>
+    public static Services.SimulationTypeService SimType { get; } = Services.SimulationTypeService.Instance;
+
+    /// <summary>Latest PID step-response metrics written by DashboardPage simulation runs.</summary>
+    public static Services.PidMetricsService PidMetrics { get; } = Services.PidMetricsService.Instance;
+
     public App()
     {
         InitializeComponent();

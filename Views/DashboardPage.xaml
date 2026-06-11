@@ -156,9 +156,15 @@
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                     Padding="10,0,6,0">
                 <Grid>
-                    <TextBlock Text="{x:Bind Lang.Panel_ModelSistem, Mode=OneWay}"
-                               Style="{StaticResource DashPanelHeaderStyle}"
-                               VerticalAlignment="Center"/>
+                    <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                        <TextBlock Text="{x:Bind Lang.Panel_ModelSistem, Mode=OneWay}"
+                                   Style="{StaticResource DashPanelHeaderStyle}"
+                                   VerticalAlignment="Center"/>
+                        <!-- Simulation type card-selector -->
+                        <controls:SystemModelSelectorControl
+                                  x:Name="SimSelector"
+                                  VerticalAlignment="Center"/>
+                    </StackPanel>
                     <Button x:Name="LeftFullscreenBtn"
                             Width="18" Height="18"
                             HorizontalAlignment="Right"
@@ -199,7 +205,7 @@
                                         <ColumnDefinition Width="1.1*"/>
                                     </Grid.ColumnDefinitions>
                                     <Border Grid.Column="0" Style="{StaticResource DashInputBoxStyle}" MinHeight="34" HorizontalAlignment="Stretch">
-                                        <TextBlock Text="{x:Bind Lang.Blk_Setpoint, Mode=OneWay}" Style="{StaticResource DashTinyLabelStyle}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        <TextBlock x:Name="BlkSetpointLabel" Text="{x:Bind Lang.Blk_Setpoint, Mode=OneWay}" Style="{StaticResource DashTinyLabelStyle}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                     </Border>
                                     <TextBlock Grid.Column="1" Text=">" Opacity="0.55" VerticalAlignment="Center"/>
                                     <Border Grid.Column="2" Style="{StaticResource DashInputBoxStyle}" MinHeight="34" HorizontalAlignment="Stretch">
@@ -207,7 +213,7 @@
                                     </Border>
                                     <TextBlock Grid.Column="3" Text=">" Opacity="0.55" VerticalAlignment="Center"/>
                                     <Border Grid.Column="4" Style="{StaticResource DashInputBoxStyle}" MinHeight="34" HorizontalAlignment="Stretch">
-                                        <TextBlock Text="{x:Bind Lang.Blk_Plant, Mode=OneWay}" Style="{StaticResource DashTinyLabelStyle}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        <TextBlock x:Name="BlkPlantLabel" Text="{x:Bind Lang.Blk_Plant, Mode=OneWay}" Style="{StaticResource DashTinyLabelStyle}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                     </Border>
                                 </Grid>
                             </Border>
@@ -326,7 +332,8 @@
                                        Text="{x:Bind Lang.Panel_TransferFunction, Mode=OneWay}"
                                        Style="{StaticResource DashCardTitleStyle}"/>
                             <Border Grid.Row="1" Style="{StaticResource DashInputBoxStyle}" Padding="10">
-                                <TextBlock Text="G(s) = K / (tau s + 1)"
+                                <TextBlock x:Name="TransferFunctionText"
+                                           Text="G(s) = K / (tau s + 1)"
                                            FontFamily="Consolas"
                                            FontSize="12"
                                            Opacity="0.72"
@@ -350,7 +357,8 @@
 
                                 <Border Grid.Column="0" Style="{StaticResource DashCardStyle}" Padding="8">
                                     <StackPanel Spacing="8">
-                                        <TextBlock Text="{x:Bind Lang.Ctl_Setpoint, Mode=OneWay}"
+                                        <TextBlock x:Name="CtlSetpointLabel"
+                                                   Text="{x:Bind Lang.Ctl_Setpoint, Mode=OneWay}"
                                                    Style="{StaticResource DashCardTitleStyle}"/>
                                         <Grid ColumnSpacing="6">
                                             <Grid.ColumnDefinitions>
@@ -361,7 +369,9 @@
                                                         SpinButtonPlacementMode="Compact"
                                                         FontSize="11"
                                                         Style="{StaticResource DashNumberBoxStyle}"/>
-                                            <TextBlock Grid.Column="1" Text="&#176;C"
+                                            <TextBlock x:Name="CtlSetpointUnit"
+                                                       Grid.Column="1"
+                                                       Text="&#176;C"
                                                        Style="{StaticResource DashTinyLabelStyle}"
                                                        VerticalAlignment="Center"/>
                                         </Grid>

@@ -607,6 +607,7 @@ public sealed partial class MainWindow : Window
     public void NavigateToTaskDetail(string taskId)
         => ContentFrame.Navigate(typeof(Views.TaskDetailPage), taskId);
 
+    // ── Simulation type selector ──────────────────────────────────────────
     // ── Login ─────────────────────────────────────────────────────────────
     // The server flavor authenticates against the local user database; the client
     // flavor authenticates against a remote server (address entered in the popup)

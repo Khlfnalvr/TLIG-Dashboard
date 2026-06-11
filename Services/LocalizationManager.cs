@@ -614,6 +614,15 @@ public sealed class LocalizationManager : INotifyPropertyChanged
     public string Tunnel_LoginUrlHint    => T(nameof(Tunnel_LoginUrlHint));
     public string Tunnel_DomainRequired  => T(nameof(Tunnel_DomainRequired));
 
+    // ── Challenge Learning ────────────────────────────────────────────────
+    public string Nav_ChallengeLearning => T(nameof(Nav_ChallengeLearning));
+
+    // ── Simulation type selector ──────────────────────────────────────────
+    public string Sim_SelectType    => T(nameof(Sim_SelectType));
+    public string Sim_Flow          => T(nameof(Sim_Flow));
+    public string Sim_Level         => T(nameof(Sim_Level));
+    public string Sim_Temperature   => T(nameof(Sim_Temperature));
+
     // ── Settings page (server-only full configuration) ────────────────────────
     public string Nav_Settings         => T(nameof(Nav_Settings));
     public string Settings_Subtitle    => T(nameof(Settings_Subtitle));
@@ -1966,6 +1975,12 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             ["Alert_TempCriticalBody"] = "Sensor {0} at {1:F0}C - exceeds {2:F0}C cutoff",
             ["Alert_TempWarningBody"] = "Sensor {0} at {1:F0}C - exceeds {2:F0}C warning",
             ["Alert_ImbalanceBody"] = "Delta {0:F1}mV - exceeds {1:F0}mV threshold",
+
+            [nameof(Nav_ChallengeLearning)] = "Challenge",
+            [nameof(Sim_SelectType)]   = "Simulation Type",
+            [nameof(Sim_Flow)]         = "Flow",
+            [nameof(Sim_Level)]        = "Level",
+            [nameof(Sim_Temperature)]  = "Temperature",
         },
         ["id"] = new()
         {
@@ -2102,6 +2117,12 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             ["Alert_TempCriticalBody"] = "Sensor {0} pada {1:F0}C - melebihi cutoff {2:F0}C",
             ["Alert_TempWarningBody"] = "Sensor {0} pada {1:F0}C - melebihi peringatan {2:F0}C",
             ["Alert_ImbalanceBody"] = "Delta {0:F1}mV - melebihi ambang {1:F0}mV",
+
+            [nameof(Nav_ChallengeLearning)] = "Challenge",
+            [nameof(Sim_SelectType)]   = "Tipe Simulasi",
+            [nameof(Sim_Flow)]         = "Aliran",
+            [nameof(Sim_Level)]        = "Level",
+            [nameof(Sim_Temperature)]  = "Temperatur",
         },
     };
 }
