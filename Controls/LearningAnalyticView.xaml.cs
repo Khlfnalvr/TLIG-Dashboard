@@ -794,16 +794,25 @@ public sealed partial class LearningAnalyticView : UserControl
     //  DAFTAR KELAS (Class Roster)
     // ═══════════════════════════════════════════════════════════════════
 
+    private static readonly string[] _rosterClasses = ["A", "B", "C", "D", "E"];
+
     private void RosterRefresh_Click(object sender, RoutedEventArgs e)
+        => _ = LoadRosterAsync();
+
+    private void RosterPivot_SelectionChanged(object sender, SelectionChangedEventArgs e)
         => _ = LoadRosterAsync();
 
     private async System.Threading.Tasks.Task LoadRosterAsync()
     {
-        // All student accounts from UserStore
+        // Determine active class from pivot selection (default A)
+        int idx = RosterPivot.SelectedIndex < 0 ? 0 : RosterPivot.SelectedIndex;
+        string activeClass = _rosterClasses[Math.Min(idx, _rosterClasses.Length - 1)];
+
+        // Student accounts for the selected class
         var users = UserStore.Instance.GetUsers()
-            .Where(u => UserRoles.IsStudent(u.Role) && u.Enabled)
-            .OrderBy(u => string.IsNullOrEmpty(u.Kelas) ? "zzz" : u.Kelas)
-            .ThenBy(u => u.DisplayName)
+            .Where(u => UserRoles.IsStudent(u.Role) && u.Enabled &&
+                        string.Equals(u.Kelas, activeClass, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(u => u.DisplayName)
             .ToList();
 
         // Grade summaries — carries GroupName per student
@@ -823,16 +832,16 @@ public sealed partial class LearningAnalyticView : UserControl
                 RowNumber   = i + 1,
                 Username    = u.Username,
                 DisplayName = string.IsNullOrWhiteSpace(u.DisplayName) ? u.Username : u.DisplayName,
-                Kelas       = string.IsNullOrWhiteSpace(u.Kelas) ? "—" : u.Kelas,
+                Kelas       = activeClass,
                 Group       = string.IsNullOrWhiteSpace(grp) ? "—" : grp,
                 Email       = string.IsNullOrWhiteSpace(u.Email) ? "—" : u.Email,
                 ScoreStr    = ev is not null ? ev.Score.ToString("F1") : "—",
             };
         }).ToList();
 
-        RosterRepeater.ItemsSource = rows;
+        RosterRepeater.ItemsSource  = rows;
         RosterEmptyText.Visibility  = rows.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
-        RosterSubtitle.Text         = $"{rows.Count} mahasiswa";
+        RosterSubtitle.Text         = $"Class {activeClass} — {rows.Count} student{(rows.Count == 1 ? "" : "s")}";
     }
 
     private Brush Res(string key) => (Brush)Resources[key];
