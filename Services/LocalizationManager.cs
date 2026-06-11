@@ -725,8 +725,9 @@ public sealed class LocalizationManager : INotifyPropertyChanged
     public string Roster_ColNo     => T(nameof(Roster_ColNo));
     public string Roster_ColName   => T(nameof(Roster_ColName));
     public string Roster_ColClass  => T(nameof(Roster_ColClass));
+    public string Roster_ColGroup  => T(nameof(Roster_ColGroup));
     public string Roster_ColEmail  => T(nameof(Roster_ColEmail));
-    public string Roster_ColSystem => T(nameof(Roster_ColSystem));
+    public string Roster_ColScore  => T(nameof(Roster_ColScore));
     public string Roster_NoData    => T(nameof(Roster_NoData));
 
     // ══════════════════════════════════════════════════════════════════════
@@ -1202,7 +1203,7 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             [nameof(Onboarding_Subtitle)]    = "Please fill in your class and student ID so your results can be tracked properly.",
             [nameof(Onboarding_Kelas)]       = "Class (Kelas)",
             [nameof(Onboarding_NRP)]         = "Student ID (NRP)",
-            [nameof(Onboarding_KelasSample)] = "e.g. TK-3A",
+            [nameof(Onboarding_KelasSample)] = "Select class",
             [nameof(Onboarding_Save)]        = "Save & Continue",
 
             // Class Roster
@@ -1210,8 +1211,9 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             [nameof(Roster_ColNo)]     = "No.",
             [nameof(Roster_ColName)]   = "Name",
             [nameof(Roster_ColClass)]  = "Class",
+            [nameof(Roster_ColGroup)]  = "Group",
             [nameof(Roster_ColEmail)]  = "Email",
-            [nameof(Roster_ColSystem)] = "System Score",
+            [nameof(Roster_ColScore)]  = "Score",
             [nameof(Roster_NoData)]    = "No student data available.",
 
             [nameof(Learn_Title)]       = "LEARNING ANALYTIC",
@@ -1794,7 +1796,7 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             [nameof(Onboarding_Subtitle)]    = "Isi kelas dan NRP agar hasil simulasi kamu bisa dilacak dengan benar.",
             [nameof(Onboarding_Kelas)]       = "Kelas",
             [nameof(Onboarding_NRP)]         = "NRP (Nomor Registrasi Pokok)",
-            [nameof(Onboarding_KelasSample)] = "cth. TK-3A",
+            [nameof(Onboarding_KelasSample)] = "Pilih kelas",
             [nameof(Onboarding_Save)]        = "Simpan & Lanjutkan",
 
             // Class Roster (Daftar Kelas)
@@ -1802,8 +1804,9 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             [nameof(Roster_ColNo)]     = "No.",
             [nameof(Roster_ColName)]   = "Nama",
             [nameof(Roster_ColClass)]  = "Kelas",
+            [nameof(Roster_ColGroup)]  = "Kelompok",
             [nameof(Roster_ColEmail)]  = "Email",
-            [nameof(Roster_ColSystem)] = "Nilai Sistem",
+            [nameof(Roster_ColScore)]  = "Score",
             [nameof(Roster_NoData)]    = "Belum ada data mahasiswa.",
 
             [nameof(Learn_Title)]       = "LEARNING ANALYTIC",

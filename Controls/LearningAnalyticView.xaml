@@ -784,16 +784,18 @@
                             <Grid Padding="14,10" Background="{ThemeResource SubtleFillColorSecondaryBrush}">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="36"/>
-                                    <ColumnDefinition Width="180"/>
-                                    <ColumnDefinition Width="100"/>
-                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="160"/>
+                                    <ColumnDefinition Width="70"/>
                                     <ColumnDefinition Width="90"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="70"/>
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="{x:Bind Lang.Roster_ColNo, Mode=OneWay}"    FontSize="11" FontWeight="SemiBold"/>
-                                <TextBlock Grid.Column="1" Text="{x:Bind Lang.Roster_ColName, Mode=OneWay}"  FontSize="11" FontWeight="SemiBold"/>
-                                <TextBlock Grid.Column="2" Text="{x:Bind Lang.Roster_ColClass, Mode=OneWay}" FontSize="11" FontWeight="SemiBold"/>
-                                <TextBlock Grid.Column="3" Text="{x:Bind Lang.Roster_ColEmail, Mode=OneWay}" FontSize="11" FontWeight="SemiBold"/>
-                                <TextBlock Grid.Column="4" Text="{x:Bind Lang.Roster_ColSystem, Mode=OneWay}" FontSize="11" FontWeight="SemiBold" HorizontalAlignment="Center"/>
+                                <TextBlock Grid.Column="0" Text="{x:Bind Lang.Roster_ColNo, Mode=OneWay}"     FontSize="11" FontWeight="SemiBold"/>
+                                <TextBlock Grid.Column="1" Text="{x:Bind Lang.Roster_ColName, Mode=OneWay}"   FontSize="11" FontWeight="SemiBold"/>
+                                <TextBlock Grid.Column="2" Text="{x:Bind Lang.Roster_ColClass, Mode=OneWay}"  FontSize="11" FontWeight="SemiBold"/>
+                                <TextBlock Grid.Column="3" Text="{x:Bind Lang.Roster_ColGroup, Mode=OneWay}"  FontSize="11" FontWeight="SemiBold"/>
+                                <TextBlock Grid.Column="4" Text="{x:Bind Lang.Roster_ColEmail, Mode=OneWay}"  FontSize="11" FontWeight="SemiBold"/>
+                                <TextBlock Grid.Column="5" Text="{x:Bind Lang.Roster_ColScore, Mode=OneWay}"  FontSize="11" FontWeight="SemiBold" HorizontalAlignment="Center"/>
                             </Grid>
                             <Rectangle Height="1" Fill="{ThemeResource CardStrokeColorDefaultBrush}"/>
 
@@ -806,10 +808,11 @@
                                               BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}">
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="36"/>
-                                                <ColumnDefinition Width="180"/>
-                                                <ColumnDefinition Width="100"/>
-                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="160"/>
+                                                <ColumnDefinition Width="70"/>
                                                 <ColumnDefinition Width="90"/>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="70"/>
                                             </Grid.ColumnDefinitions>
                                             <TextBlock Grid.Column="0" Text="{Binding RowNumber}"
                                                        FontSize="12" Opacity="0.5" VerticalAlignment="Center"/>
@@ -818,13 +821,15 @@
                                                 <TextBlock Text="{Binding Username}"    FontSize="11" Opacity="0.5"/>
                                             </StackPanel>
                                             <TextBlock Grid.Column="2" Text="{Binding Kelas}"
-                                                       FontSize="13" VerticalAlignment="Center"/>
-                                            <TextBlock Grid.Column="3" Text="{Binding Email}"
+                                                       FontSize="13" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                                            <TextBlock Grid.Column="3" Text="{Binding Group}"
+                                                       FontSize="12" Opacity="0.7" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                                            <TextBlock Grid.Column="4" Text="{Binding Email}"
                                                        FontSize="12" Opacity="0.7" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
-                                            <Border Grid.Column="4" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                            <Border Grid.Column="5" HorizontalAlignment="Center" VerticalAlignment="Center"
                                                     Background="{ThemeResource AccentFillColorTertiaryBrush}"
-                                                    CornerRadius="6" Padding="10,4">
-                                                <TextBlock Text="{Binding SystemScoreStr}"
+                                                    CornerRadius="6" Padding="8,3">
+                                                <TextBlock Text="{Binding ScoreStr}"
                                                            FontSize="13" FontWeight="SemiBold"
                                                            HorizontalAlignment="Center"
                                                            Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>

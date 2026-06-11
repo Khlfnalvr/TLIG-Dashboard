@@ -806,21 +806,27 @@ public sealed partial class LearningAnalyticView : UserControl
             .ThenBy(u => u.DisplayName)
             .ToList();
 
-        // System scores from grading service
+        // Grade summaries — carries GroupName per student
+        var summaries = await _grading.GetGradeSummaryByAssignmentAsync(_gradingAssignmentId);
+        var groupMap  = summaries.ToDictionary(s => s.StudentId, s => s.GroupName, StringComparer.OrdinalIgnoreCase);
+
+        // System scores
         var sysEvals = await _grading.GetSystemEvaluationsByAssignmentAsync(_gradingAssignmentId);
         var sysMap   = sysEvals.ToDictionary(e => e.StudentId, StringComparer.OrdinalIgnoreCase);
 
         var rows = users.Select((u, i) =>
         {
             sysMap.TryGetValue(u.Username, out var ev);
+            groupMap.TryGetValue(u.Username, out var grp);
             return new RosterRowVm
             {
-                RowNumber      = i + 1,
-                Username       = u.Username,
-                DisplayName    = string.IsNullOrWhiteSpace(u.DisplayName) ? u.Username : u.DisplayName,
-                Kelas          = string.IsNullOrWhiteSpace(u.Kelas) ? "—" : u.Kelas,
-                Email          = string.IsNullOrWhiteSpace(u.Email) ? "—" : u.Email,
-                SystemScoreStr = ev is not null ? ev.Score.ToString("F1") : "—",
+                RowNumber   = i + 1,
+                Username    = u.Username,
+                DisplayName = string.IsNullOrWhiteSpace(u.DisplayName) ? u.Username : u.DisplayName,
+                Kelas       = string.IsNullOrWhiteSpace(u.Kelas) ? "—" : u.Kelas,
+                Group       = string.IsNullOrWhiteSpace(grp) ? "—" : grp,
+                Email       = string.IsNullOrWhiteSpace(u.Email) ? "—" : u.Email,
+                ScoreStr    = ev is not null ? ev.Score.ToString("F1") : "—",
             };
         }).ToList();
 
@@ -957,12 +963,13 @@ internal class GLecActivityVm
 /// <summary>Row in the Daftar Kelas (Class Roster) table.</summary>
 internal class RosterRowVm
 {
-    public int    RowNumber     { get; init; }
-    public string Username      { get; init; } = "";
-    public string DisplayName   { get; init; } = "";
-    public string Kelas         { get; init; } = "";
-    public string Email         { get; init; } = "";
-    public string SystemScoreStr { get; init; } = "";
+    public int    RowNumber  { get; init; }
+    public string Username   { get; init; } = "";
+    public string DisplayName { get; init; } = "";
+    public string Kelas      { get; init; } = "";
+    public string Group      { get; init; } = "";
+    public string Email      { get; init; } = "";
+    public string ScoreStr   { get; init; } = "";
 }
 
 /// <summary>Editable row used inside the Kelola Mahasiswa dialog.</summary>

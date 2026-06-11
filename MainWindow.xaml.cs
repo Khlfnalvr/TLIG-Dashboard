@@ -733,12 +733,16 @@ public sealed partial class MainWindow : Window
 
     private async System.Threading.Tasks.Task ShowOnboardingDialogAsync(string username)
     {
-        var kelasBox = new TextBox
+        var kelasBox = new ComboBox
         {
-            Header       = Lang.Onboarding_Kelas,
-            PlaceholderText = Lang.Onboarding_KelasSample,
-            Text         = App.Session.Kelas,
+            Header              = Lang.Onboarding_Kelas,
+            PlaceholderText     = Lang.Onboarding_KelasSample,
+            HorizontalAlignment = Microsoft.UI.Xaml.HorizontalAlignment.Stretch,
         };
+        foreach (var k in new[] { "A", "B", "C", "D" })
+            kelasBox.Items.Add(k);
+        if (!string.IsNullOrEmpty(App.Session.Kelas))
+            kelasBox.SelectedItem = App.Session.Kelas;
         var nrpBox = new TextBox
         {
             Header       = Lang.Onboarding_NRP,
@@ -771,7 +775,7 @@ public sealed partial class MainWindow : Window
 
         if (res != ContentDialogResult.Primary) return;
 
-        var kelas = kelasBox.Text.Trim();
+        var kelas = kelasBox.SelectedItem?.ToString()?.Trim() ?? "";
         var nrp   = nrpBox.Text.Trim();
         if (string.IsNullOrEmpty(kelas) && string.IsNullOrEmpty(nrp)) return;
 
