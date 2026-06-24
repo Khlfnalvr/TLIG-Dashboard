@@ -210,6 +210,29 @@ public sealed partial class ChallengeLearningPage : Page
 
         // Submissions table
         RebuildSubmissionsTable(ch);
+
+        // Activity log
+        BuildAdminActivityLog(ch);
+    }
+
+    private void BuildAdminActivityLog(Challenge ch)
+    {
+#if SERVER
+        var logs = ActivityStore.Instance.GetAll()
+            .Where(a => a.Category == ActivityCategory.TaskSubmission
+                     && a.RelatedId == ch.Id.ToString())
+            .OrderByDescending(a => a.TimestampUtc)
+            .ToList();
+
+        AdminActivityLogPanel.Children.Clear();
+        AdminActivityEmptyText.Visibility = logs.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        foreach (var log in logs)
+            AdminActivityLogPanel.Children.Add(BuildActivityRow(log));
+#else
+        AdminActivityLogPanel.Children.Clear();
+        AdminActivityEmptyText.Visibility = Visibility.Visible;
+        AdminActivityEmptyText.Text = "Log aktivitas submission tersedia di mode Server.";
+#endif
     }
 
     private void RebuildSubmissionsTable(Challenge ch)
@@ -328,6 +351,86 @@ public sealed partial class ChallengeLearningPage : Page
         AttachLabel.Text   = mySub?.AttachmentFileName ?? "";
         SubmitBtn.Content  = mySub != null ? "Update Jawaban" : "Kirim Jawaban";
         SubmitStatusText.Text = "";
+
+        // Activity log
+        BuildStudentActivityLog(ch);
+    }
+
+    private void BuildStudentActivityLog(Challenge ch)
+    {
+#if CLIENT
+        var logs = ActivityStore.Instance.GetAll()
+            .Where(a => a.Category is ActivityCategory.ControlParameter
+                                   or ActivityCategory.Simulation
+                                   or ActivityCategory.AIInteraction)
+            .OrderByDescending(a => a.TimestampUtc)
+            .Take(50)
+            .ToList();
+
+        StudentActivityLogPanel.Children.Clear();
+        StudentActivityEmptyText.Visibility = logs.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        foreach (var log in logs)
+            StudentActivityLogPanel.Children.Add(BuildActivityRow(log));
+#else
+        StudentActivityLogPanel.Children.Clear();
+        StudentActivityEmptyText.Visibility = Visibility.Visible;
+        StudentActivityEmptyText.Text = "Log aktivitas parameter/simulasi/AI tersedia di mode Client.";
+#endif
+    }
+
+    private Border BuildActivityRow(ActivityLog log)
+    {
+        var row = new Border
+        {
+            Background = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["CardBackgroundFillColorDefaultBrush"],
+            BorderBrush = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(6),
+            Padding = new Thickness(10, 6, 10, 6)
+        };
+
+        var g = new Grid { ColumnSpacing = 10 };
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        var timeBlk = new TextBlock
+        {
+            Text = log.TimestampUtc.ToLocalTime().ToString("dd/MM HH:mm:ss"),
+            FontSize = 10, Foreground = Muted, VerticalAlignment = VerticalAlignment.Center
+        };
+        Grid.SetColumn(timeBlk, 0);
+
+        var info = new StackPanel { Spacing = 1, VerticalAlignment = VerticalAlignment.Center };
+        info.Children.Add(new TextBlock
+        {
+            Text = log.DisplayName, FontSize = 11,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, Foreground = Brush("#e0e0f0")
+        });
+        info.Children.Add(new TextBlock
+        {
+            Text = $"{log.Action} — {log.Description}", FontSize = 10, Foreground = Muted,
+            TextWrapping = TextWrapping.NoWrap, TextTrimming = TextTrimming.CharacterEllipsis
+        });
+        Grid.SetColumn(info, 1);
+
+        var catBadge = new Border
+        {
+            CornerRadius = new CornerRadius(4), Padding = new Thickness(6, 2, 6, 2),
+            Background = Brush("#1e1e2e"), VerticalAlignment = VerticalAlignment.Center
+        };
+        catBadge.Child = new TextBlock
+        {
+            Text = log.CategoryLabel, FontSize = 9,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, Foreground = Purple
+        };
+        Grid.SetColumn(catBadge, 2);
+
+        g.Children.Add(timeBlk);
+        g.Children.Add(info);
+        g.Children.Add(catBadge);
+        row.Child = g;
+        return row;
     }
 
     private void BuildStudentTaskList(Challenge ch)
@@ -712,6 +815,13 @@ public sealed partial class ChallengeLearningPage : Page
         SubmitStatusText.Foreground = Green;
         SubmitBtn.Content = "Update Jawaban";
         UpdateStudentStats();
+
+        Services.ActivityStore.Instance.LogSession(
+            Models.ActivityCategory.TaskSubmission,
+            Models.ActivityActions.ChallengeSubmitted,
+            $"Submit jawaban challenge: {_selected.Title}",
+            relatedId: _selected.Id.ToString(),
+            metadata: snapshot.ToDictionary(kv => kv.Key, kv => kv.Value.ToString("F3")));
     }
 
     private async void AttachFileBtn_Click(object sender, RoutedEventArgs e)

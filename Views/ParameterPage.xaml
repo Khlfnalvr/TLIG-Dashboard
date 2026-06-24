@@ -305,28 +305,42 @@
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <TextBlock Grid.Column="0" Text="Kp"
                                    FontSize="13" FontWeight="SemiBold" Opacity="0.65"
                                    VerticalAlignment="Center"/>
-                        <NumberBox Grid.Column="1" Value="10" Minimum="0" SmallChange="1"
+                        <NumberBox x:Name="KpBox" Grid.Column="1" Value="10" Minimum="0" SmallChange="1"
                                    SpinButtonPlacementMode="Compact"
                                    FontSize="13"
                                    Style="{StaticResource ParamNumberBoxStyle}"/>
                         <TextBlock Grid.Column="2" Text="Ki"
                                    FontSize="13" FontWeight="SemiBold" Opacity="0.65"
                                    VerticalAlignment="Center"/>
-                        <NumberBox Grid.Column="3" Value="10" Minimum="0" SmallChange="1"
+                        <NumberBox x:Name="KiBox" Grid.Column="3" Value="10" Minimum="0" SmallChange="1"
                                    SpinButtonPlacementMode="Compact"
                                    FontSize="13"
                                    Style="{StaticResource ParamNumberBoxStyle}"/>
                         <TextBlock Grid.Column="4" Text="Kd"
                                    FontSize="13" FontWeight="SemiBold" Opacity="0.65"
                                    VerticalAlignment="Center"/>
-                        <NumberBox Grid.Column="5" Value="10" Minimum="0" SmallChange="1"
+                        <NumberBox x:Name="KdBox" Grid.Column="5" Value="10" Minimum="0" SmallChange="1"
                                    SpinButtonPlacementMode="Compact"
                                    FontSize="13"
                                    Style="{StaticResource ParamNumberBoxStyle}"/>
+                        <Button Grid.Column="6"
+                                x:Name="ApplyPidBtn"
+                                Height="34" Padding="14,0"
+                                Click="ApplyPid_Click"
+                                Style="{ThemeResource AccentButtonStyle}"
+                                VerticalAlignment="Center"
+                                ToolTipService.ToolTip="Terapkan parameter PID">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <FontIcon FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                                          Glyph="&#xE74E;" FontSize="11"/>
+                                <TextBlock Text="Terapkan"/>
+                            </StackPanel>
+                        </Button>
                     </Grid>
                 </Grid>
             </Border>
@@ -403,7 +417,8 @@
                             </Grid.RowDefinitions>
 
                             <!-- RUN — green -->
-                            <Button Grid.Row="0" Grid.Column="0" HorizontalAlignment="Stretch" Height="34">
+                            <Button x:Name="RunBtn" Grid.Row="0" Grid.Column="0" HorizontalAlignment="Stretch" Height="34"
+                                    Click="RunBtn_Click">
                                 <Button.Resources>
                                     <SolidColorBrush x:Key="ButtonBackground"             Color="{ThemeResource SystemFillColorSuccess}"/>
                                     <SolidColorBrush x:Key="ButtonBackgroundPointerOver"  Color="{ThemeResource SystemFillColorSuccess}"/>
@@ -422,7 +437,8 @@
                             </Button>
 
                             <!-- STOP — red -->
-                            <Button Grid.Row="0" Grid.Column="1" HorizontalAlignment="Stretch" Height="34">
+                            <Button x:Name="StopBtn" Grid.Row="0" Grid.Column="1" HorizontalAlignment="Stretch" Height="34"
+                                    Click="StopBtn_Click">
                                 <Button.Resources>
                                     <SolidColorBrush x:Key="ButtonBackground"             Color="{ThemeResource SystemFillColorCritical}"/>
                                     <SolidColorBrush x:Key="ButtonBackgroundPointerOver"  Color="{ThemeResource SystemFillColorCritical}"/>

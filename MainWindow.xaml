@@ -148,6 +148,16 @@
                         </TextBlock.RenderTransform>
                     </TextBlock>
                 </NavigationViewItem>
+                <!--
+                    Log Aktivitas — hanya untuk Dosen/Asisten (staff).
+                -->
+                <NavigationViewItem x:Name="NavLogging" Tag="Logging" MinWidth="0" MinHeight="32" Height="32" Padding="0,0,0,2" VerticalContentAlignment="Center">
+                    <TextBlock Text="Log Aktivitas" FontSize="12" VerticalAlignment="Center">
+                        <TextBlock.RenderTransform>
+                            <TranslateTransform Y="-3"/>
+                        </TextBlock.RenderTransform>
+                    </TextBlock>
+                </NavigationViewItem>
             </NavigationView.MenuItems>
 
             <Frame x:Name="ContentFrame" Padding="0"/>

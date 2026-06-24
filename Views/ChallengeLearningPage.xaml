@@ -406,6 +406,16 @@
                         </StackPanel>
                     </Border>
 
+                    <!-- Log Aktivitas (SERVER: task submissions only) -->
+                    <Border Style="{StaticResource CL_Card}">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="LOG AKTIVITAS" Style="{StaticResource CL_SectionHeader}"/>
+                            <StackPanel x:Name="AdminActivityLogPanel" Spacing="6"/>
+                            <TextBlock x:Name="AdminActivityEmptyText" Text="Belum ada log aktivitas."
+                                       Style="{StaticResource CL_Label}" Margin="0,4" HorizontalAlignment="Center"/>
+                        </StackPanel>
+                    </Border>
+
                 </StackPanel>
             </ScrollViewer>
 
@@ -569,6 +579,16 @@
                                         Click="RefreshMetricsBtn_Click"/>
                             </Grid>
                             <StackPanel x:Name="StudentTaskList" Spacing="8"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Log Aktivitas (CLIENT: parameter/simulasi/AI) -->
+                    <Border Style="{StaticResource CL_Card}">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="LOG AKTIVITAS" Style="{StaticResource CL_SectionHeader}"/>
+                            <StackPanel x:Name="StudentActivityLogPanel" Spacing="6"/>
+                            <TextBlock x:Name="StudentActivityEmptyText" Text="Belum ada log aktivitas."
+                                       Style="{StaticResource CL_Label}" Margin="0,4" HorizontalAlignment="Center"/>
                         </StackPanel>
                     </Border>
 

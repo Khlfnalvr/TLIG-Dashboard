@@ -1,5 +1,6 @@
 ﻿using System.Collections.Generic;
 using System.Text.Json.Serialization;
+using TLIGDashboard.Models;
 
 namespace TLIGDashboard.Services;
 
@@ -12,5 +13,8 @@ namespace TLIGDashboard.Services;
 [JsonSerializable(typeof(OpcUaNodeConfig))]
 [JsonSerializable(typeof(UsersFile))]
 [JsonSerializable(typeof(TasksFile))]
+[JsonSerializable(typeof(ActivityLogFile))]
+[JsonSerializable(typeof(List<ActivityLog>))]
+[JsonSerializable(typeof(Dictionary<string, string>))]
 [JsonSourceGenerationOptions(WriteIndented = true)]
 internal partial class AppJsonContext : JsonSerializerContext { }

@@ -1,3 +1,5 @@
+using TLIGDashboard.Models;
+
 namespace TLIGDashboard.Services;
 
 /// <summary>
@@ -66,6 +68,11 @@ public sealed class SessionService
 
     public void SignOut()
     {
+        if (IsSignedIn)
+            ActivityStore.Instance.Log(
+                Username, DisplayName, Role,
+                Models.ActivityCategory.Authentication, Models.ActivityActions.Logout,
+                "Logout");
         Username = DisplayName = Role = Nrp = Kelas = "";
         Changed?.Invoke();
     }
