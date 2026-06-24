@@ -22,7 +22,30 @@ public sealed partial class ParameterPage : Page
         Loaded -= OnLoaded;
         App.SimType.SimulationTypeChanged += OnSimulationTypeChanged;
         ApplySimulationType(App.SimType.CurrentType);
+#if CLIENT
+        RefreshParamCounter();
+#endif
     }
+
+#if CLIENT
+    private void RefreshParamCounter()
+    {
+        int used = ActivityStore.Instance.GetAll()
+            .Count(a => a.Category == ActivityCategory.ControlParameter);
+        int remaining = Math.Max(0, 3 - used);
+        bool limitReached = used >= 3;
+
+        ParamCounterBadge.Visibility = Visibility.Visible;
+        ParamCounterText.Text = $"{Math.Min(used, 3)}/3";
+        ParamCounterBadge.Background = limitReached
+            ? new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(255, 80, 20, 20))
+            : new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(60, 255, 255, 255));
+        ParamCounterText.Foreground = limitReached
+            ? new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(255, 255, 100, 100))
+            : new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(255, 200, 200, 200));
+        ApplyPidBtn.IsEnabled = !limitReached;
+    }
+#endif
 
     protected override void OnNavigatedFrom(Microsoft.UI.Xaml.Navigation.NavigationEventArgs e)
     {
@@ -73,6 +96,9 @@ public sealed partial class ParameterPage : Page
             });
 
         ShowApplyFeedback();
+#if CLIENT
+        RefreshParamCounter();
+#endif
     }
 
     // ── Simulation Run / Stop ────────────────────────────────────────────────
