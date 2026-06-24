@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
@@ -758,6 +758,14 @@ public sealed partial class LearningAnalyticView : UserControl
         workSection.Children.Add(MakeWorkCard("", "Rekam Tuning Parameter", tuningSum, tuningDetail));
         workSection.Children.Add(MakeWorkCard("", "Penggunaan AI", aiSum));
         workSection.Children.Add(MakeWorkCard("", "Hasil Simulasi", simSum));
+
+        // File yang diunggah mahasiswa
+        var uploads = await _grading.GetUploadedFilesAsync(_lecGradingStudentId, _gradingAssignmentId);
+        string uploadSum = uploads.Any()
+            ? string.Join(", ", uploads.Take(3).Select(u => u.FileName ?? u.Description))
+              + (uploads.Count > 3 ? " ... +" + uploads.Count + " file lain" : "")
+            : "Belum ada file yang diunggah";
+        workSection.Children.Add(MakeWorkCard("", "File Diunggah (" + uploads.Count + ")", uploadSum));
 
         // ── Susun konten dialog ──────────────────────────────────────────────
         var divider = new Microsoft.UI.Xaml.Shapes.Rectangle { Height = 1, Margin = new Thickness(0, 4, 0, 4) };

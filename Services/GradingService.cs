@@ -254,6 +254,19 @@ namespace TLIGDashboard.Services
             return Task.FromResult(result);
         }
 
+        /// <summary>File yang diunggah mahasiswa (ActivityType == "Upload") beserta metadata file.</summary>
+        public Task<List<GroupActivity>> GetUploadedFilesAsync(string studentId, string assignmentId)
+            => Task.FromResult(_groupActivities
+                .Where(a => a.StudentId == studentId && a.AssignmentId == assignmentId
+                         && a.ActivityType == "Upload" && a.FileName != null)
+                .OrderByDescending(a => a.ActivityTime).ToList());
+
+        public Task<List<GroupActivity>> GetAllUploadedFilesAsync(string assignmentId)
+            => Task.FromResult(_groupActivities
+                .Where(a => a.AssignmentId == assignmentId
+                         && a.ActivityType == "Upload" && a.FileName != null)
+                .OrderByDescending(a => a.ActivityTime).ToList());
+
         public Task AddGroupActivityAsync(GroupActivity activity)
         {
             _groupActivities.Add(activity);
@@ -343,6 +356,18 @@ namespace TLIGDashboard.Services
                 ["Comment"] = new[] { "Memberi komentar review", "Feedback diagram sistem", "Review kode teman" },
                 ["Review"]  = new[] { "Review laporan kelompok", "Cek hasil simulasi", "Verifikasi data" },
             };
+            // Nama file demo untuk aktivitas Upload
+            var demoFiles = new[]
+            {
+                ("Laporan_PID_Control.pdf",   "laporan"),
+                ("Video_Demo_Simulasi.mp4",   "video"),
+                ("Data_Percobaan.xlsx",       "data"),
+                ("Diagram_Sistem.png",        "gambar"),
+                ("Kode_Kontroler.zip",        "arsip"),
+                ("Presentasi_Kelompok.pptx",  "presentasi"),
+                ("Hasil_Tuning_Parameter.pdf","laporan"),
+                ("Screenshot_Simulasi.png",   "gambar"),
+            };
 
             foreach (var sid in students)
             {
@@ -351,7 +376,7 @@ namespace TLIGDashboard.Services
                 {
                     var type = actTypes[rnd.Next(actTypes.Length)];
                     var desc = descriptions[type][rnd.Next(descriptions[type].Length)];
-                    _groupActivities.Add(new GroupActivity
+                    var act  = new GroupActivity
                     {
                         StudentId           = sid,
                         StudentName         = GetDemoStudentName(sid),
@@ -362,7 +387,16 @@ namespace TLIGDashboard.Services
                         ActivityTime        = DateTime.Now.AddHours(-rnd.Next(1, 80)),
                         AutoScore           = actAutoScore[type],
                         CountsToSystemScore = true,
-                    });
+                    };
+                    // Untuk Upload: tambahkan nama file demo
+                    if (type == "Upload")
+                    {
+                        var (fn, _) = demoFiles[rnd.Next(demoFiles.Length)];
+                        act.FileName = fn;
+                        act.FilePath = $"C:\\Demo\\{sid}\\{fn}";   // path demo (tidak nyata)
+                        act.Description = $"Upload: {fn}";
+                    }
+                    _groupActivities.Add(act);
                 }
             }
 

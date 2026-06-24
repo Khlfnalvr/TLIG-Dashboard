@@ -345,6 +345,10 @@ namespace TLIGDashboard.Models
         public double? AutoScore { get; set; }  // Skor yang dihasilkan dari aktivitas ini
         public bool CountsToSystemScore { get; set; } = true;
 
+        // Untuk aktivitas Upload: nama dan path file yang diunggah
+        public string? FileName { get; set; }
+        public string? FilePath { get; set; }
+
         public string TimeAgo
         {
             get

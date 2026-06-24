@@ -1,4 +1,4 @@
-// Controls/StudentDetailDialog.cs
+﻿// Controls/StudentDetailDialog.cs
 // Dialog detail mahasiswa: overall score breakdown + hasil simulasi.
 // Dipanggil dari LearningAnalyticView (dosen) dan UserPerformancePage.
 
@@ -29,7 +29,6 @@ internal static class StudentDetailDialog
         var grading  = GradingService.Instance;
         var summaries = await grading.GetGradeSummaryByAssignmentAsync(assignmentId);
         var summary   = summaries.FirstOrDefault(s => s.StudentId == studentId);
-        var sims      = await grading.GetSimulationResultsForStudentAsync(studentId);
 
         var peerReceived = (await grading.GetPeerEvaluationsForStudentAsync(studentId))
             .Where(e => e.AssignmentId == assignmentId).ToList();
@@ -37,12 +36,19 @@ internal static class StudentDetailDialog
             .Where(e => e.AssignmentId == assignmentId).ToList();
         var sysEval  = await grading.GetSystemEvaluationForStudentAsync(studentId, assignmentId);
         var lecGrade = await grading.GetLecturerGradeForStudentAsync(studentId, assignmentId);
-        var allActs  = await grading.GetGroupActivitiesAsync(assignmentId, 300);
-        var myActs   = allActs.Where(a => a.StudentId == studentId)
-                              .OrderByDescending(a => a.ActivityTime).ToList();
+
+        var allActs   = await grading.GetGroupActivitiesAsync(assignmentId, 500);
+        var myActs    = allActs.Where(a => a.StudentId == studentId)
+                               .OrderByDescending(a => a.ActivityTime).ToList();
         var mySubmits = myActs.Where(a => a.ActivityType == "Submit").ToList();
 
-        var content = new StackPanel { Width = 520, Spacing = 16 };
+        // Data 3 parameter sistem
+        var tunings   = await grading.GetTuningRecordsAsync(studentId, assignmentId);
+        var aiUsage   = await grading.GetAiUsageAsync(studentId, assignmentId);
+        var sims      = await grading.GetSimulationResultsAsync(studentId, assignmentId);
+        var uploads   = await grading.GetUploadedFilesAsync(studentId, assignmentId);
+
+        var content = new StackPanel { Width = 560, Spacing = 16 };
 
         // ── 1. Header ─────────────────────────────────────────────────────
         content.Children.Add(BuildHeader(studentId, studentName, summary));
@@ -52,7 +58,7 @@ internal static class StudentDetailDialog
         content.Children.Add(BuildScoreBreakdown(summary));
 
         // ── 3. Nilai Dosen (komponen) ─────────────────────────────────────
-        content.Children.Add(BuildSectionTitle("Nilai Dosen — Rincian Komponen"));
+        content.Children.Add(BuildSectionTitle("Penilaian Dosen — Rincian Komponen"));
         content.Children.Add(BuildLecturerDetail(lecGrade));
 
         // ── 4. Penilaian Peer Diterima ────────────────────────────────────
@@ -69,18 +75,26 @@ internal static class StudentDetailDialog
             ? BuildPeerGivenList(peerGiven)
             : MutedNote("Belum memberikan penilaian peer."));
 
-        // ── 6. Detail Sistem ──────────────────────────────────────────────
-        content.Children.Add(BuildSectionTitle("Detail Skor Sistem"));
-        content.Children.Add(BuildSystemDetail(sysEval));
+        // ── 6. Detail Skor Sistem (3 parameter) ──────────────────────────
+        content.Children.Add(BuildSectionTitle(
+            $"Penilaian Sistem — 3 Parameter  (Skor: {sysEval?.Score:F1}/100)"));
+        content.Children.Add(BuildSystemDetail(sysEval, tunings, aiUsage, sims));
 
-        // ── 7. Rekap Submit vs Deadline ───────────────────────────────────
+        // ── 7. File yang Diunggah Mahasiswa ──────────────────────────────
+        content.Children.Add(BuildSectionTitle(
+            $"File yang Diunggah  ({uploads.Count} file)"));
+        content.Children.Add(uploads.Count > 0
+            ? BuildUploadedFiles(uploads)
+            : MutedNote("Belum ada file yang diunggah untuk tugas ini."));
+
+        // ── 8. Rekap Submit vs Deadline ───────────────────────────────────
         content.Children.Add(BuildSectionTitle(
             $"Rekap Submit  ({mySubmits.Count} submit)"));
         content.Children.Add(mySubmits.Count > 0
             ? BuildSubmitHistory(mySubmits, deadline)
             : MutedNote("Belum ada aktivitas Submit tercatat."));
 
-        // ── 8. Hasil Simulasi ─────────────────────────────────────────────
+        // ── 9. Hasil Simulasi ─────────────────────────────────────────────
         content.Children.Add(BuildSectionTitle(
             sims.Count > 0 ? $"Hasil Simulasi  ({sims.Count} sesi)" : "Hasil Simulasi"));
         content.Children.Add(sims.Count > 0
@@ -390,63 +404,269 @@ internal static class StudentDetailDialog
         return panel;
     }
 
-    // ── System detail ─────────────────────────────────────────────────────
+    // ── System detail — 3 parameter ──────────────────────────────────────
 
-    private static UIElement BuildSystemDetail(SystemEvaluation? sys)
+    private static UIElement BuildSystemDetail(
+        SystemEvaluation? sys,
+        List<TuningRecord> tunings,
+        List<AiUsageRecord> aiUsage,
+        List<SimulationResult> sims)
     {
-        if (sys == null)
-            return MutedNote("Belum ada evaluasi sistem untuk tugas ini.");
+        var panel = new StackPanel { Spacing = 10 };
 
-        var card = new Border
+        if (sys == null && tunings.Count == 0 && aiUsage.Count == 0 && sims.Count == 0)
+            return MutedNote("Belum ada data penilaian sistem.");
+
+        // ── Kartu ringkasan skor sistem ───────────────────────────────────
+        if (sys != null)
         {
-            Background      = SafeThemeBrush("CardBackgroundFillColorDefaultBrush"),
-            BorderBrush     = SafeThemeBrush("CardStrokeColorDefaultBrush"),
-            BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(8),
-            Padding         = new Thickness(14, 12, 14, 12),
-        };
-
-        var grid = new Grid { ColumnSpacing = 20, RowSpacing = 10 };
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-
-        void AddCell(int row, int col, string label, string val, Windows.UI.Color? accent = null)
-        {
-            var sp = new StackPanel { Spacing = 2 };
-            sp.Children.Add(new TextBlock { Text = label, FontSize = 11, Opacity = 0.6 });
-            var tb = new TextBlock { Text = val, FontSize = 13, FontWeight = FontWeights.SemiBold };
-            if (accent.HasValue)
-                tb.Foreground = new SolidColorBrush(accent.Value);
-            sp.Children.Add(tb);
-            Grid.SetRow(sp, row); Grid.SetColumn(sp, col);
-            grid.Children.Add(sp);
+            var summCard = new Border
+            {
+                Background      = SafeThemeBrush("AccentFillColorTertiaryBrush"),
+                CornerRadius    = new CornerRadius(8), Padding = new Thickness(14, 10, 14, 10),
+            };
+            var summGrid = new Grid { ColumnSpacing = 10 };
+            summGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            summGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            summGrid.Children.Add(new TextBlock
+            {
+                Text = "Total Skor Sistem", FontSize = 13, FontWeight = FontWeights.SemiBold,
+                VerticalAlignment = VerticalAlignment.Center,
+            });
+            var scoreTb = new TextBlock
+            {
+                Text = $"{sys.Score:F1} / 100", FontSize = 22, FontWeight = FontWeights.Bold,
+                Foreground = SafeThemeBrush("AccentTextFillColorPrimaryBrush"),
+            };
+            Grid.SetColumn(scoreTb, 1); summGrid.Children.Add(scoreTb);
+            summCard.Child = summGrid;
+            panel.Children.Add(summCard);
         }
 
-        AddCell(0, 0, "Jumlah Submit",   sys.CommitsCount.ToString());
-        AddCell(0, 1, "File Dimodifikasi", sys.FilesModified.ToString());
-        AddCell(1, 0, "Tasks Selesai",   $"{sys.TasksCompleted}/{sys.TasksTotal}");
-        AddCell(1, 1, "Completion Rate", $"{sys.CompletionRate:F0}%");
-        AddCell(2, 0, "Status Tepat Waktu",
-            sys.SubmittedOnTime ? "Ya — Tepat Waktu ✓" : "Tidak — Terlambat",
-            sys.SubmittedOnTime
-                ? Windows.UI.Color.FromArgb(255, 16, 124, 16)
-                : Windows.UI.Color.FromArgb(255, 196, 43, 28));
+        // ── 1. Rekam Tuning Parameter (maks 40 poin) ──────────────────────
+        panel.Children.Add(BuildSystemParamCard(
+            "1. Rekam Tuning Parameter",
+            tunings.Any() ? $"{tunings.Count} percobaan · {tunings.Select(t => $"{t.Kp:F1}{t.Ki:F2}{t.Kd:F2}").Distinct().Count()} unik · Terbaik: {(tunings.Any() ? tunings.Max(t => t.QualityScore) : 0):F0}/100"
+                          : "Belum ada rekam tuning",
+            "maks 40 poin",
+            Windows.UI.Color.FromArgb(255, 245, 158, 11)));
 
-        // Skor sistem
-        var scoreRow = new StackPanel { Spacing = 2 };
-        scoreRow.Children.Add(new TextBlock { Text = "Skor Sistem", FontSize = 11, Opacity = 0.6 });
-        scoreRow.Children.Add(new TextBlock
+        if (tunings.Any())
         {
-            Text = sys.Score.ToString("F1"), FontSize = 13, FontWeight = FontWeights.Bold,
-            Foreground = SafeThemeBrush("AccentTextFillColorPrimaryBrush"),
-        });
-        Grid.SetRow(scoreRow, 2); Grid.SetColumn(scoreRow, 1);
-        grid.Children.Add(scoreRow);
+            foreach (var t in tunings.OrderByDescending(x => x.QualityScore).Take(3))
+            {
+                var tCard = new Border
+                {
+                    Background = SafeThemeBrush("SubtleFillColorSecondaryBrush"),
+                    CornerRadius = new CornerRadius(6), Padding = new Thickness(12, 8, 12, 8),
+                    Margin = new Thickness(0, 0, 0, 0),
+                };
+                var tSp = new StackPanel { Spacing = 2 };
+                tSp.Children.Add(new TextBlock
+                {
+                    Text = $"{t.PlantLabel}  —  {t.KpKiKdStr}",
+                    FontSize = 12, FontWeight = FontWeights.SemiBold,
+                });
+                var metaRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12 };
+                if (t.RiseTime.HasValue)    metaRow.Children.Add(MutedChip($"Rise: {t.RiseTime:F2}s"));
+                if (t.Overshoot.HasValue)   metaRow.Children.Add(MutedChip($"OS: {t.Overshoot:F1}%"));
+                if (t.SettlingTime.HasValue) metaRow.Children.Add(MutedChip($"Ts: {t.SettlingTime:F2}s"));
+                if (t.SteadyStateError.HasValue) metaRow.Children.Add(MutedChip($"SSE: {t.SteadyStateError:F2}%"));
+                tSp.Children.Add(metaRow);
+                tSp.Children.Add(new TextBlock
+                {
+                    Text = $"Kualitas: {t.QualityScore:F0}/100 — {t.QualityStr}  ·  {t.RecordedAt:dd MMM HH:mm}",
+                    FontSize = 11, Opacity = 0.55,
+                });
+                tCard.Child = tSp;
+                panel.Children.Add(tCard);
+            }
+            if (tunings.Count > 3)
+                panel.Children.Add(MutedNote($"... dan {tunings.Count - 3} percobaan lainnya"));
+        }
 
-        card.Child = grid;
+        // ── 2. Penggunaan AI (maks 20 poin) ──────────────────────────────
+        int prodAi = aiUsage.Count(a => a.IsProductive);
+        panel.Children.Add(BuildSystemParamCard(
+            "2. Penggunaan AI",
+            aiUsage.Any() ? $"{aiUsage.Count} sesi · {prodAi} produktif"
+                          : "Belum ada rekam penggunaan AI",
+            "maks 20 poin",
+            Windows.UI.Color.FromArgb(255, 139, 92, 246)));
+
+        if (aiUsage.Any())
+        {
+            foreach (var a in aiUsage.OrderByDescending(x => x.SessionAt).Take(4))
+            {
+                var aCard = new Border
+                {
+                    Background = SafeThemeBrush("SubtleFillColorSecondaryBrush"),
+                    CornerRadius = new CornerRadius(6), Padding = new Thickness(12, 8, 12, 8),
+                };
+                var aSp = new StackPanel { Spacing = 2 };
+                aSp.Children.Add(new TextBlock
+                {
+                    Text = a.Topic, FontSize = 12, FontWeight = FontWeights.SemiBold,
+                    TextWrapping = TextWrapping.Wrap,
+                });
+                var row2 = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10 };
+                row2.Children.Add(MutedChip($"{a.AiProvider}  ·  {a.MessageCount} pesan  ·  {a.SessionAtStr}"));
+                var pill = new Border
+                {
+                    Background = new SolidColorBrush(a.IsProductive
+                        ? Windows.UI.Color.FromArgb(30, 16, 124, 16)
+                        : Windows.UI.Color.FromArgb(30, 150, 150, 150)),
+                    CornerRadius = new CornerRadius(4), Padding = new Thickness(6, 2, 6, 2),
+                };
+                pill.Child = new TextBlock
+                {
+                    Text = a.IsProductive ? "Produktif" : "Eksplorasi",
+                    FontSize = 10, FontWeight = FontWeights.SemiBold,
+                    Foreground = new SolidColorBrush(a.IsProductive
+                        ? Windows.UI.Color.FromArgb(255, 16, 124, 16)
+                        : Windows.UI.Color.FromArgb(255, 120, 120, 120)),
+                };
+                row2.Children.Add(pill);
+                aSp.Children.Add(row2);
+                aCard.Child = aSp;
+                panel.Children.Add(aCard);
+            }
+        }
+
+        // ── 3. Hasil Simulasi (maks 40 poin) ─────────────────────────────
+        double bestSim = sims.Any() ? sims.Max(s => s.Score) : 0;
+        panel.Children.Add(BuildSystemParamCard(
+            "3. Hasil Simulasi",
+            sims.Any() ? $"{sims.Count} sesi · Terbaik: {bestSim:F1}/100"
+                       : "Belum ada sesi simulasi",
+            "maks 40 poin",
+            Windows.UI.Color.FromArgb(255, 16, 185, 129)));
+
+        return panel;
+    }
+
+    private static Border BuildSystemParamCard(string title, string summary, string cap, Windows.UI.Color accent)
+    {
+        var card = new Border
+        {
+            BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(60, accent.R, accent.G, accent.B)),
+            BorderThickness = new Thickness(0, 0, 0, 0),
+            Background = new SolidColorBrush(Windows.UI.Color.FromArgb(20, accent.R, accent.G, accent.B)),
+            CornerRadius = new CornerRadius(8), Padding = new Thickness(12, 9, 12, 9),
+        };
+        var sp = new StackPanel { Spacing = 2 };
+        var header = new Grid { ColumnSpacing = 8 };
+        header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        header.Children.Add(new TextBlock
+        {
+            Text = title, FontSize = 12, FontWeight = FontWeights.SemiBold,
+            Foreground = new SolidColorBrush(accent),
+        });
+        var capTb = new TextBlock
+        {
+            Text = cap, FontSize = 10, Opacity = 0.6,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        Grid.SetColumn(capTb, 1); header.Children.Add(capTb);
+        sp.Children.Add(header);
+        sp.Children.Add(new TextBlock { Text = summary, FontSize = 12, TextWrapping = TextWrapping.Wrap });
+        card.Child = sp;
         return card;
+    }
+
+    // ── File yang diunggah mahasiswa ──────────────────────────────────────
+
+    private static UIElement BuildUploadedFiles(List<GroupActivity> uploads)
+    {
+        var panel = new StackPanel { Spacing = 6 };
+        foreach (var u in uploads)
+        {
+            var card = new Border
+            {
+                Background      = SafeThemeBrush("CardBackgroundFillColorDefaultBrush"),
+                BorderBrush     = SafeThemeBrush("CardStrokeColorDefaultBrush"),
+                BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(7),
+                Padding         = new Thickness(12, 9, 12, 9),
+            };
+            var g = new Grid { ColumnSpacing = 10 };
+            g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            // Ikon berdasarkan ekstensi
+            string ext = System.IO.Path.GetExtension(u.FileName ?? "").ToLowerInvariant();
+            string glyph = ext switch
+            {
+                ".pdf"  => "",  // dokumen
+                ".docx" or ".doc" => "",
+                ".xlsx" or ".xls" => "",
+                ".pptx" or ".ppt" => "",
+                ".zip"  or ".rar" => "",
+                ".mp4"  or ".avi" or ".mkv" => "",
+                ".png"  or ".jpg" or ".jpeg" => "",
+                _       => "",
+            };
+            var icon = new FontIcon
+            {
+                FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Segoe Fluent Icons,Segoe MDL2 Assets"),
+                Glyph = glyph, FontSize = 20,
+                VerticalAlignment = VerticalAlignment.Center,
+                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 0, 120, 212)),
+            };
+            g.Children.Add(icon);
+
+            var info = new StackPanel { Spacing = 2, VerticalAlignment = VerticalAlignment.Center };
+            info.Children.Add(new TextBlock
+            {
+                Text = u.FileName ?? u.Description, FontSize = 12, FontWeight = FontWeights.SemiBold,
+                TextWrapping = TextWrapping.Wrap,
+            });
+            info.Children.Add(new TextBlock
+            {
+                Text = u.ActivityTime.ToString("dd MMM yyyy, HH:mm"),
+                FontSize = 10, Opacity = 0.5,
+            });
+            Grid.SetColumn(info, 1); g.Children.Add(info);
+
+            // Tombol buka file (jika path tersedia)
+            if (!string.IsNullOrEmpty(u.FilePath))
+            {
+                var openBtn = new Button
+                {
+                    Content = "Buka",
+                    FontSize = 11,
+                    Padding = new Thickness(10, 4, 10, 4),
+                    VerticalAlignment = VerticalAlignment.Center,
+                };
+                string filePath = u.FilePath;
+                openBtn.Click += async (_, _) =>
+                {
+                    try
+                    {
+                        var file = await Windows.Storage.StorageFile.GetFileFromPathAsync(filePath);
+                        await Windows.System.Launcher.LaunchFileAsync(file);
+                    }
+                    catch
+                    {
+                        // File demo — path tidak nyata, tampilkan info saja
+                        var infoDialog = new ContentDialog
+                        {
+                            Title = "Info File",
+                            Content = $"File: {u.FileName}\nPath: {filePath}\n\n(Dalam implementasi nyata, file akan dibuka dari server.)",
+                            CloseButtonText = "OK",
+                            XamlRoot = openBtn.XamlRoot,
+                        };
+                        await infoDialog.ShowAsync();
+                    }
+                };
+                Grid.SetColumn(openBtn, 2); g.Children.Add(openBtn);
+            }
+
+            card.Child = g;
+            panel.Children.Add(card);
+        }
+        return panel;
     }
 
     // ── Submit history vs deadline ────────────────────────────────────────
