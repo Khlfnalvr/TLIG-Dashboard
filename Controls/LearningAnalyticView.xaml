@@ -574,42 +574,66 @@
                                             <ItemsRepeater.Layout><StackLayout/></ItemsRepeater.Layout>
                                             <ItemsRepeater.ItemTemplate>
                                                 <DataTemplate>
-                                                    <Grid Padding="14,10" BorderThickness="0,0,0,1"
-                                                          BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}">
-                                                        <Grid.ColumnDefinitions>
-                                                            <ColumnDefinition Width="160"/>
-                                                            <ColumnDefinition Width="*"/>
-                                                            <ColumnDefinition Width="80"/>
-                                                            <ColumnDefinition Width="80"/>
-                                                            <ColumnDefinition Width="80"/>
-                                                            <ColumnDefinition Width="80"/>
-                                                            <ColumnDefinition Width="55"/>
-                                                            <ColumnDefinition Width="Auto"/>
-                                                        </Grid.ColumnDefinitions>
-                                                        <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                                                            <TextBlock Text="{Binding StudentName}" FontSize="13" FontWeight="SemiBold"/>
-                                                            <TextBlock Text="{Binding StudentId}" FontSize="11" Opacity="0.5"/>
-                                                        </StackPanel>
-                                                        <TextBlock Grid.Column="1" Text="{Binding GroupName}" FontSize="13" VerticalAlignment="Center"/>
-                                                        <TextBlock Grid.Column="2" Text="{Binding PeerScoreStr}" FontSize="13" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                                        <TextBlock Grid.Column="3" Text="{Binding SystemScoreStr}" FontSize="13" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                                        <TextBlock Grid.Column="4" Text="{Binding LecturerScoreStr}" FontSize="13" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                                        <TextBlock Grid.Column="5" Text="{Binding FinalScoreStr}" FontSize="13" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                                        <Border Grid.Column="6" HorizontalAlignment="Center" VerticalAlignment="Center"
-                                                                Background="{Binding GradeBadgeColor}" CornerRadius="4" Padding="7,2">
-                                                            <TextBlock Text="{Binding LetterGrade}" FontSize="11" FontWeight="Bold" Foreground="White"/>
-                                                        </Border>
-                                                        <!-- Aksi: Detail + Nilai -->
-                                                        <StackPanel Grid.Column="7" Orientation="Horizontal" Spacing="6" HorizontalAlignment="Center" VerticalAlignment="Center">
-                                                            <Button Tag="{Binding StudentId}" Content="Detail"
-                                                                    FontSize="12" Padding="10,4"
-                                                                    Click="GLecShowDetail_Click"/>
-                                                            <Button Tag="{Binding StudentId}" Content="Nilai"
-                                                                    Style="{ThemeResource AccentButtonStyle}"
-                                                                    FontSize="12" Padding="10,4"
-                                                                    Click="GLecGradeStudent_Click"/>
-                                                        </StackPanel>
-                                                    </Grid>
+                                                    <StackPanel BorderThickness="0,0,0,1"
+                                                                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}">
+                                                        <!-- Baris ringkasan -->
+                                                        <Grid Padding="14,10">
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="160"/>
+                                                                <ColumnDefinition Width="*"/>
+                                                                <ColumnDefinition Width="80"/>
+                                                                <ColumnDefinition Width="80"/>
+                                                                <ColumnDefinition Width="80"/>
+                                                                <ColumnDefinition Width="80"/>
+                                                                <ColumnDefinition Width="55"/>
+                                                                <ColumnDefinition Width="Auto"/>
+                                                            </Grid.ColumnDefinitions>
+                                                            <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                                                <TextBlock Text="{Binding StudentName}" FontSize="13" FontWeight="SemiBold"/>
+                                                                <TextBlock Text="{Binding StudentId}" FontSize="11" Opacity="0.5"/>
+                                                            </StackPanel>
+                                                            <TextBlock Grid.Column="1" Text="{Binding GroupName}" FontSize="13" VerticalAlignment="Center"/>
+                                                            <TextBlock Grid.Column="2" Text="{Binding PeerScoreStr}" FontSize="13" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                            <TextBlock Grid.Column="3" Text="{Binding SystemScoreStr}" FontSize="13" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                            <TextBlock Grid.Column="4" Text="{Binding LecturerScoreStr}" FontSize="13" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                            <TextBlock Grid.Column="5" Text="{Binding FinalScoreStr}" FontSize="13" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                            <Border Grid.Column="6" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                                    Background="{Binding GradeBadgeColor}" CornerRadius="4" Padding="7,2">
+                                                                <TextBlock Text="{Binding LetterGrade}" FontSize="11" FontWeight="Bold" Foreground="White"/>
+                                                            </Border>
+                                                            <StackPanel Grid.Column="7" Orientation="Horizontal" Spacing="6"
+                                                                        HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                                <Button Tag="{Binding StudentId}" Content="Detail"
+                                                                        FontSize="12" Padding="10,4"
+                                                                        Click="GLecShowDetail_Click"/>
+                                                                <Button Tag="{Binding StudentId}" Content="Nilai"
+                                                                        Style="{ThemeResource AccentButtonStyle}"
+                                                                        FontSize="12" Padding="10,4"
+                                                                        Click="GLecGradeStudent_Click"/>
+                                                            </StackPanel>
+                                                        </Grid>
+
+                                                        <!-- Expander breakdown persentase -->
+                                                        <Expander Header="Detail Persentase Penilaian"
+                                                                  Margin="14,0,14,8"
+                                                                  HorizontalAlignment="Stretch"
+                                                                  HorizontalContentAlignment="Stretch">
+                                                            <Border Background="{ThemeResource SubtleFillColorSecondaryBrush}"
+                                                                    CornerRadius="8" Padding="14,10">
+                                                                <StackPanel Spacing="6">
+                                                                    <TextBlock Text="{Binding PeerContribStr}"
+                                                                               FontSize="12" FontFamily="Consolas,Courier New"/>
+                                                                    <TextBlock Text="{Binding SystemContribStr}"
+                                                                               FontSize="12" FontFamily="Consolas,Courier New"/>
+                                                                    <TextBlock Text="{Binding LecturerContribStr}"
+                                                                               FontSize="12" FontFamily="Consolas,Courier New"/>
+                                                                    <Rectangle Height="1" Fill="{ThemeResource CardStrokeColorDefaultBrush}" Margin="0,2"/>
+                                                                    <TextBlock Text="{Binding WeightInfoStr}"
+                                                                               FontSize="12" FontWeight="SemiBold"/>
+                                                                </StackPanel>
+                                                            </Border>
+                                                        </Expander>
+                                                    </StackPanel>
                                                 </DataTemplate>
                                             </ItemsRepeater.ItemTemplate>
                                         </ItemsRepeater>
@@ -634,6 +658,7 @@
                                                         <ColumnDefinition Width="*"/>
                                                         <ColumnDefinition Width="Auto"/>
                                                         <ColumnDefinition Width="70"/>
+                                                        <ColumnDefinition Width="Auto"/>
                                                     </Grid.ColumnDefinitions>
                                                     <StackPanel Grid.Column="0" VerticalAlignment="Center">
                                                         <StackPanel Orientation="Horizontal" Spacing="6">
@@ -648,6 +673,9 @@
                                                     <Border Grid.Column="2" CornerRadius="6" Background="{ThemeResource AccentFillColorTertiaryBrush}" Padding="10,5" VerticalAlignment="Center">
                                                         <TextBlock Text="{Binding ScoreStr}" FontSize="16" FontWeight="Bold" HorizontalAlignment="Center" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
                                                     </Border>
+                                                    <Button Grid.Column="3" Tag="{Binding EvaluateeId}" Content="Detail"
+                                                            FontSize="12" Padding="10,4" VerticalAlignment="Center"
+                                                            Click="GLecDetailAny_Click"/>
                                                 </Grid>
                                             </Border>
                                         </DataTemplate>
@@ -659,42 +687,126 @@
                         <!-- Tab 3: Penilaian Sistem -->
                         <PivotItem Header="Penilaian Sistem">
                             <StackPanel Spacing="12" Margin="0,12,0,0">
-                                <TextBlock Text="Skor Otomatis Sistem per Mahasiswa" FontSize="13" FontWeight="SemiBold"/>
+
+                                <!-- Keterangan bobot komponen -->
+                                <Border Background="{ThemeResource SubtleFillColorSecondaryBrush}"
+                                        CornerRadius="8" Padding="14,10">
+                                    <StackPanel Spacing="4">
+                                        <TextBlock Text="Komponen Skor Sistem (Total maks 100)"
+                                                   FontSize="12" FontWeight="SemiBold"/>
+                                        <StackPanel Orientation="Horizontal" Spacing="10" Opacity="0.8">
+                                            <TextBlock Text="Submit ×10 (maks 30)" FontSize="11"/>
+                                            <TextBlock Text="·" FontSize="11" Opacity="0.4"/>
+                                            <TextBlock Text="Edit ×5 (maks 20)" FontSize="11"/>
+                                            <TextBlock Text="·" FontSize="11" Opacity="0.4"/>
+                                            <TextBlock Text="Upload ×8 (maks 20)" FontSize="11"/>
+                                            <TextBlock Text="·" FontSize="11" Opacity="0.4"/>
+                                            <TextBlock Text="Komentar ×3 (maks 10)" FontSize="11"/>
+                                            <TextBlock Text="·" FontSize="11" Opacity="0.4"/>
+                                            <TextBlock Text="Review ×4 (maks 10)" FontSize="11"/>
+                                            <TextBlock Text="·" FontSize="11" Opacity="0.4"/>
+                                            <TextBlock Text="Tepat Waktu +10" FontSize="11"/>
+                                        </StackPanel>
+                                    </StackPanel>
+                                </Border>
+
+                                <TextBlock Text="Skor Sistem per Mahasiswa (berdasarkan 3 parameter)"
+                                           FontSize="13" FontWeight="SemiBold"/>
                                 <ItemsRepeater x:Name="GLecSystemRepeater">
                                     <ItemsRepeater.Layout><StackLayout Spacing="8"/></ItemsRepeater.Layout>
                                     <ItemsRepeater.ItemTemplate>
                                         <DataTemplate>
                                             <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                                                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                                                    BorderThickness="1" CornerRadius="8" Padding="16,14">
-                                                <Grid ColumnSpacing="16">
-                                                    <Grid.ColumnDefinitions>
-                                                        <ColumnDefinition Width="150"/>
-                                                        <ColumnDefinition Width="*"/>
-                                                        <ColumnDefinition Width="70"/>
-                                                    </Grid.ColumnDefinitions>
-                                                    <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                                                        <TextBlock Text="{Binding StudentName}" FontSize="13" FontWeight="SemiBold"/>
-                                                        <TextBlock Text="{Binding StudentId}" FontSize="11" Opacity="0.5"/>
-                                                    </StackPanel>
-                                                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" FlowDirection="LeftToRight">
-                                                        <Border Background="{ThemeResource SubtleFillColorSecondaryBrush}" CornerRadius="4" Padding="7,3">
-                                                            <TextBlock Text="{Binding CommitStr}" FontSize="11"/>
+                                                    BorderThickness="1" CornerRadius="8" Padding="0">
+                                                <StackPanel>
+                                                    <!-- Baris header: nama + skor + aksi -->
+                                                    <Grid Padding="14,12" ColumnSpacing="12">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="140"/>
+                                                            <ColumnDefinition Width="*"/>
+                                                            <ColumnDefinition Width="70"/>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        <StackPanel Grid.Column="0" VerticalAlignment="Center" Spacing="2">
+                                                            <TextBlock Text="{Binding StudentName}" FontSize="13" FontWeight="SemiBold"/>
+                                                            <TextBlock Text="{Binding StudentId}"   FontSize="11" Opacity="0.5"/>
+                                                        </StackPanel>
+                                                        <StackPanel Grid.Column="1" Spacing="5" VerticalAlignment="Center">
+                                                            <!-- Chip tuning -->
+                                                            <Border Background="{ThemeResource SubtleFillColorSecondaryBrush}"
+                                                                    CornerRadius="4" Padding="8,4">
+                                                                <TextBlock Text="{Binding TuningStr}" FontSize="11"/>
+                                                            </Border>
+                                                            <!-- Chip AI -->
+                                                            <Border Background="{ThemeResource SubtleFillColorSecondaryBrush}"
+                                                                    CornerRadius="4" Padding="8,4">
+                                                                <TextBlock Text="{Binding AiStr}" FontSize="11"/>
+                                                            </Border>
+                                                            <!-- Chip simulasi + status -->
+                                                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                                                <Border Background="{ThemeResource SubtleFillColorSecondaryBrush}"
+                                                                        CornerRadius="4" Padding="8,4">
+                                                                    <TextBlock Text="{Binding SimStr}" FontSize="11"/>
+                                                                </Border>
+                                                                <Border CornerRadius="4" Padding="8,4" Background="{Binding OnTimeBg}">
+                                                                    <TextBlock Text="{Binding OnTimeStr}" FontSize="11"
+                                                                               FontWeight="SemiBold" Foreground="{Binding OnTimeFg}"/>
+                                                                </Border>
+                                                            </StackPanel>
+                                                        </StackPanel>
+                                                        <Border Grid.Column="2" CornerRadius="8"
+                                                                Background="{ThemeResource AccentFillColorTertiaryBrush}"
+                                                                Padding="10,6" VerticalAlignment="Center">
+                                                            <StackPanel HorizontalAlignment="Center" Spacing="2">
+                                                                <TextBlock Text="{Binding ScoreStr}" FontSize="18" FontWeight="Bold"
+                                                                           HorizontalAlignment="Center"
+                                                                           Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
+                                                                <TextBlock Text="/ 100" FontSize="10" Opacity="0.6"
+                                                                           HorizontalAlignment="Center"/>
+                                                            </StackPanel>
                                                         </Border>
-                                                        <Border Background="{ThemeResource SubtleFillColorSecondaryBrush}" CornerRadius="4" Padding="7,3">
-                                                            <TextBlock Text="{Binding FileStr}" FontSize="11"/>
-                                                        </Border>
-                                                        <Border Background="{ThemeResource SubtleFillColorSecondaryBrush}" CornerRadius="4" Padding="7,3">
-                                                            <TextBlock Text="{Binding TaskStr}" FontSize="11"/>
-                                                        </Border>
-                                                        <Border CornerRadius="4" Padding="7,3" Background="{Binding OnTimeBg}">
-                                                            <TextBlock Text="{Binding OnTimeStr}" FontSize="11" FontWeight="SemiBold" Foreground="{Binding OnTimeFg}"/>
-                                                        </Border>
-                                                    </StackPanel>
-                                                    <Border Grid.Column="2" CornerRadius="6" Background="{ThemeResource AccentFillColorTertiaryBrush}" Padding="10,5" VerticalAlignment="Center">
-                                                        <TextBlock Text="{Binding ScoreStr}" FontSize="16" FontWeight="Bold" HorizontalAlignment="Center" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
-                                                    </Border>
-                                                </Grid>
+                                                        <Button Grid.Column="3" Tag="{Binding StudentId}" Content="Detail"
+                                                                FontSize="12" Padding="10,4" VerticalAlignment="Center"
+                                                                Click="GLecDetailAny_Click"/>
+                                                    </Grid>
+
+                                                    <!-- Expander detail tuning + simulasi -->
+                                                    <Expander Header="Detail Parameter Sistem"
+                                                              Margin="10,0,10,10"
+                                                              HorizontalAlignment="Stretch"
+                                                              HorizontalContentAlignment="Stretch">
+                                                        <StackPanel Spacing="6" Margin="4,4,4,0">
+                                                            <Border Background="{ThemeResource SubtleFillColorSecondaryBrush}"
+                                                                    CornerRadius="6" Padding="12,8">
+                                                                <StackPanel Spacing="3">
+                                                                    <TextBlock Text="Rekam Tuning Parameter (maks 40 poin)"
+                                                                               FontSize="11" FontWeight="SemiBold" Opacity="0.7"/>
+                                                                    <TextBlock Text="{Binding TuningDetailStr}"
+                                                                               FontSize="12" TextWrapping="Wrap"/>
+                                                                </StackPanel>
+                                                            </Border>
+                                                            <Border Background="{ThemeResource SubtleFillColorSecondaryBrush}"
+                                                                    CornerRadius="6" Padding="12,8">
+                                                                <StackPanel Spacing="3">
+                                                                    <TextBlock Text="Hasil Simulasi (maks 40 poin)"
+                                                                               FontSize="11" FontWeight="SemiBold" Opacity="0.7"/>
+                                                                    <TextBlock Text="{Binding SimDetailStr}"
+                                                                               FontSize="12" TextWrapping="Wrap"/>
+                                                                </StackPanel>
+                                                            </Border>
+                                                            <Border Background="{ThemeResource SubtleFillColorSecondaryBrush}"
+                                                                    CornerRadius="6" Padding="12,8">
+                                                                <StackPanel Spacing="3">
+                                                                    <TextBlock Text="Penggunaan AI (maks 20 poin)"
+                                                                               FontSize="11" FontWeight="SemiBold" Opacity="0.7"/>
+                                                                    <TextBlock Text="{Binding AiStr}"
+                                                                               FontSize="12" TextWrapping="Wrap"/>
+                                                                </StackPanel>
+                                                            </Border>
+                                                        </StackPanel>
+                                                    </Expander>
+                                                </StackPanel>
                                             </Border>
                                         </DataTemplate>
                                     </ItemsRepeater.ItemTemplate>
@@ -702,8 +814,116 @@
                             </StackPanel>
                         </PivotItem>
 
-                        <!-- Tab 4: Aktivitas Kelompok -->
-                        <PivotItem Header="Aktivitas Kelompok">
+                        <!-- Tab 4: Rekap Submit (waktu submit vs deadline) -->
+                        <PivotItem Header="Rekap Submit">
+                            <StackPanel Spacing="12" Margin="0,12,0,0">
+
+                                <!-- Header: judul + info deadline -->
+                                <Grid>
+                                    <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                        <TextBlock Text="Submit Mahasiswa" FontSize="13" FontWeight="SemiBold"/>
+                                        <TextBlock x:Name="GLecSubmitCount" Text="" FontSize="12" Opacity="0.5" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                    <Border HorizontalAlignment="Right" CornerRadius="6" Padding="10,5"
+                                            Background="{ThemeResource SubtleFillColorSecondaryBrush}" VerticalAlignment="Center">
+                                        <StackPanel Orientation="Horizontal" Spacing="6">
+                                            <FontIcon FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" Glyph="&#xE916;"
+                                                      FontSize="12" Opacity="0.7"/>
+                                            <TextBlock x:Name="GLecDeadlineInfo" Text="Deadline: —"
+                                                       FontSize="12" FontWeight="SemiBold"/>
+                                        </StackPanel>
+                                    </Border>
+                                </Grid>
+
+                                <!-- Tabel submit -->
+                                <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                        BorderThickness="1" CornerRadius="8">
+                                    <StackPanel>
+                                        <!-- Header kolom -->
+                                        <Grid Padding="14,10" Background="{ThemeResource SubtleFillColorSecondaryBrush}">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="140"/>
+                                                <ColumnDefinition Width="60"/>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="88"/>
+                                                <ColumnDefinition Width="130"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="Mahasiswa"              FontSize="11" FontWeight="SemiBold"/>
+                                            <TextBlock Grid.Column="1" Text="Kelompok"               FontSize="11" FontWeight="SemiBold"/>
+                                            <TextBlock Grid.Column="2" Text="Deadline"               FontSize="11" FontWeight="SemiBold"/>
+                                            <TextBlock Grid.Column="3" Text="Waktu Submit"           FontSize="11" FontWeight="SemiBold"/>
+                                            <TextBlock Grid.Column="4" Text="Status"                 FontSize="11" FontWeight="SemiBold" HorizontalAlignment="Center"/>
+                                            <TextBlock Grid.Column="5" Text="Selisih dari Deadline"  FontSize="11" FontWeight="SemiBold"/>
+                                            <TextBlock Grid.Column="6" Text="Aksi"                   FontSize="11" FontWeight="SemiBold" HorizontalAlignment="Center"/>
+                                        </Grid>
+                                        <Rectangle Height="1" Fill="{ThemeResource CardStrokeColorDefaultBrush}"/>
+
+                                        <ItemsRepeater x:Name="GLecSubmitRepeater">
+                                            <ItemsRepeater.Layout><StackLayout/></ItemsRepeater.Layout>
+                                            <ItemsRepeater.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Grid Padding="14,10" BorderThickness="0,0,0,1"
+                                                          BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="140"/>
+                                                            <ColumnDefinition Width="60"/>
+                                                            <ColumnDefinition Width="*"/>
+                                                            <ColumnDefinition Width="*"/>
+                                                            <ColumnDefinition Width="88"/>
+                                                            <ColumnDefinition Width="130"/>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                        </Grid.ColumnDefinitions>
+
+                                                        <!-- Mahasiswa -->
+                                                        <StackPanel Grid.Column="0" VerticalAlignment="Center" Spacing="1">
+                                                            <TextBlock Text="{Binding StudentName}" FontSize="13" FontWeight="SemiBold"/>
+                                                            <TextBlock Text="{Binding StudentId}"   FontSize="11" Opacity="0.5"/>
+                                                        </StackPanel>
+
+                                                        <!-- Kelompok -->
+                                                        <TextBlock Grid.Column="1" Text="{Binding GroupName}"
+                                                                   FontSize="12" Opacity="0.7" VerticalAlignment="Center"/>
+
+                                                        <!-- Deadline -->
+                                                        <TextBlock Grid.Column="2" Text="{Binding DeadlineStr}"
+                                                                   FontSize="12" VerticalAlignment="Center"/>
+
+                                                        <!-- Waktu Submit -->
+                                                        <TextBlock Grid.Column="3" Text="{Binding SubmitTimeStr}"
+                                                                   FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center"/>
+
+                                                        <!-- Status pill -->
+                                                        <Border Grid.Column="4" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                                Background="{Binding StatusBg}" CornerRadius="6" Padding="8,3">
+                                                            <TextBlock Text="{Binding StatusText}" FontSize="11" FontWeight="SemiBold"
+                                                                       Foreground="{Binding StatusFg}"/>
+                                                        </Border>
+
+                                                        <!-- Selisih -->
+                                                        <TextBlock Grid.Column="5" Text="{Binding TimeDiffStr}"
+                                                                   FontSize="11" Foreground="{Binding StatusFg}" VerticalAlignment="Center"/>
+
+                                                        <!-- Aksi: Detail -->
+                                                        <Button Grid.Column="6" Tag="{Binding StudentId}" Content="Detail"
+                                                                FontSize="12" Padding="10,4" VerticalAlignment="Center"
+                                                                Click="GLecDetailAny_Click"/>
+                                                    </Grid>
+                                                </DataTemplate>
+                                            </ItemsRepeater.ItemTemplate>
+                                        </ItemsRepeater>
+
+
+
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+                        </PivotItem>
+
+                        <!-- Tab 5: Aktivitas Kelompok -->
+                        <PivotItem Header="Aktivitas">
                             <StackPanel Spacing="12" Margin="0,12,0,0">
                                 <TextBlock Text="Recent Activities — Semua Mahasiswa" FontSize="13" FontWeight="SemiBold"/>
                                 <ItemsRepeater x:Name="GLecActivitiesRepeater">
@@ -717,6 +937,7 @@
                                                     <Grid.ColumnDefinitions>
                                                         <ColumnDefinition Width="Auto"/>
                                                         <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="Auto"/>
                                                         <ColumnDefinition Width="Auto"/>
                                                         <ColumnDefinition Width="Auto"/>
                                                     </Grid.ColumnDefinitions>
@@ -740,8 +961,16 @@
                                                             Background="{ThemeResource SubtleFillColorSecondaryBrush}" VerticalAlignment="Center">
                                                         <TextBlock Text="{Binding AutoScoreStr}" FontSize="11" FontWeight="SemiBold"/>
                                                     </Border>
-                                                    <TextBlock Grid.Column="3" Text="{Binding TimeAgo}" FontSize="11" Opacity="0.4"
-                                                               VerticalAlignment="Center" Margin="6,0,0,0"/>
+                                                    <!-- Waktu: absolut + relatif -->
+                                                    <StackPanel Grid.Column="3" VerticalAlignment="Center" Spacing="1"
+                                                                HorizontalAlignment="Right" Margin="6,0,0,0">
+                                                        <TextBlock Text="{Binding ActivityTimeStr}" FontSize="11" Opacity="0.6" HorizontalAlignment="Right"/>
+                                                        <TextBlock Text="{Binding TimeAgo}"         FontSize="10" Opacity="0.4" HorizontalAlignment="Right"/>
+                                                    </StackPanel>
+                                                    <!-- Detail -->
+                                                    <Button Grid.Column="4" Tag="{Binding StudentId}" Content="Detail"
+                                                            FontSize="12" Padding="10,4" VerticalAlignment="Center"
+                                                            Click="GLecDetailAny_Click" Margin="6,0,0,0"/>
                                                 </Grid>
                                             </Border>
                                         </DataTemplate>

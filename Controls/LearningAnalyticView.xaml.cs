@@ -37,11 +37,21 @@ public sealed partial class LearningAnalyticView : UserControl
     /// <summary>Currently selected kelas filter; null = semua kelas.</summary>
     private string? _selectedKelas;
 
-    private readonly List<(string Id, string Title)> _assignments = new()
+    private readonly List<(string Id, string Title, DateTime Deadline)> _assignments = new()
     {
-        ("ASGN-001", "Tugas Kelompok - Sistem Kontrol PID"),
-        ("ASGN-002", "Tugas Kelompok - Heat Exchanger"),
+        ("ASGN-001", "Tugas Kelompok - Sistem Kontrol PID", DateTime.Now.AddHours(-12)),
+        ("ASGN-002", "Tugas Kelompok - Heat Exchanger",     DateTime.Now.AddDays(7)),
     };
+
+    private DateTime CurrentDeadline
+    {
+        get
+        {
+            foreach (var a in _assignments)
+                if (a.Id == _gradingAssignmentId) return a.Deadline;
+            return DateTime.Now.AddDays(7);
+        }
+    }
 
     // Group members — populated from StudentService (excludes current user)
     private List<GradingGroupMemberVm> _groupMembers = new();
@@ -146,7 +156,7 @@ public sealed partial class LearningAnalyticView : UserControl
     private void InitGradingCombo()
     {
         GradingAssignmentCombo.Items.Clear();
-        foreach (var (id, title) in _assignments)
+        foreach (var (id, title, _) in _assignments)
             GradingAssignmentCombo.Items.Add(new ComboBoxItem { Content = title, Tag = id });
         GradingAssignmentCombo.SelectedIndex = 0;
     }
@@ -425,9 +435,13 @@ public sealed partial class LearningAnalyticView : UserControl
 
     private async System.Threading.Tasks.Task LoadLecturerGradingAsync()
     {
+        // Regenerasi skor sistem dari aktivitas nyata sebelum menampilkan data
+        await _grading.RegenerateSystemScoresAsync(_gradingAssignmentId, CurrentDeadline);
+
         await RefreshLecSummaryAsync();
         await RefreshLecPeerAsync();
         await RefreshLecSystemAsync();
+        await RefreshLecSubmitsAsync();
         await RefreshLecActivitiesAsync();
     }
 
@@ -467,6 +481,7 @@ public sealed partial class LearningAnalyticView : UserControl
             {
                 EvaluatorName  = e.EvaluatorName,
                 EvaluateeName  = e.EvaluateeName,
+                EvaluateeId    = e.EvaluateeId,
                 ScoreStr       = e.Score.ToString("F1"),
                 Comment        = string.IsNullOrWhiteSpace(e.Comment) ? "(Tidak ada komentar)" : e.Comment,
                 EvaluatedAtStr = e.EvaluatedAt.ToString("dd MMM, HH:mm"),
@@ -484,24 +499,117 @@ public sealed partial class LearningAnalyticView : UserControl
             ? allEvals
             : allEvals.Where(e => filteredIds.Contains(e.StudentId)).ToList();
 
-        GLecSystemRepeater.ItemsSource = evals
-            .OrderByDescending(e => e.Score)
-            .Select(e => new GLecSystemVm
+        // Ambil data 3 parameter untuk tiap mahasiswa
+        var allTunings  = await _grading.GetAllTuningRecordsAsync(_gradingAssignmentId);
+        var allAiUsage  = await _grading.GetAllAiUsageAsync(_gradingAssignmentId);
+
+        var vms = new List<GLecSystemVm>();
+        foreach (var e in evals.OrderByDescending(x => x.Score))
+        {
+            var myTunings = allTunings.Where(t => t.StudentId == e.StudentId).ToList();
+            var myAi      = allAiUsage.Where(a => a.StudentId == e.StudentId).ToList();
+            int prodAi    = myAi.Count(a => a.IsProductive);
+            int uniqueT   = myTunings.Select(t => $"{t.Kp:F1}{t.Ki:F2}{t.Kd:F2}").Distinct().Count();
+            double bestQ  = myTunings.Any() ? myTunings.Max(t => t.QualityScore) : 0;
+
+            var bestTuning = myTunings.OrderByDescending(t => t.QualityScore).FirstOrDefault();
+            string tuningDetail = bestTuning != null
+                ? $"Kp={bestTuning.Kp:F2}  Ki={bestTuning.Ki:F3}  Kd={bestTuning.Kd:F3}  Kualitas: {bestTuning.QualityScore:F0}/100"
+                : "Belum ada rekam tuning";
+
+            var bestSim = (await _grading.GetSimulationResultsAsync(e.StudentId, _gradingAssignmentId))
+                .OrderByDescending(s => s.Score).FirstOrDefault();
+            string simDetail = bestSim != null
+                ? $"Sesi terbaik: {bestSim.Score:F1}/100 · Stabilitas {bestSim.StabilityIndex * 100:F0}% · {bestSim.ParameterStr} parameter"
+                : "Belum ada sesi simulasi";
+
+            vms.Add(new GLecSystemVm
             {
-                StudentId   = e.StudentId,
-                StudentName = e.StudentName,
-                ScoreStr    = e.Score.ToString("F1"),
-                CommitStr   = $"Submit: {e.CommitsCount}",
-                FileStr     = $"File: {e.FilesModified}",
-                TaskStr     = $"Task: {e.TasksCompleted}/{e.TasksTotal}",
-                OnTimeStr   = e.SubmittedOnTime ? "Tepat Waktu" : "Terlambat",
+                StudentId       = e.StudentId,
+                StudentName     = e.StudentName,
+                ScoreStr        = e.Score.ToString("F1"),
+                TuningStr       = myTunings.Any()
+                    ? $"Tuning: {myTunings.Count}× ({uniqueT} unik) · Terbaik {bestQ:F0}/100"
+                    : "Tuning: belum ada rekam",
+                AiStr           = myAi.Any()
+                    ? $"AI: {myAi.Count} sesi ({prodAi} produktif)"
+                    : "AI: belum ada rekam",
+                SimStr          = bestSim != null
+                    ? $"Simulasi: {e.FilesModified} sesi · Terbaik {bestSim.Score:F1}"
+                    : "Simulasi: belum ada sesi",
+                TuningDetailStr = tuningDetail,
+                SimDetailStr    = simDetail,
+                OnTimeStr   = e.SubmittedOnTime ? "Tepat Waktu" : "Belum Submit",
                 OnTimeBg    = new SolidColorBrush(e.SubmittedOnTime
                     ? Windows.UI.Color.FromArgb(30, 16, 124, 16)
                     : Windows.UI.Color.FromArgb(30, 200, 40, 40)),
                 OnTimeFg    = new SolidColorBrush(e.SubmittedOnTime
                     ? Windows.UI.Color.FromArgb(255, 16, 124, 16)
                     : Windows.UI.Color.FromArgb(255, 200, 40, 40)),
+            });
+        }
+        GLecSystemRepeater.ItemsSource = vms;
+    }
+
+    private async System.Threading.Tasks.Task RefreshLecSubmitsAsync()
+    {
+        var deadline = CurrentDeadline;
+        GLecDeadlineInfo.Text = $"Deadline: {deadline:dd MMM yyyy, HH:mm}";
+
+        var allActs = await _grading.GetGroupActivitiesAsync(_gradingAssignmentId, 200);
+        var submitActs = allActs.Where(a => a.ActivityType == "Submit").ToList();
+
+        var filteredIds = _selectedKelas == null
+            ? null
+            : GetFilteredStudents().Select(s => s.Id).ToHashSet();
+        if (filteredIds != null)
+            submitActs = submitActs.Where(a => filteredIds.Contains(a.StudentId)).ToList();
+
+        var vms = submitActs
+            .OrderBy(a => a.StudentName)
+            .ThenByDescending(a => a.ActivityTime)
+            .Select(a =>
+            {
+                var diff = a.ActivityTime - deadline;
+                bool onTime = diff.TotalSeconds <= 0;
+                return new GLecSubmitVm
+                {
+                    StudentName   = a.StudentName,
+                    StudentId     = a.StudentId,
+                    GroupName     = a.GroupId,
+                    DeadlineStr   = deadline.ToString("dd MMM yyyy, HH:mm"),
+                    SubmitTimeStr = a.ActivityTime.ToString("dd MMM yyyy, HH:mm"),
+                    StatusText    = onTime ? "Tepat Waktu" : "Terlambat",
+                    TimeDiffStr   = FormatTimeDiff(diff),
+                    StatusBg      = new SolidColorBrush(onTime
+                        ? Windows.UI.Color.FromArgb(30, 16, 124, 16)
+                        : Windows.UI.Color.FromArgb(30, 200, 40, 40)),
+                    StatusFg      = new SolidColorBrush(onTime
+                        ? Windows.UI.Color.FromArgb(255, 16, 124, 16)
+                        : Windows.UI.Color.FromArgb(255, 200, 40, 40)),
+                };
             }).ToList();
+
+        GLecSubmitRepeater.ItemsSource = vms;
+        int uniqueMhs = submitActs.Select(a => a.StudentId).Distinct().Count();
+        GLecSubmitCount.Text = $"({vms.Count} submit dari {uniqueMhs} mahasiswa)";
+    }
+
+    private static string FormatTimeDiff(TimeSpan diff)
+    {
+        if (diff.TotalSeconds <= 0)
+        {
+            var abs = diff.Negate();
+            if (abs.TotalDays >= 1) return $"{(int)abs.TotalDays} hari sebelum deadline";
+            if (abs.TotalHours >= 1) return $"{(int)abs.TotalHours} jam sebelum deadline";
+            return $"{(int)abs.TotalMinutes} menit sebelum deadline";
+        }
+        else
+        {
+            if (diff.TotalDays >= 1) return $"{(int)diff.TotalDays} hari terlambat";
+            if (diff.TotalHours >= 1) return $"{(int)diff.TotalHours} jam terlambat";
+            return $"{(int)diff.TotalMinutes} menit terlambat";
+        }
     }
 
     private async System.Threading.Tasks.Task RefreshLecActivitiesAsync()
@@ -515,46 +623,56 @@ public sealed partial class LearningAnalyticView : UserControl
             : allActs.Where(a => filteredIds.Contains(a.StudentId)).ToList();
         GLecActivitiesRepeater.ItemsSource = acts.Select(a => new GLecActivityVm
         {
-            StudentName   = a.StudentName,
-            ActivityType  = a.ActivityType,
-            Description   = a.Description,
-            ActivityIcon  = a.ActivityIcon,
-            TimeAgo       = a.TimeAgo,
-            AutoScoreStr  = a.AutoScore.HasValue ? $"+{a.AutoScore:F0} poin" : "—",
+            StudentId       = a.StudentId,
+            StudentName     = a.StudentName,
+            ActivityType    = a.ActivityType,
+            Description     = a.Description,
+            ActivityIcon    = a.ActivityIcon,
+            TimeAgo         = a.TimeAgo,
+            ActivityTimeStr = a.ActivityTime.ToString("dd MMM, HH:mm"),
+            AutoScoreStr    = a.AutoScore.HasValue ? $"+{a.AutoScore:F0} poin" : "—",
         }).ToList();
     }
 
     private async void GLecShowDetail_Click(object sender, RoutedEventArgs e)
+        => await ShowStudentDetail((sender as Button)?.Tag?.ToString());
+
+    private async void GLecDetailAny_Click(object sender, RoutedEventArgs e)
+        => await ShowStudentDetail((sender as Button)?.Tag?.ToString());
+
+    private async System.Threading.Tasks.Task ShowStudentDetail(string? studentId)
     {
-        if (sender is not Button btn) return;
-        string? studentId = btn.Tag?.ToString();
         if (string.IsNullOrEmpty(studentId)) return;
-
-        var summaries = await _grading.GetGradeSummaryByAssignmentAsync(_gradingAssignmentId);
-        string studentName = summaries.FirstOrDefault(s => s.StudentId == studentId)?.StudentName
-                             ?? studentId;
-
-        await StudentDetailDialog.ShowAsync(XamlRoot, studentId, studentName, _gradingAssignmentId);
+        string studentName = StudentService.Instance.GetName(studentId);
+        if (string.IsNullOrWhiteSpace(studentName)) studentName = studentId;
+        await StudentDetailDialog.ShowAsync(
+            XamlRoot, studentId, studentName, _gradingAssignmentId, CurrentDeadline);
     }
 
     private async void GLecGradeStudent_Click(object sender, RoutedEventArgs e)
     {
         if (sender is not Button btn) return;
         _lecGradingStudentId = btn.Tag?.ToString();
+        if (string.IsNullOrEmpty(_lecGradingStudentId)) return;
+
         var summaries = await _grading.GetGradeSummaryByAssignmentAsync(_gradingAssignmentId);
         var s = summaries.FirstOrDefault(x => x.StudentId == _lecGradingStudentId);
         if (s == null) return;
 
-        var existing = await _grading.GetLecturerGradeForStudentAsync(_lecGradingStudentId!, _gradingAssignmentId);
+        var existing = await _grading.GetLecturerGradeForStudentAsync(_lecGradingStudentId, _gradingAssignmentId);
+        var tunings  = await _grading.GetTuningRecordsAsync(_lecGradingStudentId, _gradingAssignmentId);
+        var aiUsage  = await _grading.GetAiUsageAsync(_lecGradingStudentId, _gradingAssignmentId);
+        var sims     = await _grading.GetSimulationResultsAsync(_lecGradingStudentId, _gradingAssignmentId);
 
-        double pres = existing?.ScorePresentation  ?? 75;
-        double rep  = existing?.ScoreReport        ?? 75;
+        // ── Nilai awal ───────────────────────────────────────────────────────
+        double pres = existing?.ScorePresentation   ?? 75;
+        double rep  = existing?.ScoreReport         ?? 75;
         double impl = existing?.ScoreImplementation ?? 75;
-        double def  = existing?.ScoreDefense       ?? 75;
-        string fb   = existing?.Feedback           ?? "";
-        bool fin    = existing?.IsFinalized        ?? false;
+        double def  = existing?.ScoreDefense        ?? 75;
+        string fb   = existing?.Feedback            ?? "";
+        bool   fin  = existing?.IsFinalized         ?? false;
 
-        // Build dialog programmatically so XamlRoot is available
+        // ── Form input nilai ─────────────────────────────────────────────────
         var nbPres = new NumberBox { Minimum = 0, Maximum = 100, Value = pres, SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline, SmallChange = 1 };
         var nbRep  = new NumberBox { Minimum = 0, Maximum = 100, Value = rep,  SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline, SmallChange = 1 };
         var nbImpl = new NumberBox { Minimum = 0, Maximum = 100, Value = impl, SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline, SmallChange = 1 };
@@ -581,24 +699,88 @@ public sealed partial class LearningAnalyticView : UserControl
         AddCell(nbImpl, 1, 0, "Nilai Implementasi");
         AddCell(nbDef,  1, 1, "Nilai Defence / Ujian");
 
-        var fbHeader = new TextBlock { Text = "Feedback untuk Mahasiswa", FontSize = 12, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, Margin = new Thickness(0, 4, 0, 0) };
+        var gradeInput = new StackPanel { Spacing = 10 };
+        gradeInput.Children.Add(formGrid);
+        gradeInput.Children.Add(new TextBlock { Text = "Feedback untuk Mahasiswa", FontSize = 12, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, Margin = new Thickness(0,4,0,0) });
+        gradeInput.Children.Add(fbBox);
+        gradeInput.Children.Add(finCb);
 
-        var content = new StackPanel { Width = 400, Spacing = 12 };
-        content.Children.Add(new TextBlock { Text = $"{s.StudentName} — {s.AssignmentTitle}", FontSize = 15, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold });
-        content.Children.Add(new Microsoft.UI.Xaml.Shapes.Rectangle { Height = 1, Fill = Resources.TryGetValue("CardStrokeColorDefaultBrush", out var strokeBrush) ? (Brush)strokeBrush : new SolidColorBrush(Colors.Gray) });
-        content.Children.Add(formGrid);
-        content.Children.Add(fbHeader);
-        content.Children.Add(fbBox);
-        content.Children.Add(finCb);
+        var gradeExpander = new Expander
+        {
+            Header      = "Input Nilai Dosen",
+            IsExpanded  = true,
+            HorizontalAlignment        = HorizontalAlignment.Stretch,
+            HorizontalContentAlignment = HorizontalAlignment.Stretch,
+            Content     = gradeInput,
+        };
+
+        // ── Section hasil pekerjaan mahasiswa ────────────────────────────────
+        Border MakeWorkCard(string icon, string title, string summary, string? detail = null)
+        {
+            var inner = new StackPanel { Spacing = 2 };
+            var header = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+            header.Children.Add(new FontIcon { FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Segoe Fluent Icons,Segoe MDL2 Assets"), Glyph = icon, FontSize = 14 });
+            header.Children.Add(new TextBlock { Text = title, FontSize = 13, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold });
+            inner.Children.Add(header);
+            inner.Children.Add(new TextBlock { Text = summary, FontSize = 12, Opacity = 0.7 });
+            if (detail != null)
+                inner.Children.Add(new TextBlock { Text = detail, FontSize = 11, Opacity = 0.5, TextWrapping = TextWrapping.Wrap });
+            return new Border
+            {
+                Background   = Resources.TryGetValue("SubtleFillColorSecondaryBrush", out var subBrush) ? (Brush)subBrush : new SolidColorBrush(Colors.Transparent),
+                CornerRadius = new CornerRadius(8),
+                Padding      = new Thickness(12, 10, 12, 10),
+                Child        = inner,
+            };
+        }
+
+        // Ringkasan tuning
+        string tuningSum = tunings.Any()
+            ? $"{tunings.Count} percobaan · Terbaik: {tunings.Max(t => t.QualityScore):F0}/100 · Kp={tunings.OrderByDescending(t => t.QualityScore).First().Kp:F2}"
+            : "Belum ada rekam tuning";
+        string? tuningDetail = tunings.Any()
+            ? $"Kualitas: {string.Join(", ", tunings.Take(3).Select(t => $"{t.QualityScore:F0}"))}"
+            : null;
+
+        // Ringkasan AI
+        int prodAi = aiUsage.Count(a => a.IsProductive);
+        string aiSum = aiUsage.Any()
+            ? $"{aiUsage.Count} sesi · {prodAi} produktif · Topik: {aiUsage.FirstOrDefault()?.Topic ?? "-"}"
+            : "Belum ada rekam penggunaan AI";
+
+        // Ringkasan simulasi
+        string simSum = sims.Any()
+            ? $"{sims.Count} sesi · Terbaik: {sims.Max(r => r.Score):F1}/100 · Stabilitas: {sims.Max(r => r.StabilityIndex) * 100:F0}%"
+            : "Belum ada sesi simulasi";
+
+        var workSection = new StackPanel { Spacing = 8 };
+        workSection.Children.Add(new TextBlock { Text = "Hasil Pekerjaan Mahasiswa", FontSize = 13, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold });
+        workSection.Children.Add(MakeWorkCard("", "Rekam Tuning Parameter", tuningSum, tuningDetail));
+        workSection.Children.Add(MakeWorkCard("", "Penggunaan AI", aiSum));
+        workSection.Children.Add(MakeWorkCard("", "Hasil Simulasi", simSum));
+
+        // ── Susun konten dialog ──────────────────────────────────────────────
+        var divider = new Microsoft.UI.Xaml.Shapes.Rectangle { Height = 1, Margin = new Thickness(0, 4, 0, 4) };
+        if (Resources.TryGetValue("CardStrokeColorDefaultBrush", out var strokeBrush))
+            divider.Fill = (Brush)strokeBrush;
+
+        var scroll = new ScrollViewer { MaxHeight = 520, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+        var content = new StackPanel { Width = 560, Spacing = 12 };
+        content.Children.Add(new TextBlock { Text = $"{s.StudentName}", FontSize = 16, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold });
+        content.Children.Add(new TextBlock { Text = s.AssignmentTitle ?? _gradingAssignmentId, FontSize = 12, Opacity = 0.6 });
+        content.Children.Add(divider);
+        content.Children.Add(workSection);
+        content.Children.Add(gradeExpander);
+        scroll.Content = content;
 
         var dialog = new ContentDialog
         {
-            Title = "Beri Nilai Mahasiswa",
-            Content = content,
+            Title             = "Penilaian Dosen",
+            Content           = scroll,
             PrimaryButtonText = "Simpan Nilai",
-            CloseButtonText = "Batal",
-            DefaultButton = ContentDialogButton.Primary,
-            XamlRoot = XamlRoot,
+            CloseButtonText   = "Batal",
+            DefaultButton     = ContentDialogButton.Primary,
+            XamlRoot          = XamlRoot,
         };
 
         var result = await dialog.ShowAsync();
@@ -607,20 +789,20 @@ public sealed partial class LearningAnalyticView : UserControl
         double avg = (nbPres.Value + nbRep.Value + nbImpl.Value + nbDef.Value) / 4.0;
         var grade = new LecturerGrade
         {
-            LecturerId   = App.Session.IsSignedIn ? App.Session.Username : "LEC001",
-            LecturerName = App.Session.IsSignedIn && !string.IsNullOrWhiteSpace(App.Session.DisplayName)
-                               ? App.Session.DisplayName : "Dosen Pengampu",
-            StudentId    = _lecGradingStudentId,
-            StudentName  = s.StudentName,
-            AssignmentId = _gradingAssignmentId,
+            LecturerId      = App.Session.IsSignedIn ? App.Session.Username : "LEC001",
+            LecturerName    = App.Session.IsSignedIn && !string.IsNullOrWhiteSpace(App.Session.DisplayName)
+                                  ? App.Session.DisplayName : "Dosen Pengampu",
+            StudentId       = _lecGradingStudentId,
+            StudentName     = s.StudentName,
+            AssignmentId    = _gradingAssignmentId,
             AssignmentTitle = _assignments.FirstOrDefault(a => a.Id == _gradingAssignmentId).Title ?? "",
-            GroupId      = "GRP-01",
-            ScorePresentation  = nbPres.Value,
-            ScoreReport        = nbRep.Value,
+            GroupId         = "GRP-01",
+            ScorePresentation   = nbPres.Value,
+            ScoreReport         = nbRep.Value,
             ScoreImplementation = nbImpl.Value,
-            ScoreDefense       = nbDef.Value,
-            Score      = avg,
-            Feedback   = fbBox.Text.Trim(),
+            ScoreDefense        = nbDef.Value,
+            Score       = avg,
+            Feedback    = fbBox.Text.Trim(),
             IsFinalized = finCb.IsChecked == true,
         };
 
@@ -632,11 +814,18 @@ public sealed partial class LearningAnalyticView : UserControl
     {
         switch (LecturerGradingPivot.SelectedIndex)
         {
-            case 0: _ = RefreshLecSummaryAsync();    break;
-            case 1: _ = RefreshLecPeerAsync();       break;
-            case 2: _ = RefreshLecSystemAsync();     break;
-            case 3: _ = RefreshLecActivitiesAsync(); break;
+            case 0: _ = RefreshLecSummaryAsync();                                              break;
+            case 1: _ = RefreshLecPeerAsync();                                                 break;
+            case 2: _ = RefreshSystemThenDisplay();                                            break;
+            case 3: _ = RefreshLecSubmitsAsync();                                              break;
+            case 4: _ = RefreshLecActivitiesAsync();                                           break;
         }
+    }
+
+    private async System.Threading.Tasks.Task RefreshSystemThenDisplay()
+    {
+        await _grading.RegenerateSystemScoresAsync(_gradingAssignmentId, CurrentDeadline);
+        await RefreshLecSystemAsync();
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -849,15 +1038,21 @@ public class GradingReceivedEvalVm
 
 internal class GLecSummaryVm
 {
-    public string StudentId      { get; }
-    public string StudentName    { get; }
-    public string GroupName      { get; }
-    public string PeerScoreStr   { get; }
-    public string SystemScoreStr { get; }
+    public string StudentId        { get; }
+    public string StudentName      { get; }
+    public string GroupName        { get; }
+    public string PeerScoreStr     { get; }
+    public string SystemScoreStr   { get; }
     public string LecturerScoreStr { get; }
-    public string FinalScoreStr  { get; }
-    public string LetterGrade    { get; }
+    public string FinalScoreStr    { get; }
+    public string LetterGrade      { get; }
     public SolidColorBrush GradeBadgeColor { get; }
+
+    // Kontribusi persentase masing-masing komponen (untuk Expander breakdown)
+    public string PeerContribStr     { get; }
+    public string SystemContribStr   { get; }
+    public string LecturerContribStr { get; }
+    public string WeightInfoStr      { get; }
 
     public GLecSummaryVm(StudentGradeSummary s)
     {
@@ -876,6 +1071,17 @@ internal class GLecSummaryVm
             "C+" or "C"           => Windows.UI.Color.FromArgb(255, 200, 130, 0),
             _                     => Windows.UI.Color.FromArgb(255, 196, 43, 28),
         });
+
+        // Kontribusi tiap komponen ke nilai final
+        double peer = s.PeerScore ?? 0;
+        double sys  = s.SystemScore ?? 0;
+        double lec  = s.LecturerScore ?? 0;
+        PeerContribStr     = $"Peer    (bobot 20%): {peer:F1} × 20% = {peer * 0.20:F1} poin";
+        SystemContribStr   = $"Sistem  (bobot 30%): {sys:F1} × 30% = {sys  * 0.30:F1} poin";
+        LecturerContribStr = $"Dosen   (bobot 50%): {lec:F1} × 50% = {lec  * 0.50:F1} poin";
+        WeightInfoStr      = s.FinalScore.HasValue
+            ? $"Total nilai final: {s.FinalScore.Value:F1} / 100"
+            : "Belum lengkap — dosen belum memberi nilai";
     }
 }
 
@@ -883,6 +1089,7 @@ internal class GLecPeerVm
 {
     public string EvaluatorName  { get; set; } = "";
     public string EvaluateeName  { get; set; } = "";
+    public string EvaluateeId    { get; set; } = "";
     public string ScoreStr       { get; set; } = "";
     public string Comment        { get; set; } = "";
     public string EvaluatedAtStr { get; set; } = "";
@@ -891,25 +1098,44 @@ internal class GLecPeerVm
 
 internal class GLecSystemVm
 {
-    public string StudentId   { get; set; } = "";
-    public string StudentName { get; set; } = "";
-    public string ScoreStr    { get; set; } = "";
-    public string CommitStr   { get; set; } = "";
-    public string FileStr     { get; set; } = "";
-    public string TaskStr     { get; set; } = "";
-    public string OnTimeStr   { get; set; } = "";
+    public string StudentId    { get; set; } = "";
+    public string StudentName  { get; set; } = "";
+    public string ScoreStr     { get; set; } = "";
+    // 3 parameter sistem
+    public string TuningStr    { get; set; } = "";   // rekam tuning parameter
+    public string AiStr        { get; set; } = "";   // penggunaan AI
+    public string SimStr       { get; set; } = "";   // hasil simulasi
+    // Detail tuning
+    public string TuningDetailStr { get; set; } = "";
+    public string SimDetailStr    { get; set; } = "";
+    public string OnTimeStr    { get; set; } = "";
     public SolidColorBrush? OnTimeBg { get; set; }
     public SolidColorBrush? OnTimeFg { get; set; }
 }
 
+internal class GLecSubmitVm
+{
+    public string StudentName   { get; set; } = "";
+    public string StudentId     { get; set; } = "";
+    public string GroupName     { get; set; } = "";
+    public string DeadlineStr   { get; set; } = "";
+    public string SubmitTimeStr { get; set; } = "";
+    public string StatusText    { get; set; } = "";
+    public string TimeDiffStr   { get; set; } = "";
+    public SolidColorBrush? StatusBg { get; set; }
+    public SolidColorBrush? StatusFg { get; set; }
+}
+
 internal class GLecActivityVm
 {
-    public string StudentName  { get; set; } = "";
-    public string ActivityType { get; set; } = "";
-    public string Description  { get; set; } = "";
-    public string ActivityIcon { get; set; } = "";
-    public string TimeAgo      { get; set; } = "";
-    public string AutoScoreStr { get; set; } = "";
+    public string StudentId       { get; set; } = "";
+    public string StudentName     { get; set; } = "";
+    public string ActivityType    { get; set; } = "";
+    public string Description     { get; set; } = "";
+    public string ActivityIcon    { get; set; } = "";
+    public string TimeAgo         { get; set; } = "";
+    public string ActivityTimeStr { get; set; } = "";
+    public string AutoScoreStr    { get; set; } = "";
 }
 
 /// <summary>Editable row used inside the Kelola Mahasiswa dialog.</summary>

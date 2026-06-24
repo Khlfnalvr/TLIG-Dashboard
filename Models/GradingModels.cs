@@ -270,6 +270,64 @@ namespace TLIGDashboard.Models
     }
 
     // ─────────────────────────────────────────────────────────────────────────
+    //  TuningRecord — rekam jejak tuning parameter PID mahasiswa
+    // ─────────────────────────────────────────────────────────────────────────
+
+    public class TuningRecord
+    {
+        public string   Id           { get; set; } = Guid.NewGuid().ToString();
+        public string   StudentId    { get; set; } = "";
+        public string   AssignmentId { get; set; } = "";
+        public string   PlantType    { get; set; } = "Flow";  // Flow / Level / Temperature
+
+        // Parameter PID yang dicoba
+        public double Kp { get; set; }
+        public double Ki { get; set; }
+        public double Kd { get; set; }
+
+        // Metrik performa yang dicapai
+        public double? RiseTime         { get; set; }  // detik
+        public double? Overshoot        { get; set; }  // %
+        public double? SettlingTime     { get; set; }  // detik
+        public double? SteadyStateError { get; set; }  // %
+
+        /// <summary>Skor kualitas tuning 0–100. Semakin mendekati parameter ideal, semakin tinggi.</summary>
+        public double QualityScore { get; set; }
+
+        public DateTime RecordedAt { get; set; } = DateTime.Now;
+
+        public string KpKiKdStr  => $"Kp={Kp:F2} Ki={Ki:F3} Kd={Kd:F3}";
+        public string PlantLabel => PlantType switch
+        {
+            "Level"       => "Level Control",
+            "Temperature" => "Temperature Control",
+            _             => "Flow Control",
+        };
+        public string QualityStr => QualityScore >= 85 ? "Sangat Baik"
+                                  : QualityScore >= 70 ? "Baik"
+                                  : QualityScore >= 55 ? "Cukup" : "Perlu Perbaikan";
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    //  AiUsageRecord — rekam penggunaan AI oleh mahasiswa
+    // ─────────────────────────────────────────────────────────────────────────
+
+    public class AiUsageRecord
+    {
+        public string   Id           { get; set; } = Guid.NewGuid().ToString();
+        public string   StudentId    { get; set; } = "";
+        public string   AssignmentId { get; set; } = "";
+        public string   Topic        { get; set; } = "";    // topik pertanyaan/sesi
+        public int      MessageCount { get; set; }          // jumlah pesan dalam sesi
+        public bool     IsProductive { get; set; }          // apakah sesi menghasilkan output bermakna
+        public string   AiProvider   { get; set; } = "";    // DeepSeek / Claude / dsb
+        public DateTime SessionAt    { get; set; } = DateTime.Now;
+
+        public string ProductivityStr => IsProductive ? "Produktif" : "Eksplorasi";
+        public string SessionAtStr    => SessionAt.ToString("dd MMM HH:mm");
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
     //  GroupActivity — aktivitas per mahasiswa dalam tugas kelompok
     // ─────────────────────────────────────────────────────────────────────────
 

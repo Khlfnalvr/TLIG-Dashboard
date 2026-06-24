@@ -23,36 +23,80 @@ internal static class StudentDetailDialog
         XamlRoot root,
         string studentId,
         string studentName,
-        string assignmentId)
+        string assignmentId,
+        DateTime? deadline = null)
     {
-        var grading   = GradingService.Instance;
+        var grading  = GradingService.Instance;
         var summaries = await grading.GetGradeSummaryByAssignmentAsync(assignmentId);
         var summary   = summaries.FirstOrDefault(s => s.StudentId == studentId);
         var sims      = await grading.GetSimulationResultsForStudentAsync(studentId);
 
-        var content = new StackPanel { Width = 500, Spacing = 16 };
+        var peerReceived = (await grading.GetPeerEvaluationsForStudentAsync(studentId))
+            .Where(e => e.AssignmentId == assignmentId).ToList();
+        var peerGiven = (await grading.GetPeerEvaluationsByEvaluatorAsync(studentId))
+            .Where(e => e.AssignmentId == assignmentId).ToList();
+        var sysEval  = await grading.GetSystemEvaluationForStudentAsync(studentId, assignmentId);
+        var lecGrade = await grading.GetLecturerGradeForStudentAsync(studentId, assignmentId);
+        var allActs  = await grading.GetGroupActivitiesAsync(assignmentId, 300);
+        var myActs   = allActs.Where(a => a.StudentId == studentId)
+                              .OrderByDescending(a => a.ActivityTime).ToList();
+        var mySubmits = myActs.Where(a => a.ActivityType == "Submit").ToList();
 
+        var content = new StackPanel { Width = 520, Spacing = 16 };
+
+        // ── 1. Header ─────────────────────────────────────────────────────
         content.Children.Add(BuildHeader(studentId, studentName, summary));
 
+        // ── 2. Nilai Keseluruhan ──────────────────────────────────────────
         content.Children.Add(BuildSectionTitle("Nilai Keseluruhan"));
         content.Children.Add(BuildScoreBreakdown(summary));
 
+        // ── 3. Nilai Dosen (komponen) ─────────────────────────────────────
+        content.Children.Add(BuildSectionTitle("Nilai Dosen — Rincian Komponen"));
+        content.Children.Add(BuildLecturerDetail(lecGrade));
+
+        // ── 4. Penilaian Peer Diterima ────────────────────────────────────
+        content.Children.Add(BuildSectionTitle(
+            $"Penilaian Peer Diterima  ({peerReceived.Count} penilai)"));
+        content.Children.Add(peerReceived.Count > 0
+            ? BuildPeerReceivedList(peerReceived)
+            : MutedNote("Belum ada penilaian peer yang diterima."));
+
+        // ── 5. Penilaian Peer Diberikan ───────────────────────────────────
+        content.Children.Add(BuildSectionTitle(
+            $"Penilaian Peer Diberikan  ({peerGiven.Count} penilaian)"));
+        content.Children.Add(peerGiven.Count > 0
+            ? BuildPeerGivenList(peerGiven)
+            : MutedNote("Belum memberikan penilaian peer."));
+
+        // ── 6. Detail Sistem ──────────────────────────────────────────────
+        content.Children.Add(BuildSectionTitle("Detail Skor Sistem"));
+        content.Children.Add(BuildSystemDetail(sysEval));
+
+        // ── 7. Rekap Submit vs Deadline ───────────────────────────────────
+        content.Children.Add(BuildSectionTitle(
+            $"Rekap Submit  ({mySubmits.Count} submit)"));
+        content.Children.Add(mySubmits.Count > 0
+            ? BuildSubmitHistory(mySubmits, deadline)
+            : MutedNote("Belum ada aktivitas Submit tercatat."));
+
+        // ── 8. Hasil Simulasi ─────────────────────────────────────────────
         content.Children.Add(BuildSectionTitle(
             sims.Count > 0 ? $"Hasil Simulasi  ({sims.Count} sesi)" : "Hasil Simulasi"));
         content.Children.Add(sims.Count > 0
             ? BuildSimulationList(sims)
-            : new TextBlock { Text = "Belum ada sesi simulasi tercatat.", FontSize = 12, Opacity = 0.5 });
+            : MutedNote("Belum ada sesi simulasi tercatat."));
 
         var scroll = new ScrollViewer
         {
             Content = content,
-            MaxHeight = 540,
+            MaxHeight = 600,
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
         };
 
         var dialog = new ContentDialog
         {
-            Title           = "Detail Mahasiswa",
+            Title           = $"Detail — {studentName}",
             Content         = scroll,
             CloseButtonText = "Tutup",
             DefaultButton   = ContentDialogButton.Close,
@@ -112,6 +156,386 @@ internal static class StudentDetailDialog
 
         return grid;
     }
+
+    // ── Lecturer detail ──────────────────────────────────────────────────
+
+    private static UIElement BuildLecturerDetail(LecturerGrade? lec)
+    {
+        if (lec == null)
+            return MutedNote("Belum ada penilaian dari dosen.");
+
+        var panel = new StackPanel { Spacing = 10 };
+
+        AddScoreRow(panel, "Presentasi",   "25%",
+            lec.ScorePresentation,
+            Windows.UI.Color.FromArgb(255, 16, 185, 129));
+        AddScoreRow(panel, "Laporan",      "25%",
+            lec.ScoreReport,
+            Windows.UI.Color.FromArgb(255, 59, 130, 246));
+        AddScoreRow(panel, "Implementasi", "25%",
+            lec.ScoreImplementation,
+            Windows.UI.Color.FromArgb(255, 245, 158, 11));
+        AddScoreRow(panel, "Defence/Ujian","25%",
+            lec.ScoreDefense,
+            Windows.UI.Color.FromArgb(255, 139, 92, 246));
+
+        // Divider
+        panel.Children.Add(new Microsoft.UI.Xaml.Shapes.Rectangle
+        {
+            Height = 1,
+            Fill   = new SolidColorBrush(Windows.UI.Color.FromArgb(40, 128, 128, 128)),
+        });
+
+        // Rata-rata dosen + finalisasi
+        var avgRow = new Grid { ColumnSpacing = 8 };
+        avgRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        avgRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        avgRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        avgRow.Children.Add(new TextBlock
+        {
+            Text = "Nilai Dosen (Rata-rata)", FontSize = 12,
+            FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center,
+        });
+        var avgVal = new TextBlock
+        {
+            Text = lec.Score.ToString("F1"), FontSize = 16, FontWeight = FontWeights.Bold,
+            HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center,
+        };
+        Grid.SetColumn(avgVal, 1);
+        avgRow.Children.Add(avgVal);
+
+        if (lec.IsFinalized)
+        {
+            var finBadge = new Border
+            {
+                Background   = new SolidColorBrush(Windows.UI.Color.FromArgb(40, 16, 124, 16)),
+                CornerRadius = new CornerRadius(4), Padding = new Thickness(6, 2, 6, 2),
+                VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 0, 0),
+            };
+            finBadge.Child = new TextBlock
+            {
+                Text = "Final", FontSize = 10, FontWeight = FontWeights.SemiBold,
+                Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 16, 124, 16)),
+            };
+            Grid.SetColumn(finBadge, 2);
+            avgRow.Children.Add(finBadge);
+        }
+        panel.Children.Add(avgRow);
+
+        if (!string.IsNullOrWhiteSpace(lec.Feedback))
+        {
+            var fbCard = new Border
+            {
+                Background      = SafeThemeBrush("SubtleFillColorSecondaryBrush"),
+                CornerRadius    = new CornerRadius(6),
+                Padding         = new Thickness(12, 8, 12, 8),
+                Margin          = new Thickness(0, 2, 0, 0),
+            };
+            var fbSp = new StackPanel { Spacing = 4 };
+            fbSp.Children.Add(new TextBlock
+            {
+                Text = "Feedback Dosen", FontSize = 11,
+                FontWeight = FontWeights.SemiBold, Opacity = 0.7,
+            });
+            fbSp.Children.Add(new TextBlock
+            {
+                Text = lec.Feedback, FontSize = 12, TextWrapping = TextWrapping.Wrap,
+            });
+            fbCard.Child = fbSp;
+            panel.Children.Add(fbCard);
+        }
+
+        return panel;
+    }
+
+    // ── Peer received list ────────────────────────────────────────────────
+
+    private static UIElement BuildPeerReceivedList(List<PeerEvaluation> evals)
+    {
+        var panel = new StackPanel { Spacing = 8 };
+
+        // Summary bar
+        double avg = evals.Average(e => e.Score);
+        var sumCard = new Border
+        {
+            Background      = SafeThemeBrush("AccentFillColorTertiaryBrush"),
+            CornerRadius    = new CornerRadius(6), Padding = new Thickness(12, 8, 12, 8),
+        };
+        var sumGrid = new Grid { ColumnSpacing = 8 };
+        sumGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        sumGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        sumGrid.Children.Add(new TextBlock
+        {
+            Text = $"Rata-rata dari {evals.Count} penilai",
+            FontSize = 12, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center,
+        });
+        var avgTb = new TextBlock
+        {
+            Text = avg.ToString("F1"), FontSize = 18, FontWeight = FontWeights.Bold,
+            Foreground = SafeThemeBrush("AccentTextFillColorPrimaryBrush"),
+        };
+        Grid.SetColumn(avgTb, 1); sumGrid.Children.Add(avgTb);
+        sumCard.Child = sumGrid;
+        panel.Children.Add(sumCard);
+
+        foreach (var e in evals.OrderByDescending(x => x.EvaluatedAt))
+        {
+            var card = new Border
+            {
+                Background      = SafeThemeBrush("CardBackgroundFillColorDefaultBrush"),
+                BorderBrush     = SafeThemeBrush("CardStrokeColorDefaultBrush"),
+                BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(7),
+                Padding         = new Thickness(12, 10, 12, 10),
+            };
+            var g = new Grid { ColumnSpacing = 10 };
+            g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            var info = new StackPanel { Spacing = 3 };
+            info.Children.Add(new TextBlock
+            {
+                Text = $"Dinilai oleh: {e.EvaluatorName}", FontSize = 12, FontWeight = FontWeights.SemiBold,
+            });
+            info.Children.Add(new TextBlock
+            {
+                Text = $"K:{e.CriteriaContribution:F0}  T:{e.CriteriaCooperation:F0}  " +
+                       $"J:{e.CriteriaResponsibility:F0}  C:{e.CriteriaCreativity:F0}",
+                FontSize = 11, Opacity = 0.6,
+            });
+            if (!string.IsNullOrWhiteSpace(e.Comment))
+                info.Children.Add(new TextBlock
+                {
+                    Text = $"\"{e.Comment}\"", FontSize = 11, Opacity = 0.55,
+                    TextWrapping = TextWrapping.Wrap, MaxLines = 2,
+                });
+            info.Children.Add(new TextBlock
+            {
+                Text = e.EvaluatedAt.ToString("dd MMM yyyy, HH:mm"),
+                FontSize = 10, Opacity = 0.4,
+            });
+            g.Children.Add(info);
+
+            var scoreBadge = new Border
+            {
+                Background        = SafeThemeBrush("AccentFillColorTertiaryBrush"),
+                CornerRadius      = new CornerRadius(6), Padding = new Thickness(10, 6, 10, 6),
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            scoreBadge.Child = new TextBlock
+            {
+                Text = e.Score.ToString("F1"), FontSize = 15, FontWeight = FontWeights.Bold,
+                Foreground = SafeThemeBrush("AccentTextFillColorPrimaryBrush"),
+                HorizontalAlignment = HorizontalAlignment.Center,
+            };
+            Grid.SetColumn(scoreBadge, 1); g.Children.Add(scoreBadge);
+
+            card.Child = g; panel.Children.Add(card);
+        }
+        return panel;
+    }
+
+    // ── Peer given list ───────────────────────────────────────────────────
+
+    private static UIElement BuildPeerGivenList(List<PeerEvaluation> evals)
+    {
+        var panel = new StackPanel { Spacing = 8 };
+        foreach (var e in evals.OrderByDescending(x => x.EvaluatedAt))
+        {
+            var card = new Border
+            {
+                Background      = SafeThemeBrush("CardBackgroundFillColorDefaultBrush"),
+                BorderBrush     = SafeThemeBrush("CardStrokeColorDefaultBrush"),
+                BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(7),
+                Padding         = new Thickness(12, 10, 12, 10),
+            };
+            var g = new Grid { ColumnSpacing = 10 };
+            g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            var info = new StackPanel { Spacing = 3 };
+            info.Children.Add(new TextBlock
+            {
+                Text = $"Menilai: {e.EvaluateeName}", FontSize = 12, FontWeight = FontWeights.SemiBold,
+            });
+            info.Children.Add(new TextBlock
+            {
+                Text = $"K:{e.CriteriaContribution:F0}  T:{e.CriteriaCooperation:F0}  " +
+                       $"J:{e.CriteriaResponsibility:F0}  C:{e.CriteriaCreativity:F0}",
+                FontSize = 11, Opacity = 0.6,
+            });
+            info.Children.Add(new TextBlock
+            {
+                Text = e.EvaluatedAt.ToString("dd MMM yyyy, HH:mm"),
+                FontSize = 10, Opacity = 0.4,
+            });
+            g.Children.Add(info);
+
+            var scoreBadge = new Border
+            {
+                Background        = SafeThemeBrush("AccentFillColorTertiaryBrush"),
+                CornerRadius      = new CornerRadius(6), Padding = new Thickness(10, 6, 10, 6),
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            scoreBadge.Child = new TextBlock
+            {
+                Text = e.Score.ToString("F1"), FontSize = 15, FontWeight = FontWeights.Bold,
+                Foreground = SafeThemeBrush("AccentTextFillColorPrimaryBrush"),
+                HorizontalAlignment = HorizontalAlignment.Center,
+            };
+            Grid.SetColumn(scoreBadge, 1); g.Children.Add(scoreBadge);
+
+            card.Child = g; panel.Children.Add(card);
+        }
+        return panel;
+    }
+
+    // ── System detail ─────────────────────────────────────────────────────
+
+    private static UIElement BuildSystemDetail(SystemEvaluation? sys)
+    {
+        if (sys == null)
+            return MutedNote("Belum ada evaluasi sistem untuk tugas ini.");
+
+        var card = new Border
+        {
+            Background      = SafeThemeBrush("CardBackgroundFillColorDefaultBrush"),
+            BorderBrush     = SafeThemeBrush("CardStrokeColorDefaultBrush"),
+            BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(8),
+            Padding         = new Thickness(14, 12, 14, 12),
+        };
+
+        var grid = new Grid { ColumnSpacing = 20, RowSpacing = 10 };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+        void AddCell(int row, int col, string label, string val, Windows.UI.Color? accent = null)
+        {
+            var sp = new StackPanel { Spacing = 2 };
+            sp.Children.Add(new TextBlock { Text = label, FontSize = 11, Opacity = 0.6 });
+            var tb = new TextBlock { Text = val, FontSize = 13, FontWeight = FontWeights.SemiBold };
+            if (accent.HasValue)
+                tb.Foreground = new SolidColorBrush(accent.Value);
+            sp.Children.Add(tb);
+            Grid.SetRow(sp, row); Grid.SetColumn(sp, col);
+            grid.Children.Add(sp);
+        }
+
+        AddCell(0, 0, "Jumlah Submit",   sys.CommitsCount.ToString());
+        AddCell(0, 1, "File Dimodifikasi", sys.FilesModified.ToString());
+        AddCell(1, 0, "Tasks Selesai",   $"{sys.TasksCompleted}/{sys.TasksTotal}");
+        AddCell(1, 1, "Completion Rate", $"{sys.CompletionRate:F0}%");
+        AddCell(2, 0, "Status Tepat Waktu",
+            sys.SubmittedOnTime ? "Ya — Tepat Waktu ✓" : "Tidak — Terlambat",
+            sys.SubmittedOnTime
+                ? Windows.UI.Color.FromArgb(255, 16, 124, 16)
+                : Windows.UI.Color.FromArgb(255, 196, 43, 28));
+
+        // Skor sistem
+        var scoreRow = new StackPanel { Spacing = 2 };
+        scoreRow.Children.Add(new TextBlock { Text = "Skor Sistem", FontSize = 11, Opacity = 0.6 });
+        scoreRow.Children.Add(new TextBlock
+        {
+            Text = sys.Score.ToString("F1"), FontSize = 13, FontWeight = FontWeights.Bold,
+            Foreground = SafeThemeBrush("AccentTextFillColorPrimaryBrush"),
+        });
+        Grid.SetRow(scoreRow, 2); Grid.SetColumn(scoreRow, 1);
+        grid.Children.Add(scoreRow);
+
+        card.Child = grid;
+        return card;
+    }
+
+    // ── Submit history vs deadline ────────────────────────────────────────
+
+    private static UIElement BuildSubmitHistory(
+        List<GroupActivity> submits, DateTime? deadline)
+    {
+        var panel = new StackPanel { Spacing = 8 };
+        foreach (var s in submits)
+        {
+            bool onTime = !deadline.HasValue || s.ActivityTime <= deadline.Value;
+            TimeSpan diff = deadline.HasValue ? s.ActivityTime - deadline.Value : TimeSpan.Zero;
+
+            string statusText = !deadline.HasValue ? "—"
+                : onTime ? "Tepat Waktu" : "Terlambat";
+            string diffText = deadline.HasValue ? FormatDiff(diff) : "";
+
+            var accentColor = onTime
+                ? Windows.UI.Color.FromArgb(255, 16, 124, 16)
+                : Windows.UI.Color.FromArgb(255, 196, 43, 28);
+            var bgColor = onTime
+                ? Windows.UI.Color.FromArgb(25, 16, 124, 16)
+                : Windows.UI.Color.FromArgb(25, 196, 43, 28);
+
+            var card = new Border
+            {
+                BorderBrush     = SafeThemeBrush("CardStrokeColorDefaultBrush"),
+                Background      = SafeThemeBrush("CardBackgroundFillColorDefaultBrush"),
+                BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(7),
+                Padding         = new Thickness(12, 10, 12, 10),
+            };
+
+            var g = new Grid { ColumnSpacing = 10 };
+            g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            var info = new StackPanel { Spacing = 3 };
+            info.Children.Add(new TextBlock
+            {
+                Text = s.Description, FontSize = 12, FontWeight = FontWeights.SemiBold,
+            });
+            var times = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 16 };
+            times.Children.Add(MutedChip($"Submit: {s.ActivityTime:dd MMM yyyy, HH:mm}"));
+            if (deadline.HasValue)
+                times.Children.Add(MutedChip($"Deadline: {deadline.Value:dd MMM yyyy, HH:mm}"));
+            info.Children.Add(times);
+            if (!string.IsNullOrEmpty(diffText))
+                info.Children.Add(new TextBlock
+                {
+                    Text = diffText, FontSize = 11,
+                    Foreground = new SolidColorBrush(accentColor),
+                });
+            g.Children.Add(info);
+
+            var pill = new Border
+            {
+                Background        = new SolidColorBrush(bgColor),
+                CornerRadius      = new CornerRadius(6),
+                Padding           = new Thickness(8, 4, 8, 4),
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            pill.Child = new TextBlock
+            {
+                Text = statusText, FontSize = 11, FontWeight = FontWeights.SemiBold,
+                Foreground = new SolidColorBrush(accentColor),
+            };
+            Grid.SetColumn(pill, 1); g.Children.Add(pill);
+
+            card.Child = g; panel.Children.Add(card);
+        }
+        return panel;
+    }
+
+    private static string FormatDiff(TimeSpan diff)
+    {
+        if (diff.TotalSeconds <= 0)
+        {
+            var abs = diff.Negate();
+            if (abs.TotalDays >= 1) return $"{(int)abs.TotalDays} hari sebelum deadline";
+            if (abs.TotalHours >= 1) return $"{(int)abs.TotalHours} jam sebelum deadline";
+            return $"{(int)abs.TotalMinutes} menit sebelum deadline";
+        }
+        if (diff.TotalDays >= 1) return $"{(int)diff.TotalDays} hari terlambat";
+        if (diff.TotalHours >= 1) return $"{(int)diff.TotalHours} jam terlambat";
+        return $"{(int)diff.TotalMinutes} menit terlambat";
+    }
+
+    private static UIElement MutedNote(string text) =>
+        new TextBlock { Text = text, FontSize = 12, Opacity = 0.5, Margin = new Thickness(0, 0, 0, 4) };
 
     // ── Score breakdown: Peer / Sistem / Dosen + Final ──────────────────
 
