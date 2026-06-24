@@ -49,6 +49,12 @@ public sealed class LearningTask
     public DateTime UpdatedUtc { get; set; } = DateTime.UtcNow;
 
     public bool HasStructuredTarget => TaskMetrics.IsValid(Metric) && Metric != TaskMetrics.None;
+
+    /// <summary>
+    /// Maximum time allotted for the simulation session in minutes.
+    /// 0 = no time limit. Default = 45 minutes (recommended for a standard lab session).
+    /// </summary>
+    public int SimulationTimeMinutes { get; set; } = 45;
 }
 
 /// <summary>A record that a given user has completed a given task.</summary>
@@ -132,12 +138,13 @@ public sealed class TaskStore
             }
             else
             {
-                stored.Title     = task.Title;
-                stored.Objective = task.Objective;
-                stored.Metric    = task.Metric;
-                stored.Op        = task.Op;
-                stored.Target    = task.Target;
-                stored.Tolerance = task.Tolerance;
+                stored.Title                 = task.Title;
+                stored.Objective             = task.Objective;
+                stored.Metric                = task.Metric;
+                stored.Op                    = task.Op;
+                stored.Target                = task.Target;
+                stored.Tolerance             = task.Tolerance;
+                stored.SimulationTimeMinutes = task.SimulationTimeMinutes;
                 if (!string.IsNullOrWhiteSpace(task.CreatedBy)) stored.CreatedBy = task.CreatedBy;
                 stored.UpdatedUtc = DateTime.UtcNow;
             }
@@ -248,15 +255,16 @@ public sealed class TaskStore
 
     private static LearningTask Clone(LearningTask t) => new()
     {
-        Id         = t.Id,
-        Title      = t.Title,
-        Objective  = t.Objective,
-        Metric     = t.Metric,
-        Op         = t.Op,
-        Target     = t.Target,
-        Tolerance  = t.Tolerance,
-        CreatedBy  = t.CreatedBy,
-        CreatedUtc = t.CreatedUtc,
-        UpdatedUtc = t.UpdatedUtc,
+        Id                    = t.Id,
+        Title                 = t.Title,
+        Objective             = t.Objective,
+        Metric                = t.Metric,
+        Op                    = t.Op,
+        Target                = t.Target,
+        Tolerance             = t.Tolerance,
+        CreatedBy             = t.CreatedBy,
+        CreatedUtc            = t.CreatedUtc,
+        UpdatedUtc            = t.UpdatedUtc,
+        SimulationTimeMinutes = t.SimulationTimeMinutes,
     };
 }

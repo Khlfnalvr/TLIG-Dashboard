@@ -88,11 +88,28 @@ internal static class TaskUi
         metricOpGrid.Children.Add(metricCombo);
         metricOpGrid.Children.Add(opCombo);
 
+        // Simulation time (minutes) — 0 = no limit
+        var simTimeBox = new NumberBox
+        {
+            Header      = Lang.Sim_TimeLimitField,
+            Value       = existing?.SimulationTimeMinutes ?? 45,
+            Minimum     = 0, Maximum = 180, SmallChange = 5,
+            SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline,
+        };
+        var simTimeNote = new TextBlock
+        {
+            Text    = Lang.Sim_TimeLimitNote,
+            FontSize = 11, Opacity = 0.55,
+            Margin  = new Thickness(0, -6, 0, 0),
+        };
+
         var panel = new StackPanel { Spacing = 12, MinWidth = 360 };
         panel.Children.Add(titleBox);
         panel.Children.Add(objBox);
         panel.Children.Add(metricOpGrid);
         panel.Children.Add(grid);
+        panel.Children.Add(simTimeBox);
+        panel.Children.Add(simTimeNote);
 
         var dialog = new ContentDialog
         {
@@ -113,6 +130,8 @@ internal static class TaskUi
         var title = titleBox.Text.Trim();
         if (string.IsNullOrEmpty(title)) return null; // title is required
 
+        int simMins = double.IsNaN(simTimeBox.Value) ? 45 : (int)Math.Clamp(simTimeBox.Value, 0, 180);
+
         return new LearningTask
         {
             Id        = existing?.Id ?? "",
@@ -123,6 +142,7 @@ internal static class TaskUi
             Target    = double.IsNaN(targetBox.Value) ? 0 : targetBox.Value,
             Tolerance = double.IsNaN(tolBox.Value) ? 0 : Math.Max(0, tolBox.Value),
             CreatedBy = existing?.CreatedBy ?? "",
+            SimulationTimeMinutes = simMins,
         };
     }
 }

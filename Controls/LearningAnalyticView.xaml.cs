@@ -115,6 +115,9 @@ public sealed partial class LearningAnalyticView : UserControl
 
         // Load grading section berdasarkan role
         await LoadGradingSectionAsync();
+
+        // Always load the class roster
+        await LoadRosterAsync();
     }
 
     private TaskRowVm BuildRow(LearningTask t, bool done)
@@ -1018,6 +1021,60 @@ public sealed partial class LearningAnalyticView : UserControl
         return new Point(cx + r * Math.Cos(a), cy - r * Math.Sin(a));
     }
 
+    // ═══════════════════════════════════════════════════════════════════
+    //  DAFTAR KELAS (Class Roster)
+    // ═══════════════════════════════════════════════════════════════════
+
+    private static readonly string[] _rosterClasses = ["A", "B", "C", "D", "E"];
+
+    private void RosterRefresh_Click(object sender, RoutedEventArgs e)
+        => _ = LoadRosterAsync();
+
+    private void RosterPivot_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        => _ = LoadRosterAsync();
+
+    private async System.Threading.Tasks.Task LoadRosterAsync()
+    {
+        // Determine active class from pivot selection (default A)
+        int idx = RosterPivot.SelectedIndex < 0 ? 0 : RosterPivot.SelectedIndex;
+        string activeClass = _rosterClasses[Math.Min(idx, _rosterClasses.Length - 1)];
+
+        // Student accounts for the selected class
+        var users = UserStore.Instance.GetUsers()
+            .Where(u => UserRoles.IsStudent(u.Role) && u.Enabled &&
+                        string.Equals(u.Kelas, activeClass, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(u => u.DisplayName)
+            .ToList();
+
+        // Grade summaries — carries GroupName per student
+        var summaries = await _grading.GetGradeSummaryByAssignmentAsync(_gradingAssignmentId);
+        var groupMap  = summaries.ToDictionary(s => s.StudentId, s => s.GroupName, StringComparer.OrdinalIgnoreCase);
+
+        // System scores
+        var sysEvals = await _grading.GetSystemEvaluationsByAssignmentAsync(_gradingAssignmentId);
+        var sysMap   = sysEvals.ToDictionary(e => e.StudentId, StringComparer.OrdinalIgnoreCase);
+
+        var rows = users.Select((u, i) =>
+        {
+            sysMap.TryGetValue(u.Username, out var ev);
+            groupMap.TryGetValue(u.Username, out var grp);
+            return new RosterRowVm
+            {
+                RowNumber   = i + 1,
+                Username    = u.Username,
+                DisplayName = string.IsNullOrWhiteSpace(u.DisplayName) ? u.Username : u.DisplayName,
+                Kelas       = activeClass,
+                Group       = string.IsNullOrWhiteSpace(grp) ? "—" : grp,
+                Email       = string.IsNullOrWhiteSpace(u.Email) ? "—" : u.Email,
+                ScoreStr    = ev is not null ? ev.Score.ToString("F1") : "—",
+            };
+        }).ToList();
+
+        RosterRepeater.ItemsSource  = rows;
+        RosterEmptyText.Visibility  = rows.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        RosterSubtitle.Text         = $"Class {activeClass} — {rows.Count} student{(rows.Count == 1 ? "" : "s")}";
+    }
+
     private Brush Res(string key) => (Brush)Resources[key];
 
     private static string GetInitials(string name)
@@ -1196,6 +1253,18 @@ internal class GLecActivityVm
     public string TimeAgo         { get; set; } = "";
     public string ActivityTimeStr { get; set; } = "";
     public string AutoScoreStr    { get; set; } = "";
+}
+
+/// <summary>Row in the Daftar Kelas (Class Roster) table.</summary>
+internal class RosterRowVm
+{
+    public int    RowNumber  { get; init; }
+    public string Username   { get; init; } = "";
+    public string DisplayName { get; init; } = "";
+    public string Kelas      { get; init; } = "";
+    public string Group      { get; init; } = "";
+    public string Email      { get; init; } = "";
+    public string ScoreStr   { get; init; } = "";
 }
 
 /// <summary>Editable row used inside the Kelola Mahasiswa dialog.</summary>

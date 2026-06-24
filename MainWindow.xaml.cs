@@ -722,6 +722,72 @@ public sealed partial class MainWindow : Window
         LoginErrorText.Visibility = Visibility.Collapsed;
         LoginPasswordBox.Password = "";
         LoginOverlay.Visibility   = Visibility.Collapsed;
+
+        // Onboarding: prompt student to fill Kelas + NRP if still empty.
+        if (App.Session.IsStudent &&
+            (string.IsNullOrWhiteSpace(App.Session.Kelas) || string.IsNullOrWhiteSpace(App.Session.Nrp)))
+        {
+            _ = ShowOnboardingDialogAsync(accountName);
+        }
+    }
+
+    private async System.Threading.Tasks.Task ShowOnboardingDialogAsync(string username)
+    {
+        var kelasBox = new ComboBox
+        {
+            Header              = Lang.Onboarding_Kelas,
+            PlaceholderText     = Lang.Onboarding_KelasSample,
+            HorizontalAlignment = Microsoft.UI.Xaml.HorizontalAlignment.Stretch,
+        };
+        foreach (var k in new[] { "A", "B", "C", "D" })
+            kelasBox.Items.Add(k);
+        if (!string.IsNullOrEmpty(App.Session.Kelas))
+            kelasBox.SelectedItem = App.Session.Kelas;
+        var nrpBox = new TextBox
+        {
+            Header       = Lang.Onboarding_NRP,
+            PlaceholderText = "e.g. 5023211234",
+            Text         = App.Session.Nrp,
+        };
+        var panel = new StackPanel { Spacing = 12, MinWidth = 320 };
+        panel.Children.Add(new TextBlock
+        {
+            Text        = Lang.Onboarding_Subtitle,
+            TextWrapping = Microsoft.UI.Xaml.TextWrapping.Wrap,
+            FontSize    = 13,
+            Opacity     = 0.7,
+        });
+        panel.Children.Add(kelasBox);
+        panel.Children.Add(nrpBox);
+
+        var dlg = new ContentDialog
+        {
+            Title             = Lang.Onboarding_Title,
+            Content           = panel,
+            PrimaryButtonText = Lang.Onboarding_Save,
+            DefaultButton     = ContentDialogButton.Primary,
+            XamlRoot          = Content.XamlRoot,
+        };
+
+        ContentDialogResult res;
+        try { res = await dlg.ShowAsync(); }
+        catch { return; }
+
+        if (res != ContentDialogResult.Primary) return;
+
+        var kelas = kelasBox.SelectedItem?.ToString()?.Trim() ?? "";
+        var nrp   = nrpBox.Text.Trim();
+        if (string.IsNullOrEmpty(kelas) && string.IsNullOrEmpty(nrp)) return;
+
+        UserStore.Instance.UpdateUser(username,
+            App.Session.DisplayName,
+            App.Session.Role,
+            nrp: nrp,
+            kelas: kelas);
+
+        // Reflect in session without re-login.
+        App.Session.SignIn(username, App.Session.DisplayName, App.Session.Role, nrp, kelas);
+        UpdateAccountFlyoutText();
     }
 
     private void LoginFailed()

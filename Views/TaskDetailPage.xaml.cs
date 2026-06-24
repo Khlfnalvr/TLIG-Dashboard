@@ -1,4 +1,5 @@
 using System.Linq;
+using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
@@ -20,11 +21,18 @@ public sealed partial class TaskDetailPage : Page
 
     private const int GlyphCheck = 0xE930;
     private const int GlyphClock = 0xE823;
+    private const int GlyphPlay  = 0xE768;
+    private const int GlyphStop  = 0xE71A;
     private static string Glyph(int cp) => char.ConvertFromUtf32(cp);
 
     private string        _taskId = "";
     private LearningTask? _task;
     private bool          _completed;
+
+    // ── Simulation timer ─────────────────────────────────────────────────
+    private DispatcherTimer? _simTimer;
+    private DateTime         _simEnd;
+    private bool             _simRunning;
 
     public TaskDetailPage()
     {
@@ -74,6 +82,29 @@ public sealed partial class TaskDetailPage : Page
         bool canEdit         = result.CanEdit;
         EditBtn.Visibility   = canEdit ? Visibility.Visible : Visibility.Collapsed;
         DeleteBtn.Visibility = canEdit ? Visibility.Visible : Visibility.Collapsed;
+
+        // Simulation timer card — show only for students (mahasiswa).
+        if (App.Session.IsStudent && _task is not null)
+        {
+            SimTimerCard.Visibility = Visibility.Visible;
+            if (_task.SimulationTimeMinutes > 0)
+            {
+                SimCountdownText.Text = FormatTime(TimeSpan.FromMinutes(_task.SimulationTimeMinutes));
+                SimTimerStatus.Text   = $"{_task.SimulationTimeMinutes} {Lang.Sim_Minutes}";
+            }
+            else
+            {
+                SimCountdownText.Text = "∞";
+                SimTimerStatus.Text   = Lang.Sim_NoLimit;
+                SimStartBtn.IsEnabled = false;
+            }
+            SimBtnText.Text = Lang.Sim_Start;
+            SimBtnIcon.Glyph = Glyph(GlyphPlay);
+        }
+        else
+        {
+            SimTimerCard.Visibility = Visibility.Collapsed;
+        }
     }
 
     private async void Mark_Click(object sender, RoutedEventArgs e)
@@ -115,7 +146,84 @@ public sealed partial class TaskDetailPage : Page
     }
 
     private void Back_Click(object sender, RoutedEventArgs e)
-        => App.CurrentWindow?.NavigateToPage("LearningAnalytic");
+    {
+        StopTimer();
+        App.CurrentWindow?.NavigateToPage("LearningAnalytic");
+    }
+
+    // ── Simulation timer ─────────────────────────────────────────────────
+
+    private void SimStart_Click(object sender, RoutedEventArgs e)
+    {
+        if (_simRunning)
+        {
+            StopTimer();
+        }
+        else
+        {
+            StartTimer();
+        }
+    }
+
+    private void StartTimer()
+    {
+        if (_task is null || _task.SimulationTimeMinutes <= 0) return;
+        _simEnd     = DateTime.UtcNow.AddMinutes(_task.SimulationTimeMinutes);
+        _simRunning = true;
+        SimBtnText.Text   = "Stop";
+        SimBtnIcon.Glyph  = Glyph(GlyphStop);
+        SimTimerIcon.Foreground = (Brush)Resources["AccentGreen"];
+
+        _simTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+        _simTimer.Tick += SimTimer_Tick;
+        _simTimer.Start();
+        UpdateCountdown();
+    }
+
+    private void StopTimer()
+    {
+        _simTimer?.Stop();
+        _simTimer = null;
+        _simRunning = false;
+        if (_task is not null)
+        {
+            SimBtnText.Text  = Lang.Sim_Start;
+            SimBtnIcon.Glyph = Glyph(GlyphPlay);
+            SimCountdownText.Text = FormatTime(TimeSpan.FromMinutes(_task.SimulationTimeMinutes));
+            SimTimerStatus.Text   = $"{_task.SimulationTimeMinutes} {Lang.Sim_Minutes}";
+            SimTimerIcon.Foreground = (Brush)Application.Current.Resources["AccentTextFillColorPrimaryBrush"];
+        }
+    }
+
+    private void SimTimer_Tick(object? sender, object e) => UpdateCountdown();
+
+    private void UpdateCountdown()
+    {
+        var remaining = _simEnd - DateTime.UtcNow;
+        if (remaining <= TimeSpan.Zero)
+        {
+            _simTimer?.Stop();
+            _simTimer = null;
+            _simRunning = false;
+            SimCountdownText.Text = "00:00";
+            SimTimerStatus.Text   = Lang.Sim_Expired;
+            SimBtnText.Text       = Lang.Sim_Start;
+            SimBtnIcon.Glyph      = Glyph(GlyphPlay);
+            SimStartBtn.IsEnabled = false;
+            SimTimerIcon.Foreground = (Brush)Resources["AccentOrange"];
+            return;
+        }
+        SimCountdownText.Text = FormatTime(remaining);
+        SimTimerStatus.Text   = Lang.Sim_TimeLeft;
+    }
+
+    private static string FormatTime(TimeSpan t)
+    {
+        int h = (int)t.TotalHours;
+        return h > 0
+            ? $"{h:D2}:{t.Minutes:D2}:{t.Seconds:D2}"
+            : $"{t.Minutes:D2}:{t.Seconds:D2}";
+    }
 
     private Brush Res(string key) => (Brush)Resources[key];
 }

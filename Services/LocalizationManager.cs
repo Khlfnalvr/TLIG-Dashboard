@@ -702,6 +702,34 @@ public sealed class LocalizationManager : INotifyPropertyChanged
     public string Profile_Saved      => T(nameof(Profile_Saved));
     public string Profile_EditBtn    => T(nameof(Profile_EditBtn));
 
+    // ── Simulation timer ──────────────────────────────────────────────────
+    public string Sim_TimeLimitField => T(nameof(Sim_TimeLimitField));
+    public string Sim_TimeLimitNote  => T(nameof(Sim_TimeLimitNote));
+    public string Sim_TimeLimit      => T(nameof(Sim_TimeLimit));
+    public string Sim_Start          => T(nameof(Sim_Start));
+    public string Sim_TimeLeft       => T(nameof(Sim_TimeLeft));
+    public string Sim_Expired        => T(nameof(Sim_Expired));
+    public string Sim_NoLimit        => T(nameof(Sim_NoLimit));
+    public string Sim_Minutes        => T(nameof(Sim_Minutes));
+
+    // ── Onboarding dialog ─────────────────────────────────────────────────
+    public string Onboarding_Title      => T(nameof(Onboarding_Title));
+    public string Onboarding_Subtitle   => T(nameof(Onboarding_Subtitle));
+    public string Onboarding_Kelas      => T(nameof(Onboarding_Kelas));
+    public string Onboarding_NRP        => T(nameof(Onboarding_NRP));
+    public string Onboarding_KelasSample => T(nameof(Onboarding_KelasSample));
+    public string Onboarding_Save       => T(nameof(Onboarding_Save));
+
+    // ── Class Roster (Daftar Kelas) ───────────────────────────────────────
+    public string Roster_Title     => T(nameof(Roster_Title));
+    public string Roster_ColNo     => T(nameof(Roster_ColNo));
+    public string Roster_ColName   => T(nameof(Roster_ColName));
+    public string Roster_ColClass  => T(nameof(Roster_ColClass));
+    public string Roster_ColGroup  => T(nameof(Roster_ColGroup));
+    public string Roster_ColEmail  => T(nameof(Roster_ColEmail));
+    public string Roster_ColScore  => T(nameof(Roster_ColScore));
+    public string Roster_NoData    => T(nameof(Roster_NoData));
+
     // ══════════════════════════════════════════════════════════════════════
     // Translation table
     // ══════════════════════════════════════════════════════════════════════
@@ -1159,6 +1187,34 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             [nameof(Profile_ErrDomain)] = "Email must use @its.ac.id or @ep.itc.ac.id domain.",
             [nameof(Profile_Saved)]     = "Profile updated successfully.",
             [nameof(Profile_EditBtn)]   = "Edit Profile",
+
+            // Simulation timer
+            [nameof(Sim_TimeLimitField)] = "Simulation Time Limit (minutes, 0 = no limit)",
+            [nameof(Sim_TimeLimitNote)]  = "Recommended: 45 minutes for a standard lab session.",
+            [nameof(Sim_TimeLimit)]      = "Simulation Time Limit",
+            [nameof(Sim_Start)]          = "Start Simulation",
+            [nameof(Sim_TimeLeft)]       = "Time remaining",
+            [nameof(Sim_Expired)]        = "Time is up! Simulation period has ended.",
+            [nameof(Sim_NoLimit)]        = "No time limit for this task.",
+            [nameof(Sim_Minutes)]        = "minutes",
+
+            // Onboarding
+            [nameof(Onboarding_Title)]       = "Complete Your Profile",
+            [nameof(Onboarding_Subtitle)]    = "Please fill in your class and student ID so your results can be tracked properly.",
+            [nameof(Onboarding_Kelas)]       = "Class (Kelas)",
+            [nameof(Onboarding_NRP)]         = "Student ID (NRP)",
+            [nameof(Onboarding_KelasSample)] = "Select class",
+            [nameof(Onboarding_Save)]        = "Save & Continue",
+
+            // Class Roster
+            [nameof(Roster_Title)]     = "Class Roster",
+            [nameof(Roster_ColNo)]     = "No.",
+            [nameof(Roster_ColName)]   = "Name",
+            [nameof(Roster_ColClass)]  = "Class",
+            [nameof(Roster_ColGroup)]  = "Group",
+            [nameof(Roster_ColEmail)]  = "Email",
+            [nameof(Roster_ColScore)]  = "Score",
+            [nameof(Roster_NoData)]    = "No student data available.",
 
             [nameof(Learn_Title)]       = "LEARNING ANALYTIC",
             [nameof(Learn_Status)]      = "Learning Status",
@@ -1724,6 +1780,34 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             [nameof(Profile_ErrDomain)] = "Email harus menggunakan domain @its.ac.id atau @ep.itc.ac.id.",
             [nameof(Profile_Saved)]     = "Profil berhasil diperbarui.",
             [nameof(Profile_EditBtn)]   = "Edit Profil",
+
+            // Simulation timer
+            [nameof(Sim_TimeLimitField)] = "Batas Waktu Simulasi (menit, 0 = tanpa batas)",
+            [nameof(Sim_TimeLimitNote)]  = "Rekomendasi: 45 menit untuk satu sesi lab standar.",
+            [nameof(Sim_TimeLimit)]      = "Batas Waktu Simulasi",
+            [nameof(Sim_Start)]          = "Mulai Simulasi",
+            [nameof(Sim_TimeLeft)]       = "Waktu tersisa",
+            [nameof(Sim_Expired)]        = "Waktu habis! Sesi simulasi telah berakhir.",
+            [nameof(Sim_NoLimit)]        = "Tidak ada batas waktu untuk tugas ini.",
+            [nameof(Sim_Minutes)]        = "menit",
+
+            // Onboarding
+            [nameof(Onboarding_Title)]       = "Lengkapi Profil Anda",
+            [nameof(Onboarding_Subtitle)]    = "Isi kelas dan NRP agar hasil simulasi kamu bisa dilacak dengan benar.",
+            [nameof(Onboarding_Kelas)]       = "Kelas",
+            [nameof(Onboarding_NRP)]         = "NRP (Nomor Registrasi Pokok)",
+            [nameof(Onboarding_KelasSample)] = "Pilih kelas",
+            [nameof(Onboarding_Save)]        = "Simpan & Lanjutkan",
+
+            // Class Roster (Daftar Kelas)
+            [nameof(Roster_Title)]     = "Daftar Kelas",
+            [nameof(Roster_ColNo)]     = "No.",
+            [nameof(Roster_ColName)]   = "Nama",
+            [nameof(Roster_ColClass)]  = "Kelas",
+            [nameof(Roster_ColGroup)]  = "Kelompok",
+            [nameof(Roster_ColEmail)]  = "Email",
+            [nameof(Roster_ColScore)]  = "Score",
+            [nameof(Roster_NoData)]    = "Belum ada data mahasiswa.",
 
             [nameof(Learn_Title)]       = "LEARNING ANALYTIC",
             [nameof(Learn_Status)]      = "Status Learning",
