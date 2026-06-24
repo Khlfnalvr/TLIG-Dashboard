@@ -315,10 +315,12 @@ public sealed partial class LearningAnalyticView : UserControl
         if (sys != null)
         {
             GMySystemScore.Text = sys.Score.ToString("F1");
-            GSysCommits.Text    = sys.CommitsCount.ToString();
-            GSysFiles.Text      = sys.FilesModified.ToString();
-            GSysOnTime.Text     = sys.SubmittedOnTime ? "Ya ✓" : "Tidak";
-            GSysTasks.Text      = $"{sys.TasksCompleted}/{sys.TasksTotal}";
+            GSysCommits.Text    = sys.CommitsCount.ToString();       // unique tuning attempts
+            GSysFiles.Text      = sys.FilesModified.ToString();      // simulation sessions
+            // TasksCompleted = tuning + ai + sim counts; TasksTotal = same; derive AI sessions:
+            int aiSessions = sys.TasksCompleted - sys.CommitsCount - sys.FilesModified;
+            GSysOnTime.Text = aiSessions > 0 ? $"{aiSessions} produktif" : "Belum ada";
+            GSysTasks.Text  = sys.TasksCompleted.ToString();
         }
         else
         {
@@ -462,7 +464,39 @@ public sealed partial class LearningAnalyticView : UserControl
         var withFinal = summaries.Where(s => s.FinalScore.HasValue).ToList();
         GLecStatAvg.Text  = withFinal.Any() ? withFinal.Average(s => s.FinalScore!.Value).ToString("F1") : "—";
         GLecStatPeer.Text = summaries.Count(s => s.PeerScore.HasValue).ToString();
-        GLecSummaryRepeater.ItemsSource = summaries.Select(s => new GLecSummaryVm(s)).ToList();
+
+        // Build VM dengan data breakdown sistem per mahasiswa
+        var allTunings = await _grading.GetAllTuningRecordsAsync(_gradingAssignmentId);
+        var allAi      = await _grading.GetAllAiUsageAsync(_gradingAssignmentId);
+        var vmList = new List<GLecSummaryVm>();
+        foreach (var s in summaries)
+        {
+            var myTunings = allTunings.Where(t => t.StudentId == s.StudentId).ToList();
+            var myAi      = allAi.Where(a => a.StudentId == s.StudentId).ToList();
+            var mySims    = await _grading.GetSimulationResultsAsync(s.StudentId, _gradingAssignmentId);
+
+            int uniqueT  = myTunings.Select(t => $"{t.Kp:F1}{t.Ki:F2}{t.Kd:F2}").Distinct().Count();
+            double bestQ = myTunings.Any() ? myTunings.Max(t => t.QualityScore) : 0;
+            int prodAi   = myAi.Count(a => a.IsProductive);
+            double bestSim = mySims.Any() ? mySims.Max(r => r.Score) : 0;
+
+            double tuningPts = Math.Min(uniqueT * 3, 15) + bestQ * 0.25;
+            double aiPts     = Math.Min(prodAi * 5, 20);
+            double simPts    = bestSim * 0.40;
+
+            string tuningB = myTunings.Any()
+                ? $"Rekam Tuning  →  {myTunings.Count} percobaan ({uniqueT} unik)  ·  Kualitas terbaik {bestQ:F0}/100  →  {tuningPts:F1} / 40 poin"
+                : "Rekam Tuning  →  Belum ada rekam tuning  →  0 / 40 poin";
+            string aiB = myAi.Any()
+                ? $"Penggunaan AI  →  {myAi.Count} sesi ({prodAi} produktif)  →  {aiPts:F1} / 20 poin"
+                : "Penggunaan AI  →  Belum ada rekam  →  0 / 20 poin";
+            string simB = mySims.Any()
+                ? $"Simulasi  →  {mySims.Count} sesi  ·  Skor terbaik {bestSim:F1}/100  →  {simPts:F1} / 40 poin"
+                : "Simulasi  →  Belum ada sesi  →  0 / 40 poin";
+
+            vmList.Add(new GLecSummaryVmEx(s, tuningB, aiB, simB));
+        }
+        GLecSummaryRepeater.ItemsSource = vmList;
     }
 
     private async System.Threading.Tasks.Task RefreshLecPeerAsync()
@@ -1044,23 +1078,30 @@ public class GradingReceivedEvalVm
     public string EvaluatedAtStr    { get; set; } = "";
 }
 
-internal class GLecSummaryVm
+public class GLecSummaryVm
 {
-    public string StudentId        { get; }
-    public string StudentName      { get; }
-    public string GroupName        { get; }
-    public string PeerScoreStr     { get; }
-    public string SystemScoreStr   { get; }
-    public string LecturerScoreStr { get; }
-    public string FinalScoreStr    { get; }
-    public string LetterGrade      { get; }
-    public SolidColorBrush GradeBadgeColor { get; }
+    public string StudentId        { get; set; } = "";
+    public string StudentName      { get; set; } = "";
+    public string GroupName        { get; set; } = "";
+    public string PeerScoreStr     { get; set; } = "—";
+    public string SystemScoreStr   { get; set; } = "—";
+    public string LecturerScoreStr { get; set; } = "—";
+    public string FinalScoreStr    { get; set; } = "—";
+    public string LetterGrade      { get; set; } = "—";
+    public SolidColorBrush GradeBadgeColor { get; set; } = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 100, 100, 100));
 
     // Kontribusi persentase masing-masing komponen (untuk Expander breakdown)
-    public string PeerContribStr     { get; }
-    public string SystemContribStr   { get; }
-    public string LecturerContribStr { get; }
-    public string WeightInfoStr      { get; }
+    public string PeerContribStr     { get; set; } = "";
+    public string SystemContribStr   { get; set; } = "";
+    public string LecturerContribStr { get; set; } = "";
+    public string WeightInfoStr      { get; set; } = "";
+
+    // Sub-breakdown skor sistem (tuning, AI, simulasi)
+    public string TuningBreakdownStr { get; set; } = "";
+    public string AiBreakdownStr     { get; set; } = "";
+    public string SimBreakdownStr    { get; set; } = "";
+
+    public GLecSummaryVm() { }
 
     public GLecSummaryVm(StudentGradeSummary s)
     {
@@ -1080,16 +1121,27 @@ internal class GLecSummaryVm
             _                     => Windows.UI.Color.FromArgb(255, 196, 43, 28),
         });
 
-        // Kontribusi tiap komponen ke nilai final
         double peer = s.PeerScore ?? 0;
         double sys  = s.SystemScore ?? 0;
         double lec  = s.LecturerScore ?? 0;
-        PeerContribStr     = $"Peer    (bobot 20%): {peer:F1} × 20% = {peer * 0.20:F1} poin";
-        SystemContribStr   = $"Sistem  (bobot 30%): {sys:F1} × 30% = {sys  * 0.30:F1} poin";
-        LecturerContribStr = $"Dosen   (bobot 50%): {lec:F1} × 50% = {lec  * 0.50:F1} poin";
+        PeerContribStr     = $"Peer     (bobot 20%) :  {peer:F1}  ×  20%  =  {peer * 0.20:F1} poin";
+        SystemContribStr   = $"Sistem   (bobot 30%) :  {sys:F1}  ×  30%  =  {sys  * 0.30:F1} poin";
+        LecturerContribStr = $"Dosen    (bobot 50%) :  {lec:F1}  ×  50%  =  {lec  * 0.50:F1} poin";
         WeightInfoStr      = s.FinalScore.HasValue
-            ? $"Total nilai final: {s.FinalScore.Value:F1} / 100"
-            : "Belum lengkap — dosen belum memberi nilai";
+            ? $"Nilai Final  =  {s.FinalScore.Value:F1} / 100"
+            : "Nilai final belum tersedia — tunggu dosen memberi nilai";
+    }
+}
+
+public class GLecSummaryVmEx : GLecSummaryVm
+{
+    public GLecSummaryVmEx(StudentGradeSummary s,
+        string tuningBreakdown, string aiBreakdown, string simBreakdown)
+        : base(s)
+    {
+        TuningBreakdownStr = tuningBreakdown;
+        AiBreakdownStr     = aiBreakdown;
+        SimBreakdownStr    = simBreakdown;
     }
 }
 
