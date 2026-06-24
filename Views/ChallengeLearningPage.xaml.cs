@@ -495,7 +495,7 @@ public sealed partial class ChallengeLearningPage : Page
                 vstack.Children.Add(new TextBlock
                 {
                     Text = "Belum ada aktivitas.", FontSize = 10,
-                    Foreground = Muted, Margin = new Thickness(0, 2)
+                    Foreground = Muted, Margin = new Thickness(0, 2, 0, 2)
                 });
             else
                 foreach (var log in combinedLogs)
