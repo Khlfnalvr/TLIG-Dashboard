@@ -202,7 +202,41 @@ public sealed partial class ChallengeLearningPage : Page
                 g.Children.Add(badge);
             }
             g.Children.Add(left);
-            row.Child = g;
+
+            // Wrap card in a StackPanel so we can append activity log below task header
+            var taskStack = new StackPanel { Spacing = 6 };
+            taskStack.Children.Add(g);
+
+#if SERVER
+            // ── Submission log per task (SERVER) ─────────────────────────────
+            var submLogs = ActivityStore.Instance.GetAll()
+                .Where(a => a.Category == ActivityCategory.TaskSubmission
+                         && a.RelatedId == ch.Id.ToString())
+                .OrderByDescending(a => a.TimestampUtc)
+                .ToList();
+
+            taskStack.Children.Add(new Microsoft.UI.Xaml.Shapes.Rectangle
+            {
+                Height = 1, Fill = Muted, Margin = new Thickness(0, 4, 0, 2), Opacity = 0.2
+            });
+            taskStack.Children.Add(new TextBlock
+            {
+                Text = "LOG AKTIVITAS", FontSize = 9,
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                Foreground = Muted, Margin = new Thickness(0, 0, 0, 2)
+            });
+
+            if (submLogs.Count == 0)
+                taskStack.Children.Add(new TextBlock
+                {
+                    Text = "Belum ada yang submit.", FontSize = 10, Foreground = Muted
+                });
+            else
+                foreach (var sl in submLogs)
+                    taskStack.Children.Add(BuildCompactLogRow(sl));
+#endif
+
+            row.Child = taskStack;
             AdminTaskSummary.Children.Add(row);
         }
         if (ch.Tasks.Count == 0)
@@ -210,29 +244,6 @@ public sealed partial class ChallengeLearningPage : Page
 
         // Submissions table
         RebuildSubmissionsTable(ch);
-
-        // Activity log
-        BuildAdminActivityLog(ch);
-    }
-
-    private void BuildAdminActivityLog(Challenge ch)
-    {
-#if SERVER
-        var logs = ActivityStore.Instance.GetAll()
-            .Where(a => a.Category == ActivityCategory.TaskSubmission
-                     && a.RelatedId == ch.Id.ToString())
-            .OrderByDescending(a => a.TimestampUtc)
-            .ToList();
-
-        AdminActivityLogPanel.Children.Clear();
-        AdminActivityEmptyText.Visibility = logs.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
-        foreach (var log in logs)
-            AdminActivityLogPanel.Children.Add(BuildActivityRow(log));
-#else
-        AdminActivityLogPanel.Children.Clear();
-        AdminActivityEmptyText.Visibility = Visibility.Visible;
-        AdminActivityEmptyText.Text = "Log aktivitas submission tersedia di mode Server.";
-#endif
     }
 
     private void RebuildSubmissionsTable(Challenge ch)
@@ -352,85 +363,6 @@ public sealed partial class ChallengeLearningPage : Page
         SubmitBtn.Content  = mySub != null ? "Update Jawaban" : "Kirim Jawaban";
         SubmitStatusText.Text = "";
 
-        // Activity log
-        BuildStudentActivityLog(ch);
-    }
-
-    private void BuildStudentActivityLog(Challenge ch)
-    {
-#if CLIENT
-        var logs = ActivityStore.Instance.GetAll()
-            .Where(a => a.Category is ActivityCategory.ControlParameter
-                                   or ActivityCategory.Simulation
-                                   or ActivityCategory.AIInteraction)
-            .OrderByDescending(a => a.TimestampUtc)
-            .Take(50)
-            .ToList();
-
-        StudentActivityLogPanel.Children.Clear();
-        StudentActivityEmptyText.Visibility = logs.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
-        foreach (var log in logs)
-            StudentActivityLogPanel.Children.Add(BuildActivityRow(log));
-#else
-        StudentActivityLogPanel.Children.Clear();
-        StudentActivityEmptyText.Visibility = Visibility.Visible;
-        StudentActivityEmptyText.Text = "Log aktivitas parameter/simulasi/AI tersedia di mode Client.";
-#endif
-    }
-
-    private Border BuildActivityRow(ActivityLog log)
-    {
-        var row = new Border
-        {
-            Background = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["CardBackgroundFillColorDefaultBrush"],
-            BorderBrush = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(6),
-            Padding = new Thickness(10, 6, 10, 6)
-        };
-
-        var g = new Grid { ColumnSpacing = 10 };
-        g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-
-        var timeBlk = new TextBlock
-        {
-            Text = log.TimestampUtc.ToLocalTime().ToString("dd/MM HH:mm:ss"),
-            FontSize = 10, Foreground = Muted, VerticalAlignment = VerticalAlignment.Center
-        };
-        Grid.SetColumn(timeBlk, 0);
-
-        var info = new StackPanel { Spacing = 1, VerticalAlignment = VerticalAlignment.Center };
-        info.Children.Add(new TextBlock
-        {
-            Text = log.DisplayName, FontSize = 11,
-            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, Foreground = Brush("#e0e0f0")
-        });
-        info.Children.Add(new TextBlock
-        {
-            Text = $"{log.Action} — {log.Description}", FontSize = 10, Foreground = Muted,
-            TextWrapping = TextWrapping.NoWrap, TextTrimming = TextTrimming.CharacterEllipsis
-        });
-        Grid.SetColumn(info, 1);
-
-        var catBadge = new Border
-        {
-            CornerRadius = new CornerRadius(4), Padding = new Thickness(6, 2, 6, 2),
-            Background = Brush("#1e1e2e"), VerticalAlignment = VerticalAlignment.Center
-        };
-        catBadge.Child = new TextBlock
-        {
-            Text = log.CategoryLabel, FontSize = 9,
-            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, Foreground = Purple
-        };
-        Grid.SetColumn(catBadge, 2);
-
-        g.Children.Add(timeBlk);
-        g.Children.Add(info);
-        g.Children.Add(catBadge);
-        row.Child = g;
-        return row;
     }
 
     private void BuildStudentTaskList(Challenge ch)
@@ -514,12 +446,110 @@ public sealed partial class ChallengeLearningPage : Page
                 vstack.Children.Add(metricRow);
             }
 
+#if CLIENT
+            // ── Activity log per task (CLIENT) ───────────────────────────────
+            var allLogs      = ActivityStore.Instance.GetAll();
+            var paramLogs    = allLogs.Where(a => a.Category == ActivityCategory.ControlParameter).ToList();
+            var aiLogs       = allLogs.Where(a => a.Category == ActivityCategory.AIInteraction).ToList();
+            var combinedLogs = allLogs
+                .Where(a => a.Category is ActivityCategory.ControlParameter or ActivityCategory.AIInteraction)
+                .OrderByDescending(a => a.TimestampUtc)
+                .Take(10)
+                .ToList();
+            int paramCount   = paramLogs.Count;
+            bool limitReached = paramCount >= 3;
+
+            vstack.Children.Add(new Microsoft.UI.Xaml.Shapes.Rectangle
+            {
+                Height = 1, Fill = Muted, Margin = new Thickness(0, 8, 0, 4), Opacity = 0.25
+            });
+
+            var actHeader = new Grid { ColumnSpacing = 8, Margin = new Thickness(0, 0, 0, 4) };
+            actHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            actHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            actHeader.Children.Add(new TextBlock
+            {
+                Text = "LOG AKTIVITAS", FontSize = 9,
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                Foreground = Muted, VerticalAlignment = VerticalAlignment.Center
+            });
+
+            var counterBg = limitReached ? Brush("#2e0d0d") : Brush("#1a1a2e");
+            var counterFg = limitReached ? Red : Muted;
+            var counterBorder = new Border
+            {
+                CornerRadius = new CornerRadius(4), Padding = new Thickness(6, 2, 6, 2),
+                Background = counterBg, VerticalAlignment = VerticalAlignment.Center
+            };
+            counterBorder.Child = new TextBlock
+            {
+                Text = $"{Math.Min(paramCount, 3)}/3 perubahan parameter",
+                FontSize = 9, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, Foreground = counterFg
+            };
+            Grid.SetColumn(counterBorder, 1);
+            actHeader.Children.Add(counterBorder);
+            vstack.Children.Add(actHeader);
+
+            if (combinedLogs.Count == 0)
+                vstack.Children.Add(new TextBlock
+                {
+                    Text = "Belum ada aktivitas.", FontSize = 10,
+                    Foreground = Muted, Margin = new Thickness(0, 2)
+                });
+            else
+                foreach (var log in combinedLogs)
+                    vstack.Children.Add(BuildCompactLogRow(log));
+#endif
+
             card.Child = vstack;
             StudentTaskList.Children.Add(card);
         }
 
         if (ch.Tasks.Count == 0)
             StudentTaskList.Children.Add(new TextBlock { Text = "Challenge ini tidak memiliki task spesifik.", FontSize = 11, Foreground = Muted });
+    }
+
+    private Border BuildCompactLogRow(ActivityLog log)
+    {
+        var g = new Grid { ColumnSpacing = 8 };
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        var timeBlk = new TextBlock
+        {
+            Text = log.TimestampUtc.ToLocalTime().ToString("HH:mm:ss"),
+            FontSize = 9, Foreground = Muted, VerticalAlignment = VerticalAlignment.Center
+        };
+        Grid.SetColumn(timeBlk, 0);
+
+        var descBlk = new TextBlock
+        {
+            Text = log.Description, FontSize = 10, Foreground = Brush("#c0c0d0"),
+            TextTrimming = TextTrimming.CharacterEllipsis, TextWrapping = TextWrapping.NoWrap,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        Grid.SetColumn(descBlk, 1);
+
+        var catBadge = new Border
+        {
+            CornerRadius = new CornerRadius(3), Padding = new Thickness(5, 1, 5, 1),
+            Background = log.Category == ActivityCategory.ControlParameter ? Brush("#1a0e2e") : Brush("#0e1a2e"),
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        catBadge.Child = new TextBlock
+        {
+            Text = log.Category == ActivityCategory.ControlParameter ? "Param" : "AI",
+            FontSize = 9, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            Foreground = log.Category == ActivityCategory.ControlParameter ? Purple : Brush("#60A5FA")
+        };
+        Grid.SetColumn(catBadge, 2);
+
+        g.Children.Add(timeBlk);
+        g.Children.Add(descBlk);
+        g.Children.Add(catBadge);
+        return new Border { Child = g, Margin = new Thickness(0, 1, 0, 1) };
     }
 
     // ════════════════════════════════════════════════════════════

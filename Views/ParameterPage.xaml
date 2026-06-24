@@ -345,6 +345,13 @@
                 </Grid>
             </Border>
 
+            <!-- Parameter limit warning (CLIENT only — hidden by default) -->
+            <InfoBar x:Name="ParamLimitInfoBar"
+                     IsOpen="False" IsClosable="True"
+                     Severity="Error"
+                     Title="Batas Perubahan Parameter Tercapai"
+                     Message="Kamu sudah menggunakan 3/3 kesempatan mengubah parameter. Tidak bisa menerapkan parameter baru."/>
+
             <!-- ── Row D: Control | Status System | Alarm ── -->
             <Grid Grid.Row="4" ColumnSpacing="12">
                 <Grid.ColumnDefinitions>

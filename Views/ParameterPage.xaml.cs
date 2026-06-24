@@ -45,6 +45,17 @@ public sealed partial class ParameterPage : Page
 
     private void ApplyPid_Click(object sender, RoutedEventArgs e)
     {
+#if CLIENT
+        int paramUsed = ActivityStore.Instance.GetAll()
+            .Count(a => a.Category == ActivityCategory.ControlParameter);
+        if (paramUsed >= 3)
+        {
+            ParamLimitInfoBar.IsOpen = true;
+            return;
+        }
+        ParamLimitInfoBar.IsOpen = false;
+#endif
+
         double kp = double.IsNaN(KpBox.Value) ? 0 : KpBox.Value;
         double ki = double.IsNaN(KiBox.Value) ? 0 : KiBox.Value;
         double kd = double.IsNaN(KdBox.Value) ? 0 : KdBox.Value;

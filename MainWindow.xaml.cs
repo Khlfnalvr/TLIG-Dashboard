@@ -51,7 +51,7 @@ public sealed partial class MainWindow : Window
         { "GradingLecturer", typeof(GradingLecturerPage) },
         { "Broadcast", typeof(BroadcastSettingsPage) },
         { "UserManagement", typeof(UserManagementPage) },
-        { "Logging", typeof(LoggingPage) }
+        // "Logging" page removed from nav — LoggingPage kept for potential future use
     };
 
     private string _loggedInUser = "";
@@ -862,13 +862,10 @@ public sealed partial class MainWindow : Window
         // Manajemen Penilaian: hanya tampil saat signed-in sebagai Dosen/Asisten
         bool showGradingLecturer = signedIn && isStaff;
         // Log Aktivitas: hanya untuk Dosen/Asisten di server
-        bool showLogging = Services.BuildInfo.IsServer && signedIn && isStaff;
-
         NavBroadcast.Visibility        = showBroadcast      ? Visibility.Visible : Visibility.Collapsed;
         NavUserManagement.Visibility   = showUm             ? Visibility.Visible : Visibility.Collapsed;
         NavGradingStudent.Visibility   = showGradingStudent  ? Visibility.Visible : Visibility.Collapsed;
         NavGradingLecturer.Visibility  = showGradingLecturer ? Visibility.Visible : Visibility.Collapsed;
-        NavLogging.Visibility          = showLogging         ? Visibility.Visible : Visibility.Collapsed;
 
         if (!showBroadcast && ReferenceEquals(NavView.SelectedItem, NavBroadcast))
             NavView.SelectedItem = FirstVisibleNavItem();
@@ -877,8 +874,6 @@ public sealed partial class MainWindow : Window
         if (!showGradingStudent && ReferenceEquals(NavView.SelectedItem, NavGradingStudent))
             NavView.SelectedItem = FirstVisibleNavItem();
         if (!showGradingLecturer && ReferenceEquals(NavView.SelectedItem, NavGradingLecturer))
-            NavView.SelectedItem = FirstVisibleNavItem();
-        if (!showLogging && ReferenceEquals(NavView.SelectedItem, NavLogging))
             NavView.SelectedItem = FirstVisibleNavItem();
     }
 
