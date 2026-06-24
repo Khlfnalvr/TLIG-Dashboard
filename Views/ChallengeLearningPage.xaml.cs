@@ -60,7 +60,12 @@ public sealed partial class ChallengeLearningPage : Page
         WeightPeerBox.Value  = 20;
         ApplySession();
         RefreshList();
+        ActivityStore.Instance.Changed += OnActivityChanged;
+        Unloaded += (_, _) => ActivityStore.Instance.Changed -= OnActivityChanged;
     }
+
+    private void OnActivityChanged()
+        => DispatcherQueue.TryEnqueue(() => { if (_selected != null && !_isAdmin) RefreshMyActivityLog(); });
 
     private void ApplySession()
     {
@@ -341,6 +346,7 @@ public sealed partial class ChallengeLearningPage : Page
         StDetailInstr.Text = ch.Instructions;
 
         BuildStudentTaskList(ch);
+        RefreshMyActivityLog();
 
         // Pre-fill if already submitted
         var mySub = ch.Submissions.FirstOrDefault(s => s.StudentId == _studentId);
@@ -494,6 +500,28 @@ public sealed partial class ChallengeLearningPage : Page
 
         if (ch.Tasks.Count == 0)
             StudentTaskList.Children.Add(new TextBlock { Text = "Challenge ini tidak memiliki task spesifik.", FontSize = 11, Foreground = Muted });
+    }
+
+    private void RefreshMyActivityLog()
+    {
+        MyActivityList.Children.Clear();
+
+        var myLogs = ActivityStore.Instance.GetAll()
+            .Where(a => (a.Category == ActivityCategory.ControlParameter
+                      || a.Category == ActivityCategory.AIInteraction
+                      || a.Category == ActivityCategory.TaskSubmission)
+                     && (string.IsNullOrEmpty(a.Username)
+                         || a.Username == App.Session.Username
+                         || a.Username == _studentId))
+            .OrderByDescending(a => a.TimestampUtc)
+            .Take(20)
+            .ToList();
+
+        NoMyActivityText.Visibility = myLogs.Count == 0
+            ? Visibility.Visible : Visibility.Collapsed;
+
+        foreach (var log in myLogs)
+            MyActivityList.Children.Add(BuildCompactLogRow(log));
     }
 
     private Border BuildCompactLogRow(ActivityLog log)

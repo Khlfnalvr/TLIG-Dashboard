@@ -552,6 +552,18 @@
                         </StackPanel>
                     </Border>
 
+                    <!-- My activity log -->
+                    <Border Style="{StaticResource CL_Card}">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="AKTIVITAS SAYA" Style="{StaticResource CL_SectionHeader}"/>
+                            <StackPanel x:Name="MyActivityList" Spacing="4"/>
+                            <TextBlock x:Name="NoMyActivityText"
+                                       Text="Belum ada aktivitas untuk challenge ini."
+                                       Style="{StaticResource CL_Label}"
+                                       Margin="0,4" HorizontalAlignment="Center"/>
+                        </StackPanel>
+                    </Border>
+
                     <!-- Submit section -->
                     <Border Style="{StaticResource CL_Card}">
                         <StackPanel Spacing="10">
