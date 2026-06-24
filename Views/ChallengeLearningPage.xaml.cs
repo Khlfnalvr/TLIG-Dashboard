@@ -69,7 +69,11 @@ public sealed partial class ChallengeLearningPage : Page
 
     private void ApplySession()
     {
-        _isAdmin     = App.Session.IsStaff || !App.Session.IsSignedIn;
+#if CLIENT
+        _isAdmin = false;
+#else
+        _isAdmin = App.Session.IsStaff || !App.Session.IsSignedIn;
+#endif
         _studentId   = App.Session.Username.Length > 0 ? App.Session.Username : "DEMO_S";
         _studentName = App.Session.DisplayName.Length > 0 ? App.Session.DisplayName : "Demo Student";
 
