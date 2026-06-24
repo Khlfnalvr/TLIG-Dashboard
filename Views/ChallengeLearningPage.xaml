@@ -373,34 +373,14 @@
                         </StackPanel>
                     </Border>
 
-                    <!-- Submissions table -->
+                    <!-- Activity per student (SERVER) -->
                     <Border Style="{StaticResource CL_Card}">
                         <StackPanel Spacing="10">
-                            <TextBlock Text="SUBMISSIONS MAHASISWA"
+                            <TextBlock Text="AKTIVITAS MAHASISWA"
                                        Style="{StaticResource CL_SectionHeader}"/>
-
-                            <!-- Table header -->
-                            <Border Background="#1a1a2e" CornerRadius="6" Padding="10,6">
-                                <Grid ColumnSpacing="8">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="1.4*"/>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="Auto"/>
-                                    </Grid.ColumnDefinitions>
-                                    <TextBlock Grid.Column="0" Text="MAHASISWA"      Style="{StaticResource CL_Label}" FontWeight="SemiBold"/>
-                                    <TextBlock Grid.Column="1" Text="DIKIRIM"        Style="{StaticResource CL_Label}" FontWeight="SemiBold"/>
-                                    <TextBlock Grid.Column="2" Text="METRIK"         Style="{StaticResource CL_Label}" FontWeight="SemiBold"/>
-                                    <TextBlock Grid.Column="3" Text="SKOR AI"        Style="{StaticResource CL_Label}" FontWeight="SemiBold"/>
-                                    <TextBlock Grid.Column="4" Text="STATUS"         Style="{StaticResource CL_Label}" FontWeight="SemiBold"/>
-                                </Grid>
-                            </Border>
-
-                            <StackPanel x:Name="SubmissionRows" Spacing="4"/>
-
-                            <TextBlock x:Name="NoSubmissionsText"
-                                       Text="Belum ada submission."
+                            <StackPanel x:Name="StudentActivityRows" Spacing="8"/>
+                            <TextBlock x:Name="NoActivityText"
+                                       Text="Belum ada aktivitas."
                                        Style="{StaticResource CL_Label}"
                                        Margin="0,8" HorizontalAlignment="Center"/>
                         </StackPanel>

@@ -207,34 +207,6 @@ public sealed partial class ChallengeLearningPage : Page
             var taskStack = new StackPanel { Spacing = 6 };
             taskStack.Children.Add(g);
 
-#if SERVER
-            // ── Submission log per task (SERVER) ─────────────────────────────
-            var submLogs = ActivityStore.Instance.GetAll()
-                .Where(a => a.Category == ActivityCategory.TaskSubmission
-                         && a.RelatedId == ch.Id.ToString())
-                .OrderByDescending(a => a.TimestampUtc)
-                .ToList();
-
-            taskStack.Children.Add(new Microsoft.UI.Xaml.Shapes.Rectangle
-            {
-                Height = 1, Fill = Muted, Margin = new Thickness(0, 4, 0, 2), Opacity = 0.2
-            });
-            taskStack.Children.Add(new TextBlock
-            {
-                Text = "LOG AKTIVITAS", FontSize = 9,
-                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-                Foreground = Muted, Margin = new Thickness(0, 0, 0, 2)
-            });
-
-            if (submLogs.Count == 0)
-                taskStack.Children.Add(new TextBlock
-                {
-                    Text = "Belum ada yang submit.", FontSize = 10, Foreground = Muted
-                });
-            else
-                foreach (var sl in submLogs)
-                    taskStack.Children.Add(BuildCompactLogRow(sl));
-#endif
 
             row.Child = taskStack;
             AdminTaskSummary.Children.Add(row);
@@ -242,71 +214,85 @@ public sealed partial class ChallengeLearningPage : Page
         if (ch.Tasks.Count == 0)
             AdminTaskSummary.Children.Add(new TextBlock { Text = "Tidak ada task.", FontSize = 11, Foreground = Muted });
 
-        // Submissions table
-        RebuildSubmissionsTable(ch);
+        // Activity table
+        RebuildStudentActivityTable(ch);
     }
 
-    private void RebuildSubmissionsTable(Challenge ch)
+    private void RebuildStudentActivityTable(Challenge ch)
     {
-        SubmissionRows.Children.Clear();
-        NoSubmissionsText.Visibility = ch.Submissions.Count == 0
+        StudentActivityRows.Children.Clear();
+
+        var allLogs = ActivityStore.Instance.GetAll()
+            .Where(a => a.Category == ActivityCategory.ControlParameter
+                     || a.Category == ActivityCategory.AIInteraction
+                     || a.Category == ActivityCategory.TaskSubmission)
+            .OrderByDescending(a => a.TimestampUtc)
+            .ToList();
+
+        // Group by display name / username
+        var grouped = allLogs
+            .GroupBy(a => string.IsNullOrEmpty(a.DisplayName) ? a.Username : a.DisplayName)
+            .ToList();
+
+        NoActivityText.Visibility = grouped.Count == 0
             ? Visibility.Visible : Visibility.Collapsed;
 
-        foreach (var s in ch.Submissions)
+        foreach (var grp in grouped)
         {
-            var row = new Border
+            var card = new Border
             {
-                Background = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["CardBackgroundFillColorDefaultBrush"],
-                BorderBrush = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
+                Background    = Brush("#1a1a2a"),
+                BorderBrush   = Brush("#2d2d3e"),
                 BorderThickness = new Thickness(1),
-                CornerRadius = new CornerRadius(6),
-                Padding = new Thickness(10, 7, 10, 7)
+                CornerRadius  = new CornerRadius(8),
+                Padding       = new Thickness(12, 10, 12, 10)
             };
-            var g = new Grid { ColumnSpacing = 8 };
-            g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.4, GridUnitType.Star) });
-            g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            var vstack = new StackPanel { Spacing = 6 };
 
-            // Student name
-            var nameBlk = new TextBlock { Text = s.StudentName, FontSize = 11, Foreground = Brush("#e0e0f0"), VerticalAlignment = VerticalAlignment.Center };
-            Grid.SetColumn(nameBlk, 0);
-
-            // Submitted at
-            var dateBlk = new TextBlock { Text = s.SubmittedAt.ToString("dd/MM HH:mm"), FontSize = 11, Foreground = Muted, VerticalAlignment = VerticalAlignment.Center };
-            Grid.SetColumn(dateBlk, 1);
-
-            // Metric snapshot
-            string metricsStr = s.MetricSnapshot.Count > 0
-                ? string.Join(", ", s.MetricSnapshot.Select(kv =>
-                    $"{MetricShortLabel(kv.Key)}={kv.Value:0.#}{PidMetricsService.UnitOf(kv.Key)}"))
-                : "—";
-            var metricBlk = new TextBlock { Text = metricsStr, FontSize = 10, Foreground = Orange, VerticalAlignment = VerticalAlignment.Center, TextWrapping = TextWrapping.Wrap };
-            Grid.SetColumn(metricBlk, 2);
-
-            // AI score
-            string aiStr = s.AIGrade != null ? $"{s.AIGrade.Score:0}%" : "—";
-            var aiBlk = new TextBlock { Text = aiStr, FontSize = 11, Foreground = Purple, VerticalAlignment = VerticalAlignment.Center };
-            Grid.SetColumn(aiBlk, 3);
-
-            // Status badge
-            var sbadge = new Border { CornerRadius = new CornerRadius(4), Padding = new Thickness(6, 2, 6, 2), VerticalAlignment = VerticalAlignment.Center };
-            var stext = new TextBlock { FontSize = 9, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold };
-            (sbadge.Background, stext.Foreground, stext.Text) = s.Status switch
+            // Student name header
+            vstack.Children.Add(new TextBlock
             {
-                SubmissionStatus.Graded      => (Brush("#0d2e1e"), Green,  "Dinilai"),
-                SubmissionStatus.UnderReview => (Brush("#1a1a2e"), Purple, "Review"),
-                _                            => (Brush("#2e2a0d"), Orange, "Dikirim"),
-            };
-            sbadge.Child = stext;
-            Grid.SetColumn(sbadge, 4);
+                Text = grp.Key,
+                FontSize = 12,
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                Foreground = Brush("#e0e0f0")
+            });
 
-            foreach (var el in new UIElement[] { nameBlk, dateBlk, metricBlk, aiBlk, sbadge })
-                g.Children.Add(el);
-            row.Child = g;
-            SubmissionRows.Children.Add(row);
+            // Summary badges row
+            int paramCount = grp.Count(a => a.Category == ActivityCategory.ControlParameter);
+            int aiCount    = grp.Count(a => a.Category == ActivityCategory.AIInteraction);
+            int subCount   = grp.Count(a => a.Category == ActivityCategory.TaskSubmission);
+            var badgeRow   = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+            if (paramCount > 0) badgeRow.Children.Add(MakeBadge($"Parameter ×{paramCount}", "#1a2e1a", Green));
+            if (aiCount    > 0) badgeRow.Children.Add(MakeBadge($"AI Prompt ×{aiCount}",    "#1a1a2e", Purple));
+            if (subCount   > 0) badgeRow.Children.Add(MakeBadge($"Submit ×{subCount}",       "#2e2a0d", Orange));
+            if (badgeRow.Children.Count > 0)
+                vstack.Children.Add(badgeRow);
+
+            // Recent log rows (up to 5)
+            vstack.Children.Add(new Microsoft.UI.Xaml.Shapes.Rectangle
+            {
+                Height = 1, Fill = Muted, Margin = new Thickness(0, 2, 0, 2), Opacity = 0.2
+            });
+            foreach (var log in grp.Take(5))
+                vstack.Children.Add(BuildCompactLogRow(log));
+
+            card.Child = vstack;
+            StudentActivityRows.Children.Add(card);
         }
+    }
+
+    private Border MakeBadge(string text, string bg, Brush fg)
+    {
+        var b = new Border
+        {
+            Background    = Brush(bg),
+            CornerRadius  = new CornerRadius(4),
+            Padding       = new Thickness(6, 2, 6, 2)
+        };
+        b.Child = new TextBlock { Text = text, FontSize = 9, Foreground = fg,
+                                  FontWeight = Microsoft.UI.Text.FontWeights.SemiBold };
+        return b;
     }
 
     private void ShowStudentOverview()
