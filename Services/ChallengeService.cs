@@ -17,6 +17,8 @@ namespace TLIGDashboard.Services
     /// </summary>
     public class ChallengeService
     {
+        public static ChallengeService Instance { get; } = new();
+
         private readonly List<Challenge> _challenges = new();
         private readonly HttpClient _httpClient;
 

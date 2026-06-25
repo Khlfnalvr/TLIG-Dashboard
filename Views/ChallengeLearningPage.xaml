@@ -393,101 +393,18 @@
                  STUDENT VIEW
                  ══════════════════════════════════════════════════════ -->
 
-            <!-- Student: Progress overview (no challenge selected) -->
-            <ScrollViewer x:Name="StudentOverviewPanel"
-                          Visibility="Collapsed"
-                          VerticalScrollBarVisibility="Auto"
-                          Padding="16,12">
-                <StackPanel Spacing="14">
-                    <TextBlock Text="Progress Belajarmu"
-                               FontSize="18" FontWeight="SemiBold"
-                               Foreground="#e0e0f0"/>
-
-                    <!-- Stats row -->
-                    <Grid ColumnSpacing="12">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
-
-                        <!-- Completion donut placeholder -->
-                        <Border Grid.Column="0" Style="{StaticResource CL_Card}">
-                            <StackPanel Spacing="6" HorizontalAlignment="Center">
-                                <!-- Visual gauge ring via canvas -->
-                                <Grid Width="80" Height="80" HorizontalAlignment="Center">
-                                    <Ellipse Width="80" Height="80"
-                                             Stroke="#2d2d3e" StrokeThickness="10"
-                                             Fill="Transparent"/>
-                                    <Ellipse x:Name="GaugeArc"
-                                             Width="80" Height="80"
-                                             Stroke="#7c3aed" StrokeThickness="10"
-                                             Fill="Transparent"
-                                             StrokeDashArray="0 251.2"
-                                             RenderTransformOrigin="0.5,0.5">
-                                        <Ellipse.RenderTransform>
-                                            <RotateTransform Angle="-90"/>
-                                        </Ellipse.RenderTransform>
-                                    </Ellipse>
-                                    <TextBlock x:Name="GaugePct"
-                                               Text="0%"
-                                               FontSize="16" FontWeight="SemiBold"
-                                               Foreground="#e0e0f0"
-                                               HorizontalAlignment="Center"
-                                               VerticalAlignment="Center"/>
-                                </Grid>
-                                <TextBlock Text="Selesai" Style="{StaticResource CL_Label}"
-                                           HorizontalAlignment="Center"/>
-                            </StackPanel>
-                        </Border>
-
-                        <!-- Total / Completed / Remaining -->
-                        <Border Grid.Column="1" Style="{StaticResource CL_Card}">
-                            <StackPanel Spacing="10">
-                                <StackPanel Orientation="Horizontal" Spacing="8">
-                                    <FontIcon Glyph="&#xE9D5;" FontSize="14" Foreground="#8080a0"
-                                              FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"/>
-                                    <TextBlock Text="Total tasks" Style="{StaticResource CL_Label}"
-                                               VerticalAlignment="Center"/>
-                                    <TextBlock x:Name="StatTotal"
-                                               FontSize="18" FontWeight="SemiBold"
-                                               Foreground="#e0e0f0" Margin="4,0,0,0"/>
-                                </StackPanel>
-                                <StackPanel Orientation="Horizontal" Spacing="8">
-                                    <FontIcon Glyph="&#xE73E;" FontSize="14" Foreground="#10b981"
-                                              FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"/>
-                                    <TextBlock Text="Completed" Style="{StaticResource CL_Label}"
-                                               VerticalAlignment="Center"/>
-                                    <TextBlock x:Name="StatCompleted"
-                                               FontSize="18" FontWeight="SemiBold"
-                                               Foreground="#10b981" Margin="4,0,0,0"/>
-                                </StackPanel>
-                                <StackPanel Orientation="Horizontal" Spacing="8">
-                                    <FontIcon Glyph="&#xE916;" FontSize="14" Foreground="#f59e0b"
-                                              FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"/>
-                                    <TextBlock Text="Remaining" Style="{StaticResource CL_Label}"
-                                               VerticalAlignment="Center"/>
-                                    <TextBlock x:Name="StatRemaining"
-                                               FontSize="18" FontWeight="SemiBold"
-                                               Foreground="#f59e0b" Margin="4,0,0,0"/>
-                                </StackPanel>
-                            </StackPanel>
-                        </Border>
-
-                        <!-- Hint card -->
-                        <Border Grid.Column="2" Style="{StaticResource CL_Card}">
-                            <StackPanel Spacing="6" VerticalAlignment="Center">
-                                <FontIcon Glyph="&#xE82D;" FontSize="24"
-                                          Foreground="#7c3aed" HorizontalAlignment="Center"
-                                          FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"/>
-                                <TextBlock Text="Pilih challenge di kiri untuk melihat detail dan submit jawabanmu."
-                                           Style="{StaticResource CL_Label}"
-                                           TextWrapping="Wrap" TextAlignment="Center"/>
-                            </StackPanel>
-                        </Border>
-                    </Grid>
-                </StackPanel>
-            </ScrollViewer>
+            <!-- Student: hint when no challenge selected -->
+            <StackPanel x:Name="StudentOverviewPanel"
+                        Visibility="Collapsed"
+                        VerticalAlignment="Center" HorizontalAlignment="Center"
+                        Spacing="8" Padding="24">
+                <FontIcon Glyph="&#xE82D;" FontSize="32"
+                          Foreground="#7c3aed" HorizontalAlignment="Center"
+                          FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"/>
+                <TextBlock Text="Pilih challenge di kiri untuk melihat detail dan submit jawabanmu."
+                           Style="{StaticResource CL_Label}"
+                           TextWrapping="Wrap" TextAlignment="Center"/>
+            </StackPanel>
 
             <!-- Student: Challenge detail + submit -->
             <ScrollViewer x:Name="StudentDetailPanel"

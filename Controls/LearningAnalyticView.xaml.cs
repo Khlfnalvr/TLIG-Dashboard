@@ -37,10 +37,25 @@ public sealed partial class LearningAnalyticView : UserControl
 
     private async System.Threading.Tasks.Task LoadAsync()
     {
-        var result = await LearningTaskService.LoadAsync();
+        int total, done;
 
-        int done  = result.Tasks.Count(t => result.Completed.Contains(t.Id));
-        int total = result.Tasks.Count;
+#if CLIENT
+        // Use live challenge data: count tasks across all active challenges,
+        // completed = challenges the current student has submitted
+        var svc      = ChallengeService.Instance;
+        string stuId = App.Session.IsSignedIn ? App.Session.Username : "DEMO_S";
+        var active   = svc.GetAllChallenges()
+                          .Where(c => c.Status == Models.ChallengeStatus.Active)
+                          .ToList();
+        total = active.Sum(c => c.Tasks.Count);
+        done  = active.Count(c => c.Submissions.Any(s => s.StudentId == stuId));
+        await System.Threading.Tasks.Task.CompletedTask;
+#else
+        var result = await LearningTaskService.LoadAsync();
+        done  = result.Tasks.Count(t => result.Completed.Contains(t.Id));
+        total = result.Tasks.Count;
+#endif
+
         double ratio = total > 0 ? (double)done / total : 0;
 
         DrawGauge(ratio);

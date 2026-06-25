@@ -17,7 +17,7 @@ namespace TLIGDashboard.Views;
 public sealed partial class ChallengeLearningPage : Page
 {
     // ── State ────────────────────────────────────────────────────────────────
-    private readonly ChallengeService _service = new();
+    private readonly ChallengeService _service = ChallengeService.Instance;
     private bool   _isAdmin;
     private string _studentId   = "";
     private string _studentName = "";
@@ -306,32 +306,11 @@ public sealed partial class ChallengeLearningPage : Page
 
     private void ShowStudentOverview()
     {
-        EmptyState.Visibility         = Visibility.Collapsed;
-        AdminFormPanel.Visibility     = Visibility.Collapsed;
-        AdminDetailPanel.Visibility   = Visibility.Collapsed;
-        StudentDetailPanel.Visibility = Visibility.Collapsed;
+        EmptyState.Visibility           = Visibility.Collapsed;
+        AdminFormPanel.Visibility       = Visibility.Collapsed;
+        AdminDetailPanel.Visibility     = Visibility.Collapsed;
+        StudentDetailPanel.Visibility   = Visibility.Collapsed;
         StudentOverviewPanel.Visibility = Visibility.Visible;
-        UpdateStudentStats();
-    }
-
-    private void UpdateStudentStats()
-    {
-        var active = _service.GetAllChallenges()
-                             .Where(c => c.Status == ChallengeStatus.Active).ToList();
-        int total     = active.Sum(c => c.Tasks.Count);
-        int submitted = active.Count(c =>
-            c.Submissions.Any(s => s.StudentId == _studentId));
-        int remaining = active.Count - submitted;
-
-        StatTotal.Text     = total.ToString();
-        StatCompleted.Text = submitted.ToString();
-        StatRemaining.Text = remaining.ToString();
-
-        double pct = active.Count > 0 ? (double)submitted / active.Count * 100 : 0;
-        GaugePct.Text = $"{pct:0}%";
-        // Stroke dash: circumference = π×d = π×80 ≈ 251.2
-        double dash = pct / 100.0 * 251.2;
-        GaugeArc.StrokeDashArray = new DoubleCollection { dash, 251.2 - dash };
     }
 
     private void ShowStudentDetail(Challenge ch)
@@ -862,7 +841,6 @@ public sealed partial class ChallengeLearningPage : Page
         SubmitStatusText.Text = "✓ Jawaban berhasil dikirim!";
         SubmitStatusText.Foreground = Green;
         SubmitBtn.Content = "Update Jawaban";
-        UpdateStudentStats();
 
         Services.ActivityStore.Instance.LogSession(
             Models.ActivityCategory.TaskSubmission,
