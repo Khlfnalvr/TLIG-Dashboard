@@ -47,7 +47,7 @@
             <Frame x:Name="ChallengeFrame" Height="900"/>
 
             <!-- ══ Section 3: Penilaian ══ -->
-            <Border Padding="4,16,0,10" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+            <Border x:Name="PenilaianDivider" Padding="4,16,0,10" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                     BorderThickness="0,0,0,1" Margin="0,4,0,4">
                 <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
                     <Border Width="32" Height="32" CornerRadius="8" Background="{StaticResource TintBlue}">

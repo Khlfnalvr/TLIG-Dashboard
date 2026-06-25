@@ -41,8 +41,13 @@ public sealed partial class LearningAnalyticPage : Page
         if (!ChallengeFrame.CanGoBack && ChallengeFrame.Content is null)
             ChallengeFrame.Navigate(typeof(ChallengeLearningPage));
 
+#if CLIENT
+        PenilaianDivider.Visibility = Visibility.Collapsed;
+        GradingCard.Visibility      = Visibility.Collapsed;
+#else
         InitGradingCombo();
         _ = LoadGradingSectionAsync();
+#endif
     }
 
     protected override void OnNavigatedTo(NavigationEventArgs e)
