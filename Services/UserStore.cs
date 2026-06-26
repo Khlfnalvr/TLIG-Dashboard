@@ -1,6 +1,7 @@
 using System.IO;
 using System.Security.Cryptography;
 using System.Text.Json;
+using TLIGDashboard.Models;
 
 namespace TLIGDashboard.Services;
 
@@ -130,6 +131,7 @@ public sealed class UserStore
     public UserAccount? Verify(string username, string password)
     {
         username = (username ?? "").Trim();
+        UserAccount? result = null;
         lock (_lock)
         {
             var u = FindLocked(username);
@@ -137,8 +139,14 @@ public sealed class UserStore
             if (!VerifyHash(password ?? "", u.PasswordHash, u.Salt)) return null;
             u.LastLoginUtc = DateTime.UtcNow;
             SaveLocked();
-            return Clone(u);
+            result = Clone(u);
         }
+        if (result != null)
+            ActivityStore.Instance.Log(
+                result.Username, result.DisplayName, result.Role,
+                Models.ActivityCategory.Authentication, Models.ActivityActions.Login,
+                $"Login berhasil");
+        return result;
     }
 
     // ── Management operations (used by the User Management page) ────────────────
@@ -193,6 +201,10 @@ public sealed class UserStore
             _file.Users.Add(user);
             SaveLocked();
         }
+        ActivityStore.Instance.Log(
+            normalized, displayName, UserRoles.Mahasiswa,
+            Models.ActivityCategory.Authentication, Models.ActivityActions.SignUp,
+            $"Akun baru terdaftar: {normalized}");
         Changed?.Invoke();
         return (true, null);
     }

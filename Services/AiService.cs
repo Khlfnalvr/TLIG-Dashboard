@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using TLIGDashboard.Models;
 
 namespace TLIGDashboard.Services;
 
@@ -131,7 +132,15 @@ public sealed class AiService : IDisposable
 
         var reply = full.ToString();
         if (reply.Length > 0)
+        {
             _history.Add(new ChatMessage("assistant", reply));
+            var preview = userMessage.Length > 120 ? userMessage[..120] + "…" : userMessage;
+            ActivityStore.Instance.LogSession(
+                Models.ActivityCategory.AIInteraction,
+                Models.ActivityActions.AiQuery,
+                $"Query: {preview}",
+                metadata: new() { ["model"] = Model, ["replyChars"] = reply.Length.ToString() });
+        }
 
         return reply;
     }

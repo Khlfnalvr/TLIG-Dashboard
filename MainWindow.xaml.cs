@@ -47,10 +47,10 @@ public sealed partial class MainWindow : Window
         { "LiveView",  typeof(LiveViewPage) },
         { "LearningAnalytic", typeof(LearningAnalyticPage) },
         { "AI",        typeof(AIPage) },
-        { "GradingStudent",  typeof(GradingStudentPage) },
-        { "GradingLecturer", typeof(GradingLecturerPage) },
+        // GradingStudent and GradingLecturer pages removed from nav (merged into LearningAnalyticPage)
         { "Broadcast", typeof(BroadcastSettingsPage) },
-        { "UserManagement", typeof(UserManagementPage) }
+        { "UserManagement", typeof(UserManagementPage) },
+        // "Logging" page removed from nav — LoggingPage kept for potential future use
     };
 
     private string _loggedInUser = "";
@@ -856,23 +856,12 @@ public sealed partial class MainWindow : Window
         bool showBroadcast = Services.BuildInfo.IsServer && signedIn;
         bool showUm        = Services.BuildInfo.IsServer && signedIn && isStaff;
 
-        // Penilaian Mahasiswa: hanya tampil saat signed-in sebagai Mahasiswa (client)
-        bool showGradingStudent  = signedIn && !isStaff;
-        // Manajemen Penilaian: hanya tampil saat signed-in sebagai Dosen/Asisten
-        bool showGradingLecturer = signedIn && isStaff;
-
-        NavBroadcast.Visibility        = showBroadcast      ? Visibility.Visible : Visibility.Collapsed;
-        NavUserManagement.Visibility   = showUm             ? Visibility.Visible : Visibility.Collapsed;
-        NavGradingStudent.Visibility   = showGradingStudent  ? Visibility.Visible : Visibility.Collapsed;
-        NavGradingLecturer.Visibility  = showGradingLecturer ? Visibility.Visible : Visibility.Collapsed;
+        NavBroadcast.Visibility      = showBroadcast ? Visibility.Visible : Visibility.Collapsed;
+        NavUserManagement.Visibility = showUm        ? Visibility.Visible : Visibility.Collapsed;
 
         if (!showBroadcast && ReferenceEquals(NavView.SelectedItem, NavBroadcast))
             NavView.SelectedItem = FirstVisibleNavItem();
         if (!showUm && ReferenceEquals(NavView.SelectedItem, NavUserManagement))
-            NavView.SelectedItem = FirstVisibleNavItem();
-        if (!showGradingStudent && ReferenceEquals(NavView.SelectedItem, NavGradingStudent))
-            NavView.SelectedItem = FirstVisibleNavItem();
-        if (!showGradingLecturer && ReferenceEquals(NavView.SelectedItem, NavGradingLecturer))
             NavView.SelectedItem = FirstVisibleNavItem();
     }
 
