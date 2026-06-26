@@ -47,6 +47,8 @@ public sealed partial class LearningAnalyticPage : Page
 #else
         InitGradingCombo();
         _ = LoadGradingSectionAsync();
+        ChallengeLearningPage.GradeSaved += OnChallengeGradeSaved;
+        Unloaded += (_, _) => { ChallengeLearningPage.GradeSaved -= OnChallengeGradeSaved; };
 #endif
     }
 
@@ -289,60 +291,9 @@ public sealed partial class LearningAnalyticPage : Page
 
     private async System.Threading.Tasks.Task LoadLecturerGradingAsync()
     {
-        await RefreshLecSummaryAsync();
-        await RefreshLecPeerAsync();
-        await RefreshLecSystemAsync();
+        InitChallengeRecapCombo();
+        BuildChallengeRecap();
         await RefreshLecActivitiesAsync();
-    }
-
-    private async System.Threading.Tasks.Task RefreshLecSummaryAsync()
-    {
-        var summaries = await _grading.GetGradeSummaryByAssignmentAsync(_gradingAssignmentId);
-        GLecStatTotal.Text  = summaries.Count.ToString();
-        GLecStatGraded.Text = summaries.Count(s => s.LecturerScore.HasValue).ToString();
-        var withFinal = summaries.Where(s => s.FinalScore.HasValue).ToList();
-        GLecStatAvg.Text  = withFinal.Any() ? withFinal.Average(s => s.FinalScore!.Value).ToString("F1") : "—";
-        GLecStatPeer.Text = summaries.Count(s => s.PeerScore.HasValue).ToString();
-        GLecSummaryRepeater.ItemsSource = summaries.Select(s => new GLecSummaryVm(s)).ToList();
-    }
-
-    private async System.Threading.Tasks.Task RefreshLecPeerAsync()
-    {
-        var evals = await _grading.GetPeerEvaluationsByAssignmentAsync(_gradingAssignmentId);
-        GLecPeerRepeater.ItemsSource = evals
-            .OrderByDescending(e => e.EvaluatedAt)
-            .Select(e => new GLecPeerVm
-            {
-                EvaluatorName  = e.EvaluatorName,
-                EvaluateeName  = e.EvaluateeName,
-                ScoreStr       = e.Score.ToString("F1"),
-                Comment        = string.IsNullOrWhiteSpace(e.Comment) ? "(Tidak ada komentar)" : e.Comment,
-                EvaluatedAtStr = e.EvaluatedAt.ToString("dd MMM, HH:mm"),
-                SubScoresStr   = $"K:{e.CriteriaContribution:F0}  T:{e.CriteriaCooperation:F0}  J:{e.CriteriaResponsibility:F0}  C:{e.CriteriaCreativity:F0}",
-            }).ToList();
-    }
-
-    private async System.Threading.Tasks.Task RefreshLecSystemAsync()
-    {
-        var evals = await _grading.GetSystemEvaluationsByAssignmentAsync(_gradingAssignmentId);
-        GLecSystemRepeater.ItemsSource = evals
-            .OrderByDescending(e => e.Score)
-            .Select(e => new GLecSystemVm
-            {
-                StudentId   = e.StudentId,
-                StudentName = e.StudentName,
-                ScoreStr    = e.Score.ToString("F1"),
-                CommitStr   = $"Submit: {e.CommitsCount}",
-                FileStr     = $"File: {e.FilesModified}",
-                TaskStr     = $"Task: {e.TasksCompleted}/{e.TasksTotal}",
-                OnTimeStr   = e.SubmittedOnTime ? "Tepat Waktu" : "Terlambat",
-                OnTimeBg    = new SolidColorBrush(e.SubmittedOnTime
-                    ? Windows.UI.Color.FromArgb(30, 16, 124, 16)
-                    : Windows.UI.Color.FromArgb(30, 200, 40, 40)),
-                OnTimeFg    = new SolidColorBrush(e.SubmittedOnTime
-                    ? Windows.UI.Color.FromArgb(255, 16, 124, 16)
-                    : Windows.UI.Color.FromArgb(255, 200, 40, 40)),
-            }).ToList();
     }
 
     private async System.Threading.Tasks.Task RefreshLecActivitiesAsync()
@@ -464,10 +415,8 @@ public sealed partial class LearningAnalyticPage : Page
     {
         switch (LecturerGradingPivot.SelectedIndex)
         {
-            case 0: _ = RefreshLecSummaryAsync();    break;
-            case 1: _ = RefreshLecPeerAsync();       break;
-            case 2: _ = RefreshLecSystemAsync();     break;
-            case 3: _ = RefreshLecActivitiesAsync(); break;
+            case 0: InitChallengeRecapCombo(); BuildChallengeRecap(); break;
+            case 1: _ = RefreshLecActivitiesAsync(); break;
         }
     }
 
@@ -582,6 +531,211 @@ public sealed partial class LearningAnalyticPage : Page
         if (parts.Length == 1) return name[..Math.Min(2, name.Length)].ToUpper();
         return $"{parts[0][0]}{parts[1][0]}".ToUpper();
     }
+
+    // ═══════════════════════════════════════════════════════════════════
+    //  REKAP PENILAIAN CHALLENGE (SERVER)
+    // ═══════════════════════════════════════════════════════════════════
+
+    private void OnChallengeGradeSaved()
+        => DispatcherQueue.TryEnqueue(BuildChallengeRecap);
+
+    private void InitChallengeRecapCombo()
+    {
+        var challenges = ChallengeService.Instance.GetAllChallenges();
+        ChallengeRecapCombo.Items.Clear();
+        foreach (var ch in challenges)
+            ChallengeRecapCombo.Items.Add(new ComboBoxItem { Content = ch.Title, Tag = ch.Id.ToString() });
+        if (ChallengeRecapCombo.Items.Count > 0)
+            ChallengeRecapCombo.SelectedIndex = 0;
+    }
+
+    private void BuildChallengeRecap()
+    {
+        ChallengeRecapRows.Children.Clear();
+
+        string? selectedId = (ChallengeRecapCombo.SelectedItem as ComboBoxItem)?.Tag?.ToString();
+        if (selectedId == null || !Guid.TryParse(selectedId, out var challengeGuid))
+        {
+            ChallengeRecapEmpty.Visibility = Visibility.Visible;
+            return;
+        }
+
+        var challenge = ChallengeService.Instance.GetById(challengeGuid);
+        if (challenge == null)
+        {
+            ChallengeRecapEmpty.Visibility = Visibility.Visible;
+            return;
+        }
+
+        var subs = challenge.Submissions;
+
+        bool hasRows = false;
+        foreach (var sub in subs)
+        {
+            double? finalScore = sub.ComputeFinalScore(challenge);
+            string scoreStr = finalScore.HasValue ? $"{finalScore.Value:F1}" : "—";
+            string grade    = finalScore.HasValue ? ChallengeScoreToGrade(finalScore.Value) : "—";
+
+            var row = new Grid
+            {
+                Padding = new Thickness(14, 10, 14, 10),
+                BorderThickness = new Thickness(0, 0, 0, 1),
+                BorderBrush = (Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"]
+            };
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(180) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(90) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(70) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            // Nama mahasiswa
+            var nameStack = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+            nameStack.Children.Add(new TextBlock
+            {
+                Text = sub.StudentName.Length > 0 ? sub.StudentName : sub.StudentId,
+                FontSize = 13, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
+            });
+            nameStack.Children.Add(new TextBlock
+            {
+                Text = sub.StudentId, FontSize = 11,
+                Opacity = 0.5
+            });
+            Grid.SetColumn(nameStack, 0);
+
+            // Kelompok
+            var grpText = new TextBlock
+            {
+                Text = "—", FontSize = 13,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            Grid.SetColumn(grpText, 1);
+
+            // Nilai Final
+            var finalText = new TextBlock
+            {
+                Text = scoreStr, FontSize = 13,
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            Grid.SetColumn(finalText, 2);
+
+            // Grade badge
+            var gradeBadge = new Border
+            {
+                CornerRadius = new CornerRadius(4),
+                Padding = new Thickness(7, 2, 7, 2),
+                Background = ChallengeGradeToBrush(grade),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            gradeBadge.Child = new TextBlock
+            {
+                Text = grade, FontSize = 11,
+                FontWeight = Microsoft.UI.Text.FontWeights.Bold,
+                Foreground = new SolidColorBrush(Colors.White)
+            };
+            Grid.SetColumn(gradeBadge, 3);
+
+            // Tombol Detail
+            var capturedSub = sub;
+            var capturedCh  = challenge;
+            var detailBtn = new Button
+            {
+                Content = "Detail", FontSize = 12,
+                Padding = new Thickness(10, 4, 10, 4),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            detailBtn.Click += (_, _) => ShowChallengeSubmissionDetail(capturedSub, capturedCh);
+            Grid.SetColumn(detailBtn, 4);
+
+            row.Children.Add(nameStack);
+            row.Children.Add(grpText);
+            row.Children.Add(finalText);
+            row.Children.Add(gradeBadge);
+            row.Children.Add(detailBtn);
+
+            ChallengeRecapRows.Children.Add(row);
+            hasRows = true;
+        }
+
+        ChallengeRecapEmpty.Visibility = hasRows ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    private void ShowChallengeSubmissionDetail(ChallengeSubmission sub, Challenge challenge)
+    {
+        double? finalScore = sub.ComputeFinalScore(challenge);
+        string grade = finalScore.HasValue ? ChallengeScoreToGrade(finalScore.Value) : "—";
+
+        var content = new StackPanel { Width = 380, Spacing = 10 };
+        content.Children.Add(new TextBlock
+        {
+            Text = sub.StudentName.Length > 0 ? sub.StudentName : sub.StudentId,
+            FontSize = 15, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
+        });
+        content.Children.Add(new Microsoft.UI.Xaml.Shapes.Rectangle
+        {
+            Height = 1, Fill = new SolidColorBrush(Colors.Gray), Opacity = 0.3
+        });
+
+        void AddRow(string label, string value)
+        {
+            var g = new Grid { ColumnSpacing = 12, Margin = new Thickness(0, 2, 0, 2) };
+            g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(120) });
+            g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            var lbl = new TextBlock { Text = label, FontSize = 12, Opacity = 0.6, VerticalAlignment = VerticalAlignment.Top };
+            var val = new TextBlock { Text = value, FontSize = 12, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap };
+            Grid.SetColumn(lbl, 0); Grid.SetColumn(val, 1);
+            g.Children.Add(lbl); g.Children.Add(val);
+            content.Children.Add(g);
+        }
+
+        AddRow("Nilai Dosen",  sub.DosenGrade != null ? $"{sub.DosenGrade.Score:F1}" : "Belum dinilai");
+        AddRow("Nilai Final",  finalScore.HasValue ? $"{finalScore.Value:F1}" : "—");
+        AddRow("Grade",        grade);
+        AddRow("Feedback",     sub.DosenGrade?.Feedback is { Length: > 0 } fb ? fb : "—");
+        AddRow("Disubmit",     sub.SubmittedAt.ToString("dd MMM yyyy, HH:mm"));
+        if (!string.IsNullOrEmpty(sub.TextAnswer))
+            AddRow("Jawaban", sub.TextAnswer);
+
+        var dialog = new ContentDialog
+        {
+            Title         = $"Detail — {(sub.StudentName.Length > 0 ? sub.StudentName : sub.StudentId)}",
+            Content       = content,
+            CloseButtonText = "Tutup",
+            XamlRoot      = XamlRoot
+        };
+        _ = dialog.ShowAsync();
+    }
+
+    private static string ChallengeScoreToGrade(double score) => score switch
+    {
+        >= 80 => "A",
+        >= 70 => "B",
+        >= 60 => "C",
+        >= 50 => "D",
+        _     => "E"
+    };
+
+    private static SolidColorBrush ChallengeGradeToBrush(string grade) => grade switch
+    {
+        "A" => new SolidColorBrush(Windows.UI.Color.FromArgb(255, 16, 185, 129)),
+        "B" => new SolidColorBrush(Windows.UI.Color.FromArgb(255, 59, 130, 246)),
+        "C" => new SolidColorBrush(Windows.UI.Color.FromArgb(255, 245, 158, 11)),
+        "D" => new SolidColorBrush(Windows.UI.Color.FromArgb(255, 239, 68, 68)),
+        "E" => new SolidColorBrush(Windows.UI.Color.FromArgb(255, 120, 10, 10)),
+        _   => new SolidColorBrush(Windows.UI.Color.FromArgb(255, 128, 128, 128))
+    };
+
+    internal void ChallengeRecapCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        => BuildChallengeRecap();
+
+    internal void ChallengeRecapRefresh_Click(object sender, RoutedEventArgs e)
+    {
+        InitChallengeRecapCombo();
+        BuildChallengeRecap();
+    }
 }
 
 // ══════════════════════════════════════════════════════════════════════
@@ -614,63 +768,6 @@ public class GradingReceivedEvalVm
     public string Comment           { get; set; } = "";
     public string ScoreStr          { get; set; } = "";
     public string EvaluatedAtStr    { get; set; } = "";
-}
-
-internal class GLecSummaryVm
-{
-    public string StudentId        { get; }
-    public string StudentName      { get; }
-    public string GroupName        { get; }
-    public string PeerScoreStr     { get; }
-    public string SystemScoreStr   { get; }
-    public string LecturerScoreStr { get; }
-    public string FinalScoreStr    { get; }
-    public string LetterGrade      { get; }
-    public SolidColorBrush GradeBadgeColor { get; }
-    public string AssignmentTitle  { get; }
-
-    public GLecSummaryVm(StudentGradeSummary s)
-    {
-        StudentId        = s.StudentId;
-        StudentName      = s.StudentName;
-        GroupName        = s.GroupName;
-        AssignmentTitle  = s.AssignmentTitle;
-        PeerScoreStr     = s.PeerScore.HasValue     ? s.PeerScore.Value.ToString("F1")     : "—";
-        SystemScoreStr   = s.SystemScore.HasValue   ? s.SystemScore.Value.ToString("F1")   : "—";
-        LecturerScoreStr = s.LecturerScore.HasValue ? s.LecturerScore.Value.ToString("F1") : "—";
-        FinalScoreStr    = s.FinalScore.HasValue    ? s.FinalScore.Value.ToString("F1")    : "—";
-        LetterGrade      = s.LetterGrade;
-        GradeBadgeColor  = new SolidColorBrush(s.LetterGrade switch
-        {
-            "A" or "A-"          => Windows.UI.Color.FromArgb(255, 16, 124, 16),
-            "B+" or "B" or "B-"  => Windows.UI.Color.FromArgb(255, 0, 120, 212),
-            "C+" or "C"          => Windows.UI.Color.FromArgb(255, 200, 130, 0),
-            _                    => Windows.UI.Color.FromArgb(255, 196, 43, 28),
-        });
-    }
-}
-
-internal class GLecPeerVm
-{
-    public string EvaluatorName  { get; set; } = "";
-    public string EvaluateeName  { get; set; } = "";
-    public string ScoreStr       { get; set; } = "";
-    public string Comment        { get; set; } = "";
-    public string EvaluatedAtStr { get; set; } = "";
-    public string SubScoresStr   { get; set; } = "";
-}
-
-internal class GLecSystemVm
-{
-    public string StudentId   { get; set; } = "";
-    public string StudentName { get; set; } = "";
-    public string ScoreStr    { get; set; } = "";
-    public string CommitStr   { get; set; } = "";
-    public string FileStr     { get; set; } = "";
-    public string TaskStr     { get; set; } = "";
-    public string OnTimeStr   { get; set; } = "";
-    public SolidColorBrush? OnTimeBg { get; set; }
-    public SolidColorBrush? OnTimeFg { get; set; }
 }
 
 internal class GLecActivityVm

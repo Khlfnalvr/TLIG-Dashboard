@@ -26,6 +26,9 @@ public sealed partial class ChallengeLearningPage : Page
     private Challenge?      _editing;          // challenge being created/edited
     private List<ChallengeTask> _editTasks = new(); // task editor state
     private string? _attachPath, _attachName;
+    private ChallengeSubmission? _selectedSubmission;
+
+    public static event Action? GradeSaved;
 
     // Colour constants
     private static readonly SolidColorBrush Purple = Brush("#7c3aed");
@@ -223,72 +226,183 @@ public sealed partial class ChallengeLearningPage : Page
         if (ch.Tasks.Count == 0)
             AdminTaskSummary.Children.Add(new TextBlock { Text = "Tidak ada task.", FontSize = 11, Foreground = Muted });
 
-        // Activity table
-        RebuildStudentActivityTable(ch);
+        // Student list
+        StudentDetailCard.Visibility = Visibility.Collapsed;
+        _selectedSubmission = null;
+        _ = RebuildStudentListAsync(ch);
     }
 
-    private void RebuildStudentActivityTable(Challenge ch)
+    private async System.Threading.Tasks.Task RebuildStudentListAsync(Challenge ch)
     {
-        StudentActivityRows.Children.Clear();
+        StudentListRows.Children.Clear();
 
-        var allLogs = ActivityStore.Instance.GetAll()
-            .Where(a => a.Category == ActivityCategory.ControlParameter
-                     || a.Category == ActivityCategory.AIInteraction
-                     || a.Category == ActivityCategory.TaskSubmission)
-            .OrderByDescending(a => a.TimestampUtc)
+        var subs = ch.Submissions
+            .Where(s => s.Status != SubmissionStatus.NotSubmitted)
             .ToList();
 
-        // Group by display name / username
-        var grouped = allLogs
-            .GroupBy(a => string.IsNullOrEmpty(a.DisplayName) ? a.Username : a.DisplayName)
-            .ToList();
-
-        NoActivityText.Visibility = grouped.Count == 0
+        NoStudentText.Visibility = subs.Count == 0
             ? Visibility.Visible : Visibility.Collapsed;
 
-        foreach (var grp in grouped)
+        foreach (var sub in subs)
         {
+            bool graded = sub.DosenGrade != null;
+
             var card = new Border
             {
-                Background    = Brush("#1a1a2a"),
-                BorderBrush   = Brush("#2d2d3e"),
+                Background      = Brush("#1a1a2a"),
+                BorderBrush     = graded ? Brush("#1a3a2a") : Brush("#2d2d3e"),
                 BorderThickness = new Thickness(1),
-                CornerRadius  = new CornerRadius(8),
-                Padding       = new Thickness(12, 10, 12, 10)
+                CornerRadius    = new CornerRadius(8),
+                Padding         = new Thickness(12, 10, 12, 10)
             };
-            var vstack = new StackPanel { Spacing = 6 };
 
-            // Student name header
-            vstack.Children.Add(new TextBlock
+            var g = new Grid { ColumnSpacing = 10 };
+            g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            var nameStack = new StackPanel { Spacing = 2 };
+            nameStack.Children.Add(new TextBlock
             {
-                Text = grp.Key,
-                FontSize = 12,
-                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                Text = sub.StudentName.Length > 0 ? sub.StudentName : sub.StudentId,
+                FontSize = 12, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
                 Foreground = Brush("#e0e0f0")
             });
-
-            // Summary badges row
-            int paramCount = grp.Count(a => a.Category == ActivityCategory.ControlParameter);
-            int aiCount    = grp.Count(a => a.Category == ActivityCategory.AIInteraction);
-            int subCount   = grp.Count(a => a.Category == ActivityCategory.TaskSubmission);
-            var badgeRow   = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
-            if (paramCount > 0) badgeRow.Children.Add(MakeBadge($"Parameter ×{paramCount}", "#1a2e1a", Green));
-            if (aiCount    > 0) badgeRow.Children.Add(MakeBadge($"AI Prompt ×{aiCount}",    "#1a1a2e", Purple));
-            if (subCount   > 0) badgeRow.Children.Add(MakeBadge($"Submit ×{subCount}",       "#2e2a0d", Orange));
-            if (badgeRow.Children.Count > 0)
-                vstack.Children.Add(badgeRow);
-
-            // Recent log rows (up to 5)
-            vstack.Children.Add(new Microsoft.UI.Xaml.Shapes.Rectangle
+            nameStack.Children.Add(new TextBlock
             {
-                Height = 1, Fill = Muted, Margin = new Thickness(0, 2, 0, 2), Opacity = 0.2
+                Text = $"Submit: {sub.SubmittedAt:dd MMM yyyy, HH:mm}",
+                FontSize = 10, Foreground = Muted
             });
-            foreach (var log in grp.Take(5))
-                vstack.Children.Add(BuildCompactLogRow(log));
+            Grid.SetColumn(nameStack, 0);
 
-            card.Child = vstack;
-            StudentActivityRows.Children.Add(card);
+            if (graded)
+            {
+                var gradedBadge = MakeBadge($"Dinilai: {sub.DosenGrade!.Score:F0}", "#0d2e1e", Green);
+                gradedBadge.VerticalAlignment = VerticalAlignment.Center;
+                Grid.SetColumn(gradedBadge, 1);
+                g.Children.Add(gradedBadge);
+            }
+
+            var viewBtn = new Button
+            {
+                Content = "Lihat →", FontSize = 10,
+                CornerRadius = new CornerRadius(5), Padding = new Thickness(8, 4, 8, 4),
+                Background = Purple, Foreground = Brush("#ffffff"),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            Grid.SetColumn(viewBtn, 2);
+
+            var capturedSub = sub;
+            viewBtn.Click += (_, _) => ShowStudentGradingDetail(capturedSub);
+
+            g.Children.Add(nameStack);
+            g.Children.Add(viewBtn);
+            card.Child = g;
+            StudentListRows.Children.Add(card);
         }
+
+        await System.Threading.Tasks.Task.CompletedTask;
+    }
+
+    private void ShowStudentGradingDetail(ChallengeSubmission sub)
+    {
+        _selectedSubmission = sub;
+        StudentDetailCard.Visibility = Visibility.Visible;
+
+        SelectedStudentName.Text = sub.StudentName.Length > 0 ? sub.StudentName : sub.StudentId;
+        SelectedStudentMeta.Text = !string.IsNullOrEmpty(sub.TextAnswer)
+            ? $"Submit: {sub.SubmittedAt:dd MMM yyyy, HH:mm} · Status: {sub.Status}"
+            : "Belum ada jawaban tertulis.";
+
+        // Aktivitas mahasiswa — hanya sebelum/sampai waktu submit
+        SelectedStudentActivity.Children.Clear();
+        DateTime cutoffUtc = sub.Status == SubmissionStatus.NotSubmitted
+            ? DateTime.UtcNow
+            : sub.SubmittedAt.Kind == DateTimeKind.Utc
+                ? sub.SubmittedAt
+                : sub.SubmittedAt.ToUniversalTime();
+
+        var logs = ActivityStore.Instance.GetAll()
+            .Where(a =>
+                (a.Category == ActivityCategory.ControlParameter
+                 || a.Category == ActivityCategory.AIInteraction
+                 || a.Category == ActivityCategory.TaskSubmission)
+                && (!string.IsNullOrEmpty(a.Username) && a.Username == sub.StudentId
+                    || !string.IsNullOrEmpty(a.DisplayName) && a.DisplayName == sub.StudentName)
+                && a.TimestampUtc <= cutoffUtc)
+            .OrderByDescending(a => a.TimestampUtc)
+            .Take(50)
+            .ToList();
+
+        NoSelectedStudentActivity.Visibility = logs.Count == 0
+            ? Visibility.Visible : Visibility.Collapsed;
+
+        // Summary badges
+        if (logs.Count > 0)
+        {
+            int paramCount = logs.Count(a => a.Category == ActivityCategory.ControlParameter);
+            int aiCount    = logs.Count(a => a.Category == ActivityCategory.AIInteraction);
+            int subCount   = logs.Count(a => a.Category == ActivityCategory.TaskSubmission);
+            var badgeRow   = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Margin = new Thickness(0, 0, 0, 4) };
+            if (paramCount > 0) badgeRow.Children.Add(MakeBadge($"Parameter ×{paramCount}", "#1a2e1a", Green));
+            if (aiCount    > 0) badgeRow.Children.Add(MakeBadge($"AI Prompt ×{aiCount}",   "#1a1a2e", Purple));
+            if (subCount   > 0) badgeRow.Children.Add(MakeBadge($"Submit ×{subCount}",      "#2e2a0d", Orange));
+            SelectedStudentActivity.Children.Add(badgeRow);
+        }
+
+        foreach (var log in logs)
+            SelectedStudentActivity.Children.Add(BuildCompactLogRow(log));
+
+        // Pre-fill form penilaian
+        GradeScoreBox.Value    = sub.DosenGrade?.Score ?? 0;
+        GradeFeedbackBox.Text  = sub.DosenGrade?.Feedback ?? "";
+        GradeSaveStatus.Text   = sub.DosenGrade != null
+            ? $"✓ Sudah dinilai pada {sub.DosenGrade.GradedAt:dd MMM yyyy}"
+            : "";
+        GradeSaveStatus.Foreground = Green;
+    }
+
+    private void BackToStudentListBtn_Click(object sender, RoutedEventArgs e)
+    {
+        StudentDetailCard.Visibility = Visibility.Collapsed;
+        _selectedSubmission = null;
+    }
+
+    private void SaveGradeBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (_selectedSubmission == null || _selected == null) return;
+
+        double score = double.IsNaN(GradeScoreBox.Value) ? 0 : GradeScoreBox.Value;
+        score = Math.Max(0, Math.Min(100, score));
+        string lecName = App.Session.DisplayName.Length > 0 ? App.Session.DisplayName : "Dosen";
+
+        // Jika submission belum ada di challenge, tambahkan dulu
+        if (!_selected.Submissions.Contains(_selectedSubmission))
+        {
+            _selectedSubmission.ChallengeId = _selected.Id;
+            _selectedSubmission.Status      = SubmissionStatus.Graded;
+            _selected.Submissions.Add(_selectedSubmission);
+        }
+
+        _selectedSubmission.DosenGrade = new GradeEntry
+        {
+            GraderName = lecName,
+            Score      = score,
+            Feedback   = GradeFeedbackBox.Text.Trim(),
+            GradedAt   = DateTime.Now,
+            IsAI       = false
+        };
+        _selectedSubmission.Status = SubmissionStatus.Graded;
+        _service.UpdateChallenge(_selected);
+
+        GradeSaveStatus.Text       = $"✓ Nilai {score:F0} berhasil disimpan!";
+        GradeSaveStatus.Foreground = Green;
+
+        // Refresh student list untuk update badge
+        _ = RebuildStudentListAsync(_selected);
+
+        // Notify Penilaian section
+        GradeSaved?.Invoke();
     }
 
     private Border MakeBadge(string text, string bg, Brush fg)

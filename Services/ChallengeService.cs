@@ -309,6 +309,24 @@ namespace TLIGDashboard.Services
                     }
                 }
             };
+            var sub3 = new ChallengeSubmission
+            {
+                ChallengeId = c2.Id, StudentId = "S001", StudentName = "Andi Pratama",
+                SubmittedAt = DateTime.Now.AddHours(-3),
+                TextAnswer  = "Kp=5, Ki=0.8, Kd=1.5 memberikan settling time 13s dan steady-state error 1.5%.",
+                Status      = SubmissionStatus.Submitted,
+                MetricSnapshot = new() { [TaskMetrics.Settling] = 13.0, [TaskMetrics.SteadyStateError] = 1.5 }
+            };
+            var sub4 = new ChallengeSubmission
+            {
+                ChallengeId = c2.Id, StudentId = "S002", StudentName = "Siti Rahma",
+                SubmittedAt = DateTime.Now.AddHours(-2),
+                TextAnswer  = "Setelah iterasi panjang, Kp=7, Ki=1.2, Kd=0.8 menghasilkan settling 11.5s dan error 2%.",
+                Status      = SubmissionStatus.Submitted,
+                MetricSnapshot = new() { [TaskMetrics.Settling] = 11.5, [TaskMetrics.SteadyStateError] = 2.0 }
+            };
+            c2.Submissions.Add(sub3);
+            c2.Submissions.Add(sub4);
             _challenges.Add(c2);
 
             // ── Challenge 3: Draft ───────────────────────────────────────────

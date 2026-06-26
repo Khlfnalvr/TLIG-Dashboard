@@ -373,16 +373,90 @@
                         </StackPanel>
                     </Border>
 
-                    <!-- Activity per student (SERVER) -->
+                    <!-- Daftar Mahasiswa -->
                     <Border Style="{StaticResource CL_Card}">
                         <StackPanel Spacing="10">
+                            <TextBlock Text="DAFTAR MAHASISWA"
+                                       Style="{StaticResource CL_SectionHeader}"/>
+                            <StackPanel x:Name="StudentListRows" Spacing="6"/>
+                            <TextBlock x:Name="NoStudentText"
+                                       Text="Belum ada mahasiswa yang submit."
+                                       Style="{StaticResource CL_Label}"
+                                       HorizontalAlignment="Center"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Student detail + form penilaian (tersembunyi) -->
+                    <Border x:Name="StudentDetailCard" Style="{StaticResource CL_Card}"
+                            Visibility="Collapsed">
+                        <StackPanel Spacing="12">
+
+                            <!-- Header: nama mahasiswa + tombol kembali -->
+                            <Grid>
+                                <StackPanel Spacing="2">
+                                    <TextBlock x:Name="SelectedStudentName"
+                                               FontSize="14" FontWeight="SemiBold"
+                                               Foreground="#e0e0f0"/>
+                                    <TextBlock x:Name="SelectedStudentMeta"
+                                               Style="{StaticResource CL_Label}"/>
+                                </StackPanel>
+                                <Button x:Name="BackToStudentListBtn"
+                                        Content="← Kembali"
+                                        HorizontalAlignment="Right"
+                                        FontSize="11" CornerRadius="6" Padding="8,4"
+                                        Click="BackToStudentListBtn_Click"/>
+                            </Grid>
+
+                            <!-- Aktivitas mahasiswa -->
                             <TextBlock Text="AKTIVITAS MAHASISWA"
                                        Style="{StaticResource CL_SectionHeader}"/>
-                            <StackPanel x:Name="StudentActivityRows" Spacing="8"/>
-                            <TextBlock x:Name="NoActivityText"
+                            <StackPanel x:Name="SelectedStudentActivity" Spacing="4"/>
+                            <TextBlock x:Name="NoSelectedStudentActivity"
                                        Text="Belum ada aktivitas."
                                        Style="{StaticResource CL_Label}"
-                                       Margin="0,8" HorizontalAlignment="Center"/>
+                                       HorizontalAlignment="Center"/>
+
+                            <Rectangle Height="1" Fill="#2d2d3e"
+                                       Opacity="0.5" Margin="0,4,0,4"/>
+
+                            <!-- Form penilaian dosen -->
+                            <TextBlock Text="FORM PENILAIAN DOSEN"
+                                       Style="{StaticResource CL_SectionHeader}"/>
+                            <Grid ColumnSpacing="12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" Spacing="4" MinWidth="140">
+                                    <TextBlock Text="Nilai (0–100)"
+                                               Style="{StaticResource CL_Label}"/>
+                                    <NumberBox x:Name="GradeScoreBox"
+                                               Minimum="0" Maximum="100" Value="0"
+                                               FontSize="12" CornerRadius="6"
+                                               SpinButtonPlacementMode="Compact"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Spacing="4">
+                                    <TextBlock Text="Catatan / Feedback"
+                                               Style="{StaticResource CL_Label}"/>
+                                    <TextBox x:Name="GradeFeedbackBox"
+                                             PlaceholderText="Tulis catatan untuk mahasiswa..."
+                                             FontSize="12" CornerRadius="6"
+                                             AcceptsReturn="True" Height="64"
+                                             TextWrapping="Wrap"/>
+                                </StackPanel>
+                            </Grid>
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <Button x:Name="SaveGradeBtn"
+                                        Content="Simpan Nilai"
+                                        Background="#7c3aed" Foreground="White"
+                                        FontSize="12" FontWeight="SemiBold"
+                                        CornerRadius="6" Padding="14,8"
+                                        Click="SaveGradeBtn_Click"/>
+                                <TextBlock x:Name="GradeSaveStatus"
+                                           Style="{StaticResource CL_Label}"
+                                           VerticalAlignment="Center"/>
+                            </StackPanel>
+
                         </StackPanel>
                     </Border>
 
