@@ -21,11 +21,13 @@ namespace TLIGDashboard.Services
         public static GradingService Instance => _instance ??= new GradingService();
 
         // ── In-memory storage (ganti dengan DB/API call di produksi) ─────────
-        private readonly List<PeerEvaluation> _peerEvaluations = new();
+        private readonly List<PeerEvaluation>   _peerEvaluations   = new();
         private readonly List<SystemEvaluation> _systemEvaluations = new();
-        private readonly List<LecturerGrade> _lecturerGrades = new();
-        private readonly List<GroupActivity> _groupActivities = new();
+        private readonly List<LecturerGrade>    _lecturerGrades    = new();
+        private readonly List<GroupActivity>    _groupActivities   = new();
         private readonly List<SimulationResult> _simulationResults = new();
+        private readonly List<TuningRecord>     _tuningRecords     = new();
+        private readonly List<AiUsageRecord>    _aiUsageRecords    = new();
 
         private GradingService()
         {
@@ -76,47 +78,95 @@ namespace TLIGDashboard.Services
             => Task.FromResult(_systemEvaluations.FirstOrDefault(e =>
                 e.StudentId == studentId && e.AssignmentId == assignmentId));
 
-        /// <summary>Hitung skor sistem berdasarkan aktivitas kelompok</summary>
-        public Task<SystemEvaluation> GenerateSystemScoreAsync(string studentId, string assignmentId)
+        // ── Algoritma skor sistem — berdasarkan 3 parameter nyata ──────────────
+
+        /// <summary>
+        /// Hitung skor sistem dari 3 parameter nyata:
+        ///   1. Rekam Tuning Parameter  (maks 40 poin)
+        ///   2. Hasil Penggunaan AI     (maks 20 poin)
+        ///   3. Hasil Simulasi          (maks 40 poin)
+        /// </summary>
+        private SystemEvaluation ComputeSystemScore(
+            string studentId, string assignmentId, DateTime? deadline = null)
         {
-            var activities = _groupActivities
-                .Where(a => a.StudentId == studentId && a.AssignmentId == assignmentId && a.CountsToSystemScore)
+            // ── 1. Tuning Parameter (maks 40 poin) ───────────────────────────
+            var tunings = _tuningRecords
+                .Where(t => t.StudentId == studentId && t.AssignmentId == assignmentId)
                 .ToList();
+            // Eksplorasi: variasi percobaan Kp/Ki/Kd yang berbeda (maks 15 poin, 3 poin/percobaan unik)
+            int uniqueTunings = tunings.Select(t => $"{t.Kp:F1}{t.Ki:F2}{t.Kd:F2}").Distinct().Count();
+            double tuningExploration = Math.Min(uniqueTunings * 3, 15);
+            // Kualitas: skor tuning terbaik yang dicapai (maks 25 poin)
+            double bestTuningQuality = tunings.Any() ? tunings.Max(t => t.QualityScore) : 0;
+            double tuningQuality = bestTuningQuality * 0.25;
+            double tuningScore   = tuningExploration + tuningQuality;
 
-            var student = GetDemoStudentName(studentId);
+            // ── 2. Penggunaan AI (maks 20 poin) ──────────────────────────────
+            var aiUsages = _aiUsageRecords
+                .Where(a => a.StudentId == studentId && a.AssignmentId == assignmentId)
+                .ToList();
+            int productiveSessions = aiUsages.Count(a => a.IsProductive);
+            double aiScore = Math.Min(productiveSessions * 5, 20);
 
-            // Algoritma skor sistem sederhana
-            double score = 0;
-            int commits = activities.Count(a => a.ActivityType == "Submit");
-            int edits = activities.Count(a => a.ActivityType == "Edit");
-            int uploads = activities.Count(a => a.ActivityType == "Upload");
-            bool onTime = activities.Any(a => a.ActivityType == "Submit");
+            // ── 3. Hasil Simulasi (maks 40 poin) ─────────────────────────────
+            var sims = _simulationResults
+                .Where(s => s.StudentId == studentId && s.AssignmentId == assignmentId)
+                .ToList();
+            double bestSimScore  = sims.Any() ? sims.Max(s => s.Score) : 0;
+            double simScore = bestSimScore * 0.40;
 
-            score += Math.Min(commits * 10, 30);  // Maks 30 poin dari submit
-            score += Math.Min(edits * 5, 25);     // Maks 25 poin dari edit
-            score += Math.Min(uploads * 8, 20);   // Maks 20 poin dari upload
-            score += onTime ? 15 : 0;             // 15 poin tepat waktu
-            score += Math.Min(activities.Count * 2, 10); // Maks 10 poin aktivitas umum
+            // ── Final ─────────────────────────────────────────────────────────
+            double finalScore = Math.Min(tuningScore + aiScore + simScore, 100);
 
-            var eval = new SystemEvaluation
+            // Tepat waktu: ada tuning/simulasi sebelum deadline
+            bool onTime = deadline.HasValue
+                ? tunings.Any(t => t.RecordedAt <= deadline.Value) ||
+                  sims.Any(s => s.FinishedAt <= deadline.Value)
+                : tunings.Any() || sims.Any();
+
+            return new SystemEvaluation
             {
-                StudentId = studentId,
-                StudentName = student,
-                AssignmentId = assignmentId,
-                Score = Math.Min(score, 100),
-                CommitsCount = commits,
-                FilesModified = edits + uploads,
+                StudentId       = studentId,
+                StudentName     = GetDemoStudentName(studentId),
+                AssignmentId    = assignmentId,
+                AssignmentTitle = "Tugas Kelompok - Sistem Kontrol PID",
+                GroupId         = "GRP-01",
+                Score           = finalScore,
+                CommitsCount    = uniqueTunings,        // direpurpose: jumlah percobaan tuning unik
+                FilesModified   = sims.Count,           // direpurpose: jumlah sesi simulasi
                 SubmittedOnTime = onTime,
-                TasksCompleted = activities.Count,
-                TasksTotal = activities.Count + 2
+                TasksCompleted  = tunings.Count + aiUsages.Count + sims.Count,
+                TasksTotal      = Math.Max(tunings.Count + aiUsages.Count + sims.Count, 3),
+                GeneratedAt     = DateTime.Now,
             };
+        }
 
-            // Simpan/update
-            _systemEvaluations.RemoveAll(e => e.StudentId == studentId && e.AssignmentId == assignmentId);
+        /// <summary>Hitung dan simpan skor sistem untuk satu mahasiswa berdasarkan aktivitas nyata.</summary>
+        public Task<SystemEvaluation> GenerateSystemScoreAsync(
+            string studentId, string assignmentId, DateTime? deadline = null)
+        {
+            var eval = ComputeSystemScore(studentId, assignmentId, deadline);
+            _systemEvaluations.RemoveAll(e =>
+                e.StudentId == studentId && e.AssignmentId == assignmentId);
             _systemEvaluations.Add(eval);
-
             RecalculateSummaryScore(studentId, assignmentId);
             return Task.FromResult(eval);
+        }
+
+        /// <summary>
+        /// Regenerasi skor sistem seluruh mahasiswa dalam satu tugas berdasarkan aktivitas nyata.
+        /// Dipanggil dosen saat membuka halaman penilaian agar data selalu up-to-date.
+        /// </summary>
+        public async Task RegenerateSystemScoresAsync(string assignmentId, DateTime? deadline = null)
+        {
+            var studentIds = _groupActivities
+                .Where(a => a.AssignmentId == assignmentId)
+                .Select(a => a.StudentId)
+                .Distinct()
+                .ToList();
+
+            foreach (var sid in studentIds)
+                await GenerateSystemScoreAsync(sid, assignmentId, deadline);
         }
 
         // ─────────────────────────────────────────────────────────────────────
@@ -204,6 +254,19 @@ namespace TLIGDashboard.Services
             return Task.FromResult(result);
         }
 
+        /// <summary>File yang diunggah mahasiswa (ActivityType == "Upload") beserta metadata file.</summary>
+        public Task<List<GroupActivity>> GetUploadedFilesAsync(string studentId, string assignmentId)
+            => Task.FromResult(_groupActivities
+                .Where(a => a.StudentId == studentId && a.AssignmentId == assignmentId
+                         && a.ActivityType == "Upload" && a.FileName != null)
+                .OrderByDescending(a => a.ActivityTime).ToList());
+
+        public Task<List<GroupActivity>> GetAllUploadedFilesAsync(string assignmentId)
+            => Task.FromResult(_groupActivities
+                .Where(a => a.AssignmentId == assignmentId
+                         && a.ActivityType == "Upload" && a.FileName != null)
+                .OrderByDescending(a => a.ActivityTime).ToList());
+
         public Task AddGroupActivityAsync(GroupActivity activity)
         {
             _groupActivities.Add(activity);
@@ -216,6 +279,49 @@ namespace TLIGDashboard.Services
 
         public Task<List<SimulationResult>> GetSimulationResultsForStudentAsync(string studentId)
             => Task.FromResult(_simulationResults.Where(r => r.StudentId == studentId).ToList());
+
+        public Task<List<SimulationResult>> GetSimulationResultsAsync(string studentId, string assignmentId)
+            => Task.FromResult(_simulationResults
+                .Where(r => r.StudentId == studentId && r.AssignmentId == assignmentId)
+                .OrderByDescending(r => r.StartedAt).ToList());
+
+        // ─────────────────────────────────────────────────────────────────────
+        //  TUNING RECORDS
+        // ─────────────────────────────────────────────────────────────────────
+
+        public Task<List<TuningRecord>> GetTuningRecordsAsync(string studentId, string assignmentId)
+            => Task.FromResult(_tuningRecords
+                .Where(r => r.StudentId == studentId && r.AssignmentId == assignmentId)
+                .OrderByDescending(r => r.RecordedAt).ToList());
+
+        public Task<List<TuningRecord>> GetAllTuningRecordsAsync(string assignmentId)
+            => Task.FromResult(_tuningRecords
+                .Where(r => r.AssignmentId == assignmentId).ToList());
+
+        public Task AddTuningRecordAsync(TuningRecord record)
+        {
+            _tuningRecords.Add(record);
+            return Task.CompletedTask;
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
+        //  AI USAGE RECORDS
+        // ─────────────────────────────────────────────────────────────────────
+
+        public Task<List<AiUsageRecord>> GetAiUsageAsync(string studentId, string assignmentId)
+            => Task.FromResult(_aiUsageRecords
+                .Where(r => r.StudentId == studentId && r.AssignmentId == assignmentId)
+                .OrderByDescending(r => r.SessionAt).ToList());
+
+        public Task<List<AiUsageRecord>> GetAllAiUsageAsync(string assignmentId)
+            => Task.FromResult(_aiUsageRecords
+                .Where(r => r.AssignmentId == assignmentId).ToList());
+
+        public Task AddAiUsageAsync(AiUsageRecord record)
+        {
+            _aiUsageRecords.Add(record);
+            return Task.CompletedTask;
+        }
 
         // ─────────────────────────────────────────────────────────────────────
         //  DEMO DATA SEED
@@ -231,56 +337,142 @@ namespace TLIGDashboard.Services
             var rnd = new Random(42);
 
             // ── Group Activities ─────────────────────────────────────────────
+            // AutoScore per jenis aktivitas (digunakan juga untuk skor sistem)
+            var actAutoScore = new Dictionary<string, double>
+            {
+                ["Submit"]  = 10,
+                ["Edit"]    =  5,
+                ["Upload"]  =  8,
+                ["Comment"] =  3,
+                ["Review"]  =  4,
+            };
+
             var actTypes = new[] { "Submit", "Edit", "Upload", "Comment", "Review" };
             var descriptions = new Dictionary<string, string[]>
             {
-                ["Submit"] = new[] { "Mensubmit draft laporan", "Push kode implementasi", "Submit hasil akhir" },
-                ["Edit"] = new[] { "Mengedit bagian pendahuluan", "Update diagram blok", "Revisi bab 3" },
-                ["Upload"] = new[] { "Upload video demo", "Upload data percobaan", "Upload foto komponen" },
+                ["Submit"]  = new[] { "Mensubmit draft laporan", "Push kode implementasi", "Submit hasil akhir" },
+                ["Edit"]    = new[] { "Mengedit bagian pendahuluan", "Update diagram blok", "Revisi bab 3" },
+                ["Upload"]  = new[] { "Upload video demo", "Upload data percobaan", "Upload foto komponen" },
                 ["Comment"] = new[] { "Memberi komentar review", "Feedback diagram sistem", "Review kode teman" },
-                ["Review"] = new[] { "Review laporan kelompok", "Cek hasil simulasi", "Verifikasi data" },
+                ["Review"]  = new[] { "Review laporan kelompok", "Cek hasil simulasi", "Verifikasi data" },
+            };
+            // Nama file demo untuk aktivitas Upload
+            var demoFiles = new[]
+            {
+                ("Laporan_PID_Control.pdf",   "laporan"),
+                ("Video_Demo_Simulasi.mp4",   "video"),
+                ("Data_Percobaan.xlsx",       "data"),
+                ("Diagram_Sistem.png",        "gambar"),
+                ("Kode_Kontroler.zip",        "arsip"),
+                ("Presentasi_Kelompok.pptx",  "presentasi"),
+                ("Hasil_Tuning_Parameter.pdf","laporan"),
+                ("Screenshot_Simulasi.png",   "gambar"),
             };
 
             foreach (var sid in students)
             {
-                int actCount = rnd.Next(4, 12);
+                int actCount = rnd.Next(5, 13);
                 for (int i = 0; i < actCount; i++)
                 {
                     var type = actTypes[rnd.Next(actTypes.Length)];
                     var desc = descriptions[type][rnd.Next(descriptions[type].Length)];
-                    _groupActivities.Add(new GroupActivity
+                    var act  = new GroupActivity
                     {
-                        StudentId = sid,
-                        StudentName = GetDemoStudentName(sid),
-                        AssignmentId = assignId,
-                        GroupId = "GRP-01",
-                        ActivityType = type,
-                        Description = desc,
-                        ActivityTime = DateTime.Now.AddHours(-rnd.Next(1, 72)),
+                        StudentId           = sid,
+                        StudentName         = GetDemoStudentName(sid),
+                        AssignmentId        = assignId,
+                        GroupId             = "GRP-01",
+                        ActivityType        = type,
+                        Description         = desc,
+                        ActivityTime        = DateTime.Now.AddHours(-rnd.Next(1, 80)),
+                        AutoScore           = actAutoScore[type],
                         CountsToSystemScore = true,
+                    };
+                    // Untuk Upload: tambahkan nama file demo
+                    if (type == "Upload")
+                    {
+                        var (fn, _) = demoFiles[rnd.Next(demoFiles.Length)];
+                        act.FileName = fn;
+                        act.FilePath = $"C:\\Demo\\{sid}\\{fn}";   // path demo (tidak nyata)
+                        act.Description = $"Upload: {fn}";
+                    }
+                    _groupActivities.Add(act);
+                }
+            }
+
+            // ── System Evaluations — dihitung dari aktivitas nyata (bukan random) ──
+            foreach (var sid in students)
+                _systemEvaluations.Add(ComputeSystemScore(sid, assignId));
+
+            // ── Tuning Records ───────────────────────────────────────────────
+            // Setiap mahasiswa mencoba beberapa konfigurasi Kp/Ki/Kd
+            var tuningAttempts = new[]
+            {
+                // (Kp, Ki, Kd, RiseTime, Overshoot, Settling, SSE, QualityScore)
+                (1.2, 0.05, 0.01, 3.2, 18.5, 12.4, 2.1, 72.0),
+                (1.8, 0.08, 0.02, 2.8, 12.0,  9.6, 1.5, 84.0),
+                (2.5, 0.10, 0.05, 2.1,  8.0,  7.2, 0.8, 91.0),
+                (0.8, 0.03, 0.00, 4.8, 25.0, 18.0, 4.0, 52.0),
+                (1.5, 0.06, 0.03, 3.0, 15.0, 11.0, 1.8, 77.0),
+                (3.0, 0.12, 0.08, 1.8,  6.5,  6.0, 0.5, 95.0),
+            };
+            var plantTypes = new[] { "Flow", "Level", "Temperature" };
+
+            foreach (var sid in students)
+            {
+                int tuningCount = rnd.Next(2, 6);
+                var picked = tuningAttempts.OrderBy(_ => rnd.Next()).Take(tuningCount);
+                foreach (var (kp, ki, kd, rt, os, st, sse, qs) in picked)
+                {
+                    _tuningRecords.Add(new TuningRecord
+                    {
+                        StudentId    = sid,
+                        AssignmentId = assignId,
+                        PlantType    = plantTypes[rnd.Next(plantTypes.Length)],
+                        Kp           = kp + rnd.NextDouble() * 0.2 - 0.1,
+                        Ki           = ki + rnd.NextDouble() * 0.01 - 0.005,
+                        Kd           = kd + rnd.NextDouble() * 0.01 - 0.005,
+                        RiseTime         = rt   + rnd.NextDouble() * 0.4 - 0.2,
+                        Overshoot        = os   + rnd.NextDouble() * 3   - 1.5,
+                        SettlingTime     = st   + rnd.NextDouble() * 1   - 0.5,
+                        SteadyStateError = sse  + rnd.NextDouble() * 0.4 - 0.2,
+                        QualityScore     = Math.Clamp(qs + rnd.NextDouble() * 8 - 4, 0, 100),
+                        RecordedAt   = DateTime.Now.AddHours(-rnd.Next(2, 70)),
                     });
                 }
             }
 
-            // ── System Evaluations ───────────────────────────────────────────
+            // ── AI Usage Records ─────────────────────────────────────────────
+            var aiTopics = new[]
+            {
+                "Cara tuning PID untuk sistem Flow Control",
+                "Penjelasan rise time dan overshoot",
+                "Perbedaan kontroler P, PI, PID",
+                "Cara menganalisis respons step",
+                "Metode Ziegler-Nichols untuk tuning PID",
+                "Kenapa steady-state error tidak nol pada kontroler P?",
+                "Cara membaca grafik respons transien",
+                "Apa itu stability margin?",
+            };
+            var aiProviders = new[] { "DeepSeek", "Claude", "GPT-4o" };
+
             foreach (var sid in students)
             {
-                var acts = _groupActivities.Where(a => a.StudentId == sid).ToList();
-                _systemEvaluations.Add(new SystemEvaluation
+                int sessionCount = rnd.Next(1, 6);
+                for (int i = 0; i < sessionCount; i++)
                 {
-                    StudentId = sid,
-                    StudentName = GetDemoStudentName(sid),
-                    AssignmentId = assignId,
-                    AssignmentTitle = "Tugas Kelompok - Sistem Kontrol PID",
-                    GroupId = "GRP-01",
-                    Score = 55 + rnd.NextDouble() * 40,
-                    CommitsCount = acts.Count(a => a.ActivityType == "Submit"),
-                    FilesModified = acts.Count(a => a.ActivityType is "Edit" or "Upload"),
-                    SubmittedOnTime = rnd.NextDouble() > 0.2,
-                    TasksCompleted = acts.Count,
-                    TasksTotal = acts.Count + rnd.Next(0, 3),
-                    GeneratedAt = DateTime.Now.AddHours(-2)
-                });
+                    bool productive = rnd.NextDouble() > 0.25;
+                    _aiUsageRecords.Add(new AiUsageRecord
+                    {
+                        StudentId    = sid,
+                        AssignmentId = assignId,
+                        Topic        = aiTopics[rnd.Next(aiTopics.Length)],
+                        MessageCount = rnd.Next(2, 12),
+                        IsProductive = productive,
+                        AiProvider   = aiProviders[rnd.Next(aiProviders.Length)],
+                        SessionAt    = DateTime.Now.AddHours(-rnd.Next(1, 96)),
+                    });
+                }
             }
 
             // ── Simulation Results ───────────────────────────────────────────
