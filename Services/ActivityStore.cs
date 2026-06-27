@@ -78,6 +78,18 @@ public sealed class ActivityStore
         Log(s.Username, s.DisplayName, s.Role, category, action, description, relatedId, metadata);
     }
 
+    /// <summary>Inserts a pre-built ActivityLog entry (used for server-side sync from CLIENT).</summary>
+    public void LogExternal(ActivityLog entry)
+    {
+        lock (_lock)
+        {
+            if (_file.Activities.Any(a => a.Id == entry.Id)) return;
+            _file.Activities.Add(entry);
+            SaveLocked();
+        }
+        Changed?.Invoke();
+    }
+
     // ── Query API ─────────────────────────────────────────────────────────────
 
     public IReadOnlyList<ActivityLog> GetAll()

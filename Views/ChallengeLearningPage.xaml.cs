@@ -29,6 +29,9 @@ public sealed partial class ChallengeLearningPage : Page
     private ChallengeSubmission? _selectedSubmission;
 
     public static event Action? GradeSaved;
+    public static event Action? SubmissionReceived;
+
+    public static void NotifySubmissionReceived() => SubmissionReceived?.Invoke();
 
     // Colour constants
     private static readonly SolidColorBrush Purple = Brush("#7c3aed");
@@ -64,11 +67,19 @@ public sealed partial class ChallengeLearningPage : Page
         ApplySession();
         RefreshList();
         ActivityStore.Instance.Changed += OnActivityChanged;
-        Unloaded += (_, _) => ActivityStore.Instance.Changed -= OnActivityChanged;
+        SubmissionReceived += OnSubmissionReceived;
+        Unloaded += (_, _) =>
+        {
+            ActivityStore.Instance.Changed -= OnActivityChanged;
+            SubmissionReceived -= OnSubmissionReceived;
+        };
     }
 
     private void OnActivityChanged()
         => DispatcherQueue.TryEnqueue(() => { if (_selected != null && !_isAdmin) RefreshMyActivityLog(); });
+
+    private void OnSubmissionReceived()
+        => DispatcherQueue.TryEnqueue(() => { if (_selected != null && _isAdmin) _ = RebuildStudentListAsync(_selected); });
 
     private void ApplySession()
     {
@@ -955,6 +966,11 @@ public sealed partial class ChallengeLearningPage : Page
         SubmitStatusText.Text = "✓ Jawaban berhasil dikirim!";
         SubmitStatusText.Foreground = Green;
         SubmitBtn.Content = "Update Jawaban";
+
+        // Sync submission to server
+        var submittedSub = _selected.Submissions.FirstOrDefault(s => s.StudentId == _studentId);
+        if (submittedSub != null)
+            Services.SyncClient.Instance.SendSubmission(submittedSub);
 
         Services.ActivityStore.Instance.LogSession(
             Models.ActivityCategory.TaskSubmission,

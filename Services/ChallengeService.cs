@@ -218,11 +218,17 @@ namespace TLIGDashboard.Services
 
         // ── Demo Data ──────────────────────────────────────────────────────
 
+        // Fixed Guids so CLIENT and SERVER always have matching challenge IDs
+        private static readonly Guid _c1Id = new("a1b2c3d4-e5f6-7890-abcd-ef1234567890");
+        private static readonly Guid _c2Id = new("b2c3d4e5-f6a7-8901-bcde-f12345678901");
+        private static readonly Guid _c3Id = new("c3d4e5f6-a7b8-9012-cdef-123456789012");
+
         private void SeedDemoData()
         {
             // ── Challenge 1: Flow PID Tuning ─────────────────────────────────
             var c1 = new Challenge
             {
+                Id            = _c1Id,
                 Title         = "Tune PID for Fast Rise Time",
                 Description   = "Atur parameter PID pada sistem Flow agar step response memenuhi spesifikasi rise time yang cepat.",
                 Instructions  = "1. Buka Dashboard → pilih sistem Flow.\n2. Atur Kp, Ki, Kd di panel PID Parameters.\n3. Klik RUN dan amati step response.\n4. Pastikan Rise Time dan Overshoot memenuhi target.\n5. Submit screenshot dan nilai parameter yang digunakan.",
@@ -277,6 +283,7 @@ namespace TLIGDashboard.Services
             // ── Challenge 2: Level Control ───────────────────────────────────
             var c2 = new Challenge
             {
+                Id            = _c2Id,
                 Title         = "Minimize Settling Time – Level",
                 Description   = "Optimalkan PID untuk sistem Level Tank agar settling time minimal dan steady-state error kecil.",
                 Instructions  = "1. Pilih sistem Level di SYSTEM MODEL.\n2. Set setpoint ke 50 cm.\n3. Tuning PID untuk mencapai target settling dan steady-state error.\n4. Submit parameter PID dan nilai metrik yang dicapai.",
@@ -332,6 +339,7 @@ namespace TLIGDashboard.Services
             // ── Challenge 3: Draft ───────────────────────────────────────────
             _challenges.Add(new Challenge
             {
+                Id            = _c3Id,
                 Title         = "Temperature Control Design",
                 Description   = "Desain kontroler PID untuk heat exchanger dengan respons stabil.",
                 Instructions  = "Draft — instruksi belum lengkap.",

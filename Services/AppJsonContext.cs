@@ -15,6 +15,9 @@ namespace TLIGDashboard.Services;
 [JsonSerializable(typeof(TasksFile))]
 [JsonSerializable(typeof(ActivityLogFile))]
 [JsonSerializable(typeof(List<ActivityLog>))]
+[JsonSerializable(typeof(ActivityLog))]
+[JsonSerializable(typeof(ChallengeSubmission))]
 [JsonSerializable(typeof(Dictionary<string, string>))]
+[JsonSerializable(typeof(Dictionary<string, double>))]
 [JsonSourceGenerationOptions(WriteIndented = true)]
 internal partial class AppJsonContext : JsonSerializerContext { }

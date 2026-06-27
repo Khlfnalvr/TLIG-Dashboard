@@ -709,6 +709,11 @@ public sealed partial class MainWindow : Window
 
         // Open the live stream and point the AI assistant at the server proxy.
         _ = ConnectClientStreamAsync(s.ServerHost, result.Token);
+
+#if CLIENT
+        // Start syncing activities and submissions to the server in real-time.
+        SyncClient.Instance.Start(s.ServerHost, result.Token);
+#endif
     }
 
     private void OnLoginSucceeded(string accountName, string displayName, string role,
