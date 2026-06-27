@@ -638,8 +638,8 @@ public sealed partial class LearningAnalyticPage : Page
             Grid.SetColumn(gradeBadge, 3);
 
             // Tombol Detail
-            var capturedSub = sub;
-            var capturedCh  = challenge;
+            var capturedStudentId   = sub.StudentId;
+            var capturedStudentName = sub.StudentName.Length > 0 ? sub.StudentName : sub.StudentId;
             var detailBtn = new Button
             {
                 Content = "Detail", FontSize = 12,
@@ -647,7 +647,7 @@ public sealed partial class LearningAnalyticPage : Page
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center
             };
-            detailBtn.Click += (_, _) => ShowChallengeSubmissionDetail(capturedSub, capturedCh);
+            detailBtn.Click += (_, _) => ShowStudentAllChallengesDetail(capturedStudentId, capturedStudentName);
             Grid.SetColumn(detailBtn, 4);
 
             row.Children.Add(nameStack);
@@ -663,48 +663,390 @@ public sealed partial class LearningAnalyticPage : Page
         ChallengeRecapEmpty.Visibility = hasRows ? Visibility.Collapsed : Visibility.Visible;
     }
 
-    private void ShowChallengeSubmissionDetail(ChallengeSubmission sub, Challenge challenge)
+    private void ShowStudentAllChallengesDetail(string studentId, string studentName)
     {
-        double? finalScore = sub.ComputeFinalScore(challenge);
-        string grade = finalScore.HasValue ? ChallengeScoreToGrade(finalScore.Value) : "—";
+        var allChallenges = ChallengeService.Instance.GetAllChallenges();
 
-        var content = new StackPanel { Width = 380, Spacing = 10 };
-        content.Children.Add(new TextBlock
+        Border MakeScoreCard(string label, string value)
         {
-            Text = sub.StudentName.Length > 0 ? sub.StudentName : sub.StudentId,
-            FontSize = 15, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
-        });
-        content.Children.Add(new Microsoft.UI.Xaml.Shapes.Rectangle
-        {
-            Height = 1, Fill = new SolidColorBrush(Colors.Gray), Opacity = 0.3
-        });
-
-        void AddRow(string label, string value)
-        {
-            var g = new Grid { ColumnSpacing = 12, Margin = new Thickness(0, 2, 0, 2) };
-            g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(120) });
-            g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            var lbl = new TextBlock { Text = label, FontSize = 12, Opacity = 0.6, VerticalAlignment = VerticalAlignment.Top };
-            var val = new TextBlock { Text = value, FontSize = 12, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap };
-            Grid.SetColumn(lbl, 0); Grid.SetColumn(val, 1);
-            g.Children.Add(lbl); g.Children.Add(val);
-            content.Children.Add(g);
+            var sp = new StackPanel { Spacing = 2, HorizontalAlignment = HorizontalAlignment.Center };
+            sp.Children.Add(new TextBlock { Text = label, FontSize = 10, Opacity = 0.6, HorizontalAlignment = HorizontalAlignment.Center });
+            sp.Children.Add(new TextBlock { Text = value, FontSize = 16, FontWeight = Microsoft.UI.Text.FontWeights.Bold, HorizontalAlignment = HorizontalAlignment.Center });
+            return new Border
+            {
+                Background      = (Brush)Application.Current.Resources["CardBackgroundFillColorDefaultBrush"],
+                BorderBrush     = (Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
+                BorderThickness = new Thickness(1),
+                CornerRadius    = new CornerRadius(8),
+                Padding         = new Thickness(10, 8, 10, 8),
+                Child           = sp
+            };
         }
 
-        AddRow("Nilai Dosen",  sub.DosenGrade != null ? $"{sub.DosenGrade.Score:F1}" : "Belum dinilai");
-        AddRow("Nilai Final",  finalScore.HasValue ? $"{finalScore.Value:F1}" : "—");
-        AddRow("Grade",        grade);
-        AddRow("Feedback",     sub.DosenGrade?.Feedback is { Length: > 0 } fb ? fb : "—");
-        AddRow("Disubmit",     sub.SubmittedAt.ToString("dd MMM yyyy, HH:mm"));
-        if (!string.IsNullOrEmpty(sub.TextAnswer))
-            AddRow("Jawaban", sub.TextAnswer);
+        Border WrapSection(UIElement child)
+            => new Border
+            {
+                Background      = (Brush)Application.Current.Resources["CardBackgroundFillColorDefaultBrush"],
+                BorderBrush     = (Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
+                BorderThickness = new Thickness(1),
+                CornerRadius    = new CornerRadius(7),
+                Padding         = new Thickness(12, 10, 12, 10),
+                Child           = child
+            };
+
+        var challengesPanel = new StackPanel { Spacing = 6 };
+
+        foreach (var ch in allChallenges)
+        {
+            var sub = ch.Submissions.FirstOrDefault(s => s.StudentId == studentId);
+
+            double? finalScore = sub?.ComputeFinalScore(ch);
+            string  grade      = finalScore.HasValue ? ChallengeScoreToGrade(finalScore.Value) : "—";
+            double  peerAvg    = sub?.PeerGrades.Count > 0 ? sub.PeerGrades.Average(g => g.Score) : 0;
+            double? sysScore   = sub?.AIGrade?.Score;
+            double? dosScore   = sub?.DosenGrade?.Score;
+
+            // ── Expander header ──────────────────────────────────────────
+            var headerGrid = new Grid { ColumnSpacing = 10 };
+            headerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            headerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            var titleSp = new StackPanel { Spacing = 2, VerticalAlignment = VerticalAlignment.Center };
+            titleSp.Children.Add(new TextBlock { Text = ch.Title, FontSize = 13, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold });
+            titleSp.Children.Add(new TextBlock { Text = ch.Status.ToString(), FontSize = 10, Opacity = 0.55 });
+
+            var statusBadge = new Border
+            {
+                CornerRadius = new CornerRadius(4),
+                Padding = new Thickness(7, 2, 7, 2),
+                Background = sub != null ? ChallengeGradeToBrush(grade) : new SolidColorBrush(Windows.UI.Color.FromArgb(60, 128, 128, 128)),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            statusBadge.Child = new TextBlock
+            {
+                Text = sub != null ? grade : "Belum submit",
+                FontSize = 10, FontWeight = Microsoft.UI.Text.FontWeights.Bold,
+                Foreground = new SolidColorBrush(Colors.White)
+            };
+
+            Grid.SetColumn(titleSp, 0); Grid.SetColumn(statusBadge, 1);
+            headerGrid.Children.Add(titleSp); headerGrid.Children.Add(statusBadge);
+
+            // ── Expander content ─────────────────────────────────────────
+            var content = new StackPanel { Spacing = 10, Margin = new Thickness(4, 8, 4, 4) };
+
+            if (sub == null)
+            {
+                content.Children.Add(new TextBlock { Text = "Mahasiswa belum mengumpulkan submission untuk challenge ini.", FontSize = 12, Opacity = 0.5 });
+            }
+            else
+            {
+                // Score summary pills
+                var scoreGrid = new Grid { ColumnSpacing = 8 };
+                scoreGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                scoreGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                scoreGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                scoreGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                var c0 = MakeScoreCard($"Peer ({sub.PeerGrades.Count})", sub.PeerGrades.Count > 0 ? peerAvg.ToString("F1") : "—");
+                var c1 = MakeScoreCard("Sistem",  sysScore.HasValue ? sysScore.Value.ToString("F1") : "—");
+                var c2 = MakeScoreCard("Dosen",   dosScore.HasValue ? dosScore.Value.ToString("F1") : "—");
+                var c3 = MakeScoreCard("Final",   finalScore.HasValue ? $"{finalScore.Value:F1}" : "—");
+                Grid.SetColumn(c0, 0); Grid.SetColumn(c1, 1); Grid.SetColumn(c2, 2); Grid.SetColumn(c3, 3);
+                scoreGrid.Children.Add(c0); scoreGrid.Children.Add(c1);
+                scoreGrid.Children.Add(c2); scoreGrid.Children.Add(c3);
+                content.Children.Add(scoreGrid);
+
+                // Peer grades detail
+                var peerSp = new StackPanel { Spacing = 4 };
+                peerSp.Children.Add(new TextBlock { Text = $"Nilai Peer  ({sub.PeerGrades.Count} penilai)", FontSize = 12, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold });
+                if (sub.PeerGrades.Count > 0)
+                {
+                    foreach (var pg in sub.PeerGrades)
+                    {
+                        var pgRow = new Grid { ColumnSpacing = 8 };
+                        pgRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                        pgRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                        var pgName  = new TextBlock { Text = pg.GraderName, FontSize = 11, Opacity = 0.65, VerticalAlignment = VerticalAlignment.Center };
+                        var pgScore = new TextBlock { Text = pg.Score.ToString("F1"), FontSize = 11, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold };
+                        Grid.SetColumn(pgName, 0); Grid.SetColumn(pgScore, 1);
+                        pgRow.Children.Add(pgName); pgRow.Children.Add(pgScore);
+                        peerSp.Children.Add(pgRow);
+                    }
+                    peerSp.Children.Add(new TextBlock { Text = $"Rata-rata: {peerAvg:F1}", FontSize = 12, FontWeight = Microsoft.UI.Text.FontWeights.Bold, Margin = new Thickness(0, 2, 0, 0) });
+                }
+                else
+                    peerSp.Children.Add(new TextBlock { Text = "Belum ada penilaian peer", FontSize = 11, Opacity = 0.45 });
+
+                // System grade
+                var sysSp = new StackPanel { Spacing = 2 };
+                sysSp.Children.Add(new TextBlock { Text = "Nilai Sistem  (log aktivitas)", FontSize = 12, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold });
+                sysSp.Children.Add(new TextBlock { Text = sysScore.HasValue ? sysScore.Value.ToString("F1") : "Belum dinilai sistem", FontSize = 11, Opacity = sysScore.HasValue ? 1 : 0.45 });
+                if (sub.AIGrade?.Feedback is { Length: > 0 } sysNote)
+                    sysSp.Children.Add(new TextBlock { Text = sysNote, FontSize = 11, Opacity = 0.6, TextWrapping = TextWrapping.Wrap });
+
+                // Lecturer grade
+                var lecSp = new StackPanel { Spacing = 2 };
+                lecSp.Children.Add(new TextBlock { Text = "Nilai Dosen  (input dosen)", FontSize = 12, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold });
+                lecSp.Children.Add(new TextBlock { Text = dosScore.HasValue ? dosScore.Value.ToString("F1") : "Belum dinilai dosen", FontSize = 11, Opacity = dosScore.HasValue ? 1 : 0.45 });
+                if (sub.DosenGrade?.Feedback is { Length: > 0 } dosFb)
+                    lecSp.Children.Add(new TextBlock { Text = dosFb, FontSize = 11, Opacity = 0.6, TextWrapping = TextWrapping.Wrap });
+
+                content.Children.Add(WrapSection(peerSp));
+                content.Children.Add(WrapSection(sysSp));
+                content.Children.Add(WrapSection(lecSp));
+
+                content.Children.Add(new TextBlock { Text = $"Disubmit: {sub.SubmittedAt:dd MMM yyyy, HH:mm}", FontSize = 11, Opacity = 0.4 });
+            }
+
+            var expander = new Expander
+            {
+                Header = headerGrid,
+                Content = content,
+                HorizontalAlignment        = HorizontalAlignment.Stretch,
+                HorizontalContentAlignment = HorizontalAlignment.Stretch
+            };
+            challengesPanel.Children.Add(expander);
+        }
+
+        if (!allChallenges.Any())
+            challengesPanel.Children.Add(new TextBlock { Text = "Belum ada challenge yang dibuat.", FontSize = 12, Opacity = 0.5 });
+
+        var scrollViewer = new ScrollViewer
+        {
+            Content = challengesPanel,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            MaxHeight = 480
+        };
+
+        var dialogContent = new StackPanel { Width = 500, Spacing = 12 };
+        dialogContent.Children.Add(new TextBlock { Text = $"Rincian nilai per challenge untuk {studentName}", FontSize = 12, Opacity = 0.6, TextWrapping = TextWrapping.Wrap });
+        dialogContent.Children.Add(scrollViewer);
 
         var dialog = new ContentDialog
         {
-            Title         = $"Detail — {(sub.StudentName.Length > 0 ? sub.StudentName : sub.StudentId)}",
-            Content       = content,
+            Title           = studentName,
+            Content         = dialogContent,
             CloseButtonText = "Tutup",
-            XamlRoot      = XamlRoot
+            XamlRoot        = XamlRoot
+        };
+        _ = dialog.ShowAsync();
+    }
+
+    private void ShowChallengeSubmissionDetail(ChallengeSubmission sub, Challenge challenge)
+    {
+        double? finalScore = sub.ComputeFinalScore(challenge);
+        string  grade      = finalScore.HasValue ? ChallengeScoreToGrade(finalScore.Value) : "—";
+
+        double peerAvg  = sub.PeerGrades.Count > 0 ? sub.PeerGrades.Average(g => g.Score) : 0;
+        double? sysScore = sub.AIGrade?.Score;
+        double? dosScore = sub.DosenGrade?.Score;
+
+        // ── Helper: small score pill card ────────────────────────────────
+        Border MakeScoreCard(string label, string value)
+        {
+            var sp = new StackPanel { Spacing = 2, HorizontalAlignment = HorizontalAlignment.Center };
+            sp.Children.Add(new TextBlock { Text = label, FontSize = 10, Opacity = 0.6, HorizontalAlignment = HorizontalAlignment.Center });
+            sp.Children.Add(new TextBlock { Text = value, FontSize = 17, FontWeight = Microsoft.UI.Text.FontWeights.Bold, HorizontalAlignment = HorizontalAlignment.Center });
+            return new Border
+            {
+                Background      = (Brush)Application.Current.Resources["CardBackgroundFillColorDefaultBrush"],
+                BorderBrush     = (Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
+                BorderThickness = new Thickness(1),
+                CornerRadius    = new CornerRadius(8),
+                Padding         = new Thickness(12, 8, 12, 8),
+                Child           = sp
+            };
+        }
+
+        // ── Summary header ────────────────────────────────────────────────
+        var headerStack = new StackPanel { Spacing = 10 };
+        headerStack.Children.Add(new TextBlock
+        {
+            Text = sub.StudentName.Length > 0 ? sub.StudentName : sub.StudentId,
+            FontSize = 14, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
+        });
+
+        var scoreGrid = new Grid { ColumnSpacing = 8 };
+        scoreGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        scoreGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        scoreGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        scoreGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        var c0 = MakeScoreCard($"Peer ({sub.PeerGrades.Count})", sub.PeerGrades.Count > 0 ? peerAvg.ToString("F1") : "—");
+        var c1 = MakeScoreCard("Sistem",   sysScore.HasValue ? sysScore.Value.ToString("F1") : "—");
+        var c2 = MakeScoreCard("Dosen",    dosScore.HasValue ? dosScore.Value.ToString("F1") : "—");
+        var c3 = MakeScoreCard("Final",    finalScore.HasValue ? $"{finalScore.Value:F1} ({grade})" : "—");
+        Grid.SetColumn(c0, 0); Grid.SetColumn(c1, 1); Grid.SetColumn(c2, 2); Grid.SetColumn(c3, 3);
+        scoreGrid.Children.Add(c0); scoreGrid.Children.Add(c1);
+        scoreGrid.Children.Add(c2); scoreGrid.Children.Add(c3);
+        headerStack.Children.Add(scoreGrid);
+        headerStack.Children.Add(new Microsoft.UI.Xaml.Shapes.Rectangle { Height = 1, Fill = new SolidColorBrush(Colors.Gray), Opacity = 0.25 });
+        headerStack.Children.Add(new TextBlock { Text = "Daftar Tugas", FontSize = 13, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold });
+
+        // ── Per-task expanders ────────────────────────────────────────────
+        var tasksPanel = new StackPanel { Spacing = 6 };
+
+        foreach (var task in challenge.Tasks)
+        {
+            double actualVal = 0;
+            bool hasActual = task.HasMetricTarget && sub.MetricSnapshot.TryGetValue(task.Metric, out actualVal);
+            bool? achieved = task.IsAchieved(hasActual ? actualVal : (double?)null);
+            string targetStr = task.FormatTarget();
+
+            // Expander header
+            var taskHeader = new StackPanel { Spacing = 2 };
+            var nameRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+            nameRow.Children.Add(new TextBlock { Text = task.Name, FontSize = 13, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center });
+            if (achieved.HasValue)
+            {
+                var badge = new Border
+                {
+                    CornerRadius = new CornerRadius(4),
+                    Padding = new Thickness(6, 2, 6, 2),
+                    Background = achieved.Value
+                        ? new SolidColorBrush(Windows.UI.Color.FromArgb(40, 16, 185, 129))
+                        : new SolidColorBrush(Windows.UI.Color.FromArgb(40, 239, 68, 68)),
+                    VerticalAlignment = VerticalAlignment.Center
+                };
+                badge.Child = new TextBlock
+                {
+                    Text = achieved.Value ? "✓ Tercapai" : "✗ Belum",
+                    FontSize = 10, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                    Foreground = achieved.Value
+                        ? new SolidColorBrush(Windows.UI.Color.FromArgb(255, 16, 185, 129))
+                        : new SolidColorBrush(Windows.UI.Color.FromArgb(255, 239, 68, 68))
+                };
+                nameRow.Children.Add(badge);
+            }
+            taskHeader.Children.Add(nameRow);
+            if (!string.IsNullOrEmpty(task.Description))
+                taskHeader.Children.Add(new TextBlock { Text = task.Description, FontSize = 11, Opacity = 0.55, TextWrapping = TextWrapping.Wrap });
+
+            // Expander content
+            var taskContent = new StackPanel { Spacing = 12, Margin = new Thickness(4, 8, 4, 4) };
+
+            // Metric target vs actual
+            if (task.HasMetricTarget)
+            {
+                var metricGrid = new Grid { ColumnSpacing = 12 };
+                metricGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                metricGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+                var tgtSp = new StackPanel { Spacing = 2 };
+                tgtSp.Children.Add(new TextBlock { Text = "Target", FontSize = 10, Opacity = 0.6 });
+                tgtSp.Children.Add(new TextBlock { Text = targetStr, FontSize = 12, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold });
+
+                var actSp = new StackPanel { Spacing = 2 };
+                actSp.Children.Add(new TextBlock { Text = "Aktual", FontSize = 10, Opacity = 0.6 });
+                actSp.Children.Add(new TextBlock { Text = hasActual ? actualVal.ToString("F3") : "—", FontSize = 12, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold });
+
+                Grid.SetColumn(tgtSp, 0); Grid.SetColumn(actSp, 1);
+                metricGrid.Children.Add(tgtSp); metricGrid.Children.Add(actSp);
+
+                var metricCard = new Border
+                {
+                    Background = (Brush)Application.Current.Resources["SubtleFillColorSecondaryBrush"],
+                    CornerRadius = new CornerRadius(6), Padding = new Thickness(10, 8, 10, 8),
+                    Child = metricGrid
+                };
+                taskContent.Children.Add(metricCard);
+            }
+
+            taskContent.Children.Add(new TextBlock { Text = "Rincian Nilai", FontSize = 11, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, Opacity = 0.7 });
+
+            // Peer grades
+            var peerSp = new StackPanel { Spacing = 4 };
+            peerSp.Children.Add(new TextBlock { Text = $"Nilai Peer  ({sub.PeerGrades.Count} penilai)", FontSize = 12, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold });
+            if (sub.PeerGrades.Count > 0)
+            {
+                foreach (var pg in sub.PeerGrades)
+                {
+                    var pgRow = new Grid { ColumnSpacing = 8 };
+                    pgRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                    pgRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                    var pgName  = new TextBlock { Text = pg.GraderName, FontSize = 11, Opacity = 0.65, VerticalAlignment = VerticalAlignment.Center };
+                    var pgScore = new TextBlock { Text = pg.Score.ToString("F1"), FontSize = 11, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold };
+                    Grid.SetColumn(pgName, 0); Grid.SetColumn(pgScore, 1);
+                    pgRow.Children.Add(pgName); pgRow.Children.Add(pgScore);
+                    peerSp.Children.Add(pgRow);
+                }
+                peerSp.Children.Add(new TextBlock { Text = $"Rata-rata: {peerAvg:F1}", FontSize = 12, FontWeight = Microsoft.UI.Text.FontWeights.Bold, Margin = new Thickness(0, 2, 0, 0) });
+            }
+            else
+                peerSp.Children.Add(new TextBlock { Text = "Belum ada penilaian peer", FontSize = 11, Opacity = 0.45 });
+
+            // System (AI) grade
+            var sysSp = new StackPanel { Spacing = 2 };
+            sysSp.Children.Add(new TextBlock { Text = "Nilai Sistem  (log aktivitas)", FontSize = 12, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold });
+            sysSp.Children.Add(new TextBlock
+            {
+                Text = sysScore.HasValue ? sysScore.Value.ToString("F1") : "Belum dinilai sistem",
+                FontSize = 11, Opacity = sysScore.HasValue ? 1 : 0.45
+            });
+            if (sub.AIGrade?.Feedback is { Length: > 0 } sysNote)
+                sysSp.Children.Add(new TextBlock { Text = sysNote, FontSize = 11, Opacity = 0.6, TextWrapping = TextWrapping.Wrap });
+
+            // Lecturer grade
+            var lecSp = new StackPanel { Spacing = 2 };
+            lecSp.Children.Add(new TextBlock { Text = "Nilai Dosen  (input dosen)", FontSize = 12, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold });
+            lecSp.Children.Add(new TextBlock
+            {
+                Text = dosScore.HasValue ? dosScore.Value.ToString("F1") : "Belum dinilai dosen",
+                FontSize = 11, Opacity = dosScore.HasValue ? 1 : 0.45
+            });
+            if (sub.DosenGrade?.Feedback is { Length: > 0 } dosFb)
+                lecSp.Children.Add(new TextBlock { Text = dosFb, FontSize = 11, Opacity = 0.6, TextWrapping = TextWrapping.Wrap });
+
+            // Wrap 3 grade sections in card borders
+            Border WrapSection(StackPanel sp)
+                => new Border
+                {
+                    Background      = (Brush)Application.Current.Resources["CardBackgroundFillColorDefaultBrush"],
+                    BorderBrush     = (Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
+                    BorderThickness = new Thickness(1),
+                    CornerRadius    = new CornerRadius(7),
+                    Padding         = new Thickness(12, 10, 12, 10),
+                    Child           = sp
+                };
+
+            taskContent.Children.Add(WrapSection(peerSp));
+            taskContent.Children.Add(WrapSection(sysSp));
+            taskContent.Children.Add(WrapSection(lecSp));
+
+            var expander = new Expander
+            {
+                Header = taskHeader,
+                Content = taskContent,
+                HorizontalAlignment        = HorizontalAlignment.Stretch,
+                HorizontalContentAlignment = HorizontalAlignment.Stretch
+            };
+            tasksPanel.Children.Add(expander);
+        }
+
+        if (challenge.Tasks.Count == 0)
+            tasksPanel.Children.Add(new TextBlock { Text = "Tidak ada tugas dalam challenge ini.", FontSize = 12, Opacity = 0.5 });
+
+        var scrollViewer = new ScrollViewer
+        {
+            Content = tasksPanel,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            MaxHeight = 420
+        };
+
+        var content = new StackPanel { Width = 480, Spacing = 10 };
+        content.Children.Add(headerStack);
+        content.Children.Add(scrollViewer);
+        content.Children.Add(new TextBlock
+        {
+            Text = $"Disubmit: {sub.SubmittedAt:dd MMM yyyy, HH:mm}",
+            FontSize = 11, Opacity = 0.45
+        });
+
+        var dialog = new ContentDialog
+        {
+            Title           = $"Detail — {(sub.StudentName.Length > 0 ? sub.StudentName : sub.StudentId)}",
+            Content         = content,
+            CloseButtonText = "Tutup",
+            XamlRoot        = XamlRoot
         };
         _ = dialog.ShowAsync();
     }
