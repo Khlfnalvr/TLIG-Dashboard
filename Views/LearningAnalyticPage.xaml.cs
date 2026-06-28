@@ -1053,21 +1053,25 @@ public sealed partial class LearningAnalyticPage : Page
 
     private static string ChallengeScoreToGrade(double score) => score switch
     {
-        >= 80 => "A",
-        >= 70 => "B",
-        >= 60 => "C",
-        >= 50 => "D",
+        >= 86 => "A",
+        >= 76 => "AB",
+        >= 66 => "B",
+        >= 61 => "BC",
+        >= 56 => "C",
+        >= 41 => "D",
         _     => "E"
     };
 
     private static SolidColorBrush ChallengeGradeToBrush(string grade) => grade switch
     {
-        "A" => new SolidColorBrush(Windows.UI.Color.FromArgb(255, 16, 185, 129)),
-        "B" => new SolidColorBrush(Windows.UI.Color.FromArgb(255, 59, 130, 246)),
-        "C" => new SolidColorBrush(Windows.UI.Color.FromArgb(255, 245, 158, 11)),
-        "D" => new SolidColorBrush(Windows.UI.Color.FromArgb(255, 239, 68, 68)),
-        "E" => new SolidColorBrush(Windows.UI.Color.FromArgb(255, 120, 10, 10)),
-        _   => new SolidColorBrush(Windows.UI.Color.FromArgb(255, 128, 128, 128))
+        "A"  => new SolidColorBrush(Windows.UI.Color.FromArgb(255, 16, 185, 129)),
+        "AB" => new SolidColorBrush(Windows.UI.Color.FromArgb(255, 5, 150, 105)),
+        "B"  => new SolidColorBrush(Windows.UI.Color.FromArgb(255, 59, 130, 246)),
+        "BC" => new SolidColorBrush(Windows.UI.Color.FromArgb(255, 99, 102, 241)),
+        "C"  => new SolidColorBrush(Windows.UI.Color.FromArgb(255, 245, 158, 11)),
+        "D"  => new SolidColorBrush(Windows.UI.Color.FromArgb(255, 239, 68, 68)),
+        "E"  => new SolidColorBrush(Windows.UI.Color.FromArgb(255, 120, 10, 10)),
+        _    => new SolidColorBrush(Windows.UI.Color.FromArgb(255, 128, 128, 128))
     };
 
     internal void ChallengeRecapCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
