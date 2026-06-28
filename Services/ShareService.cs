@@ -38,9 +38,11 @@ public static class ShareProtocol
     public const string AuthLoginPath     = "/auth/login";
     public const string AuthLogoutPath    = "/auth/logout";
     public const string AuthSignupPath    = "/auth/signup";
-    public const string TasksPath         = "/tasks";          // GET = list, POST = create/update
-    public const string TasksDeletePath   = "/tasks/delete";   // POST {id}
-    public const string TasksCompletePath = "/tasks/complete"; // POST {id, completed}
+    public const string TasksPath              = "/tasks";               // GET = list, POST = create/update
+    public const string TasksDeletePath        = "/tasks/delete";        // POST {id}
+    public const string TasksCompletePath      = "/tasks/complete";      // POST {id, completed}
+    public const string ActivityPath           = "/activity";            // POST ActivityLog (client→server sync)
+    public const string ChallengeSubmitPath    = "/challenge/submit";    // POST ChallengeSubmission (client→server)
     public const string GuidWs            = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 
     /// <summary>Generates an opaque, high-entropy session token (URL-safe base64).</summary>
@@ -81,15 +83,18 @@ public sealed class ShareServer
     private CancellationTokenSource? _cts;
     private readonly ConcurrentDictionary<WsClient, byte> _clients = new();
 
+    // UI DispatcherQueue — set when Start() is called from the UI thread
+    private Microsoft.UI.Dispatching.DispatcherQueue? _uiQueue;
+
     // Active login sessions: token → who it belongs to. Issued by /auth/login,
     // validated by the WebSocket + AI proxy, revoked by /auth/logout and on Stop.
     private readonly ConcurrentDictionary<string, Session> _sessions = new();
-    private sealed record Session(string Username, string Role, DateTime IssuedUtc);
+    private sealed record Session(string Username, string DisplayName, string Role, DateTime IssuedUtc);
 
     private string IssueSession(UserAccount user)
     {
         var token = ShareProtocol.NewSessionToken();
-        _sessions[token] = new Session(user.Username, user.Role, DateTime.UtcNow);
+        _sessions[token] = new Session(user.Username, user.DisplayName.Length > 0 ? user.DisplayName : user.Username, user.Role, DateTime.UtcNow);
         return token;
     }
 
@@ -112,6 +117,7 @@ public sealed class ShareServer
         Port  = port;
         ShareCamera = shareCamera;
         ShareHmi    = shareHmi;
+        _uiQueue = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
         _cts  = new CancellationTokenSource();
         _listener = new TcpListener(IPAddress.Any, port);
         _listener.Start();
@@ -226,6 +232,14 @@ public sealed class ShareServer
             else if (method == "POST" && path == ShareProtocol.TasksCompletePath)
             {
                 await HandleTasksCompleteAsync(stream, headers, ct);
+            }
+            else if (method == "POST" && path == ShareProtocol.ActivityPath)
+            {
+                await HandleActivitySyncAsync(stream, headers, ct);
+            }
+            else if (method == "POST" && path == ShareProtocol.ChallengeSubmitPath)
+            {
+                await HandleChallengeSubmitSyncAsync(stream, headers, ct);
             }
             else if (method == "GET" && path == "/info")
             {
@@ -868,6 +882,82 @@ public sealed class ShareServer
         await WriteJsonAsync(stream, "{\"ok\":true}", ct);
     }
 
+    // ── Activity + Submission sync handlers ──────────────────────────────────
+
+    private async Task HandleActivitySyncAsync(
+        NetworkStream stream, Dictionary<string, string> headers, CancellationToken ct)
+    {
+        var session = GetSession(BearerToken(headers));
+        if (session is null)
+        {
+            await WriteSimpleAsync(stream, "401 Unauthorized", "text/plain", "Invalid or expired session", ct);
+            return;
+        }
+
+        var body = await ReadBodyAsync(stream, headers, ct);
+        try
+        {
+            var log = System.Text.Json.JsonSerializer.Deserialize(body, AppJsonContext.Default.ActivityLog);
+            if (log != null)
+            {
+                // Override identity with validated session
+                log.Username    = session.Username;
+                log.DisplayName = session.DisplayName;
+                log.Role        = session.Role;
+                log.TimestampUtc = log.TimestampUtc == default ? DateTime.UtcNow : log.TimestampUtc;
+                ActivityStore.Instance.LogExternal(log);
+            }
+        }
+        catch { }
+
+        await WriteJsonAsync(stream, "{\"ok\":true}", ct);
+    }
+
+    private async Task HandleChallengeSubmitSyncAsync(
+        NetworkStream stream, Dictionary<string, string> headers, CancellationToken ct)
+    {
+        var session = GetSession(BearerToken(headers));
+        if (session is null)
+        {
+            await WriteSimpleAsync(stream, "401 Unauthorized", "text/plain", "Invalid or expired session", ct);
+            return;
+        }
+
+        var body = await ReadBodyAsync(stream, headers, ct);
+        try
+        {
+            var sub = System.Text.Json.JsonSerializer.Deserialize(body, AppJsonContext.Default.ChallengeSubmission);
+            if (sub != null)
+            {
+                sub.StudentId   = session.Username;
+                sub.StudentName = session.DisplayName;
+                var challenge   = ChallengeService.Instance.GetById(sub.ChallengeId);
+                if (challenge != null)
+                {
+                    var existing = challenge.Submissions.FirstOrDefault(s => s.StudentId == sub.StudentId);
+                    if (existing != null)
+                    {
+                        existing.TextAnswer      = sub.TextAnswer;
+                        existing.MetricSnapshot  = sub.MetricSnapshot;
+                        existing.SubmittedAt     = sub.SubmittedAt;
+                        existing.Status          = sub.Status;
+                        existing.AttachmentFileName = sub.AttachmentFileName;
+                    }
+                    else
+                    {
+                        challenge.Submissions.Add(sub);
+                    }
+                    ChallengeService.Instance.UpdateChallenge(challenge);
+                    // Notify UI on server side (must be on UI thread)
+                    _uiQueue?.TryEnqueue(() => Views.ChallengeLearningPage.NotifySubmissionReceived());
+                }
+            }
+        }
+        catch { }
+
+        await WriteJsonAsync(stream, "{\"ok\":true}", ct);
+    }
+
     // ── HTTP parsing helpers ──────────────────────────────────────────────────
 
     private static string? GetTokenQuery(string rawPath)
@@ -1303,5 +1393,72 @@ public static class AuthClient
             await http.SendAsync(req);
         }
         catch { /* logout is best-effort; the session also dies when the server stops */ }
+    }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  SYNC CLIENT — sends activities and submissions from CLIENT → SERVER
+// ════════════════════════════════════════════════════════════════════════════
+
+/// <summary>
+/// Runs on the CLIENT side. Hooks into ActivityStore and forwards every new
+/// activity log + challenge submissions to the connected ShareServer so the
+/// lecturer can see them in real-time.
+/// </summary>
+public sealed class SyncClient
+{
+    public static SyncClient Instance { get; } = new();
+    private SyncClient() { }
+
+    private string _host  = "";
+    private string _token = "";
+    private bool   _active;
+
+    /// <summary>Call after successful login on CLIENT to start syncing.</summary>
+    public void Start(string host, string token)
+    {
+        _host   = host;
+        _token  = token;
+        _active = true;
+        ActivityStore.Instance.Changed += OnActivityChanged;
+    }
+
+    public void Stop()
+    {
+        _active = false;
+        ActivityStore.Instance.Changed -= OnActivityChanged;
+        _host = _token = "";
+    }
+
+    private void OnActivityChanged()
+    {
+        if (!_active) return;
+        // Send the most recent activity
+        var all = ActivityStore.Instance.GetAll();
+        if (all.Count == 0) return;
+        var latest = all[0]; // ordered by descending timestamp
+        _ = PostAsync(ShareProtocol.ActivityPath,
+            System.Text.Json.JsonSerializer.Serialize(latest, AppJsonContext.Default.ActivityLog));
+    }
+
+    /// <summary>Call from CLIENT when a challenge submission is saved.</summary>
+    public void SendSubmission(TLIGDashboard.Models.ChallengeSubmission sub)
+    {
+        if (!_active) return;
+        _ = PostAsync(ShareProtocol.ChallengeSubmitPath,
+            System.Text.Json.JsonSerializer.Serialize(sub, AppJsonContext.Default.ChallengeSubmission));
+    }
+
+    private async System.Threading.Tasks.Task PostAsync(string path, string json)
+    {
+        try
+        {
+            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(8) };
+            using var req  = new HttpRequestMessage(HttpMethod.Post, $"{AuthClient.BaseUrl(_host)}{path}");
+            req.Headers.TryAddWithoutValidation("Authorization", $"Bearer {_token}");
+            req.Content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
+            await http.SendAsync(req);
+        }
+        catch { /* fire-and-forget, ignore network errors */ }
     }
 }
