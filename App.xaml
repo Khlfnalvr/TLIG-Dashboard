@@ -180,15 +180,13 @@
                 </Setter>
             </Style>
 
-            <!-- System Model Selector flyout presenter — dark themed popup -->
+            <!-- System Model Selector flyout presenter — default WinUI flyout
+                 surface (theme-aware), only sizing/padding overridden -->
             <Style x:Key="SmsFlyoutStyle" TargetType="FlyoutPresenter">
-                <Setter Property="Background"      Value="#12121F"/>
-                <Setter Property="BorderBrush"     Value="#7c3aed"/>
-                <Setter Property="BorderThickness" Value="1"/>
-                <Setter Property="CornerRadius"    Value="12"/>
-                <Setter Property="Padding"         Value="12"/>
-                <Setter Property="MinWidth"        Value="320"/>
-                <Setter Property="MaxWidth"        Value="380"/>
+                <Setter Property="CornerRadius" Value="{ThemeResource OverlayCornerRadius}"/>
+                <Setter Property="Padding"      Value="12"/>
+                <Setter Property="MinWidth"     Value="320"/>
+                <Setter Property="MaxWidth"     Value="380"/>
             </Style>
 
             <!-- Dashboard semantic colours — intentionally fixed (same in both themes) -->

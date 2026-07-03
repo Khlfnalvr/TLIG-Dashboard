@@ -43,6 +43,9 @@ public static class ShareProtocol
     public const string TasksCompletePath      = "/tasks/complete";      // POST {id, completed}
     public const string ActivityPath           = "/activity";            // POST ActivityLog (client→server sync)
     public const string ChallengeSubmitPath    = "/challenge/submit";    // POST ChallengeSubmission (client→server)
+    public const string ChallengeSubmissionsPath = "/challenge/submissions"; // GET all submissions (staff only)
+    public const string ChallengeGradePath     = "/challenge/grade";     // POST dosen grade (staff only)
+    public const string StudentsPath           = "/students";            // GET student roster (staff only)
     public const string GuidWs            = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 
     /// <summary>Generates an opaque, high-entropy session token (URL-safe base64).</summary>
@@ -240,6 +243,18 @@ public sealed class ShareServer
             else if (method == "POST" && path == ShareProtocol.ChallengeSubmitPath)
             {
                 await HandleChallengeSubmitSyncAsync(stream, headers, ct);
+            }
+            else if (method == "GET" && path == ShareProtocol.ChallengeSubmissionsPath)
+            {
+                await HandleChallengeSubmissionsGetAsync(stream, headers, ct);
+            }
+            else if (method == "POST" && path == ShareProtocol.ChallengeGradePath)
+            {
+                await HandleChallengeGradeAsync(stream, headers, ct);
+            }
+            else if (method == "GET" && path == ShareProtocol.StudentsPath)
+            {
+                await HandleStudentsGetAsync(stream, headers, ct);
             }
             else if (method == "GET" && path == "/info")
             {
@@ -524,13 +539,9 @@ public sealed class ShareServer
 
             if (string.IsNullOrEmpty(text)) continue;
 
-            var chunk = new JsonObject
-            {
-                ["choices"] = new JsonArray
-                {
-                    new JsonObject { ["index"] = 0, ["delta"] = new JsonObject { ["content"] = text } }
-                }
-            }.ToJsonString();
+            var choices = new JsonArray();
+            choices.Add((JsonNode)new JsonObject { ["index"] = 0, ["delta"] = new JsonObject { ["content"] = text } });
+            var chunk = new JsonObject { ["choices"] = choices }.ToJsonString();
 
             await WriteSseChunkAsync(stream, $"data: {chunk}\n\n", ct);
         }
@@ -596,7 +607,7 @@ public sealed class ShareServer
                     }
                     else if (role is "user" or "assistant")
                     {
-                        outMsgs.Add(new JsonObject { ["role"] = role, ["content"] = content });
+                        outMsgs.Add((JsonNode)new JsonObject { ["role"] = role, ["content"] = content });
                     }
                 }
             }
@@ -633,11 +644,11 @@ public sealed class ShareServer
             var cfg = settings.AiProviderConfigs.FirstOrDefault(c => c.Id == info.Id);
 
             var models = new JsonArray();
-            foreach (var m in cfg?.Models ?? new List<string>()) models.Add(m);
+            foreach (var m in cfg?.Models ?? new List<string>()) models.Add((JsonNode)m);
             var allModels = new JsonArray();
-            foreach (var m in info.Models) allModels.Add(m);
+            foreach (var m in info.Models) allModels.Add((JsonNode)m);
 
-            arr.Add(new JsonObject
+            arr.Add((JsonNode)new JsonObject
             {
                 ["id"]        = info.Id,
                 ["name"]      = info.Name,
@@ -774,7 +785,7 @@ public sealed class ShareServer
         var completed = TaskStore.Instance.GetCompletedIds(session.Username);
 
         var arr = new JsonArray();
-        foreach (var t in tasks) arr.Add(TaskToJson(t, completed.Contains(t.Id)));
+        foreach (var t in tasks) arr.Add((JsonNode)TaskToJson(t, completed.Contains(t.Id)));
 
         var json = new JsonObject
         {
@@ -956,6 +967,125 @@ public sealed class ShareServer
         catch { }
 
         await WriteJsonAsync(stream, "{\"ok\":true}", ct);
+    }
+
+    // ── Challenge grading over HTTP (staff on CLIENT flavor) ─────────────────
+
+    /// <summary>GET /challenge/submissions — every submission across all challenges (staff only).</summary>
+    private async Task HandleChallengeSubmissionsGetAsync(
+        NetworkStream stream, Dictionary<string, string> headers, CancellationToken ct)
+    {
+        var session = GetSession(BearerToken(headers));
+        if (session is null)
+        {
+            await WriteSimpleAsync(stream, "401 Unauthorized", "text/plain", "Invalid or expired session", ct);
+            return;
+        }
+        if (!UserRoles.IsStaff(session.Role))
+        {
+            await WriteSimpleAsync(stream, "403 Forbidden", "text/plain", "Staff only", ct);
+            return;
+        }
+
+        var all = new List<Models.ChallengeSubmission>();
+        foreach (var ch in ChallengeService.Instance.GetAllChallenges())
+            all.AddRange(ch.Submissions);
+
+        var json = System.Text.Json.JsonSerializer.Serialize(
+            all, AppJsonContext.Default.ListChallengeSubmission);
+        await WriteJsonAsync(stream, json, ct);
+    }
+
+    /// <summary>POST /challenge/grade — persist a dosen grade sent from a staff CLIENT.</summary>
+    private async Task HandleChallengeGradeAsync(
+        NetworkStream stream, Dictionary<string, string> headers, CancellationToken ct)
+    {
+        var session = GetSession(BearerToken(headers));
+        if (session is null)
+        {
+            await WriteSimpleAsync(stream, "401 Unauthorized", "text/plain", "Invalid or expired session", ct);
+            return;
+        }
+        if (!UserRoles.IsStaff(session.Role))
+        {
+            await WriteSimpleAsync(stream, "403 Forbidden", "text/plain", "Staff only", ct);
+            return;
+        }
+
+        var body = await ReadBodyAsync(stream, headers, ct);
+        try
+        {
+            var node = JsonNode.Parse(body);
+            if (node != null
+                && Guid.TryParse((string?)node["challengeId"], out var challengeId)
+                && (string?)node["studentId"] is { Length: > 0 } studentId)
+            {
+                var challenge = ChallengeService.Instance.GetById(challengeId);
+                if (challenge != null)
+                {
+                    var sub = challenge.Submissions.FirstOrDefault(s =>
+                        string.Equals(s.StudentId, studentId, StringComparison.OrdinalIgnoreCase));
+                    if (sub == null)
+                    {
+                        sub = new Models.ChallengeSubmission
+                        {
+                            ChallengeId = challengeId,
+                            StudentId   = studentId,
+                            StudentName = (string?)node["studentName"] ?? studentId,
+                            Status      = Models.SubmissionStatus.NotSubmitted,
+                        };
+                        challenge.Submissions.Add(sub);
+                    }
+                    sub.DosenGrade = new Models.GradeEntry
+                    {
+                        GraderName = (string?)node["graderName"] is { Length: > 0 } g ? g : session.DisplayName,
+                        Score      = Math.Clamp((double?)node["score"] ?? 0, 0, 100),
+                        Feedback   = (string?)node["feedback"] ?? "",
+                        GradedAt   = DateTime.Now,
+                        IsAI       = false,
+                    };
+                    sub.Status = Models.SubmissionStatus.Graded;
+                    ChallengeService.Instance.UpdateChallenge(challenge);
+                    _uiQueue?.TryEnqueue(() => Views.ChallengeLearningPage.NotifySubmissionReceived());
+                }
+            }
+        }
+        catch { }
+
+        await WriteJsonAsync(stream, "{\"ok\":true}", ct);
+    }
+
+    // ── Student roster (staff only) ───────────────────────────────────────────
+
+    private async Task HandleStudentsGetAsync(
+        NetworkStream stream, Dictionary<string, string> headers, CancellationToken ct)
+    {
+        var session = GetSession(BearerToken(headers));
+        if (session is null)
+        {
+            await WriteSimpleAsync(stream, "401 Unauthorized", "text/plain", "Invalid or expired session", ct);
+            return;
+        }
+        if (!UserRoles.IsStaff(session.Role))
+        {
+            await WriteSimpleAsync(stream, "403 Forbidden", "text/plain", "Staff only", ct);
+            return;
+        }
+
+        var arr = new JsonArray();
+        foreach (var u in UserStore.Instance.GetUsers()
+                     .Where(u => u.Enabled && !UserRoles.IsStaff(u.Role)))
+        {
+            arr.Add((JsonNode)new JsonObject
+            {
+                ["id"]    = u.Username,
+                ["name"]  = string.IsNullOrWhiteSpace(u.DisplayName) ? u.Username : u.DisplayName,
+                ["nrp"]   = u.Nrp,
+                ["kelas"] = u.Kelas,
+            });
+        }
+
+        await WriteJsonAsync(stream, new JsonObject { ["students"] = arr }.ToJsonString(), ct);
     }
 
     // ── HTTP parsing helpers ──────────────────────────────────────────────────
@@ -1447,6 +1577,64 @@ public sealed class SyncClient
         if (!_active) return;
         _ = PostAsync(ShareProtocol.ChallengeSubmitPath,
             System.Text.Json.JsonSerializer.Serialize(sub, AppJsonContext.Default.ChallengeSubmission));
+    }
+
+    /// <summary>
+    /// CLIENT staff: pushes a dosen grade to the server so it lands in the
+    /// server's challenge database (fire-and-forget, like the other sync calls).
+    /// </summary>
+    public void SendGrade(Guid challengeId, string studentId, string studentName,
+                          double score, string feedback, string graderName)
+    {
+        if (!_active) return;
+        var body = new System.Text.Json.Nodes.JsonObject
+        {
+            ["challengeId"] = challengeId.ToString(),
+            ["studentId"]   = studentId,
+            ["studentName"] = studentName,
+            ["score"]       = score,
+            ["feedback"]    = feedback,
+            ["graderName"]  = graderName,
+        };
+        _ = PostAsync(ShareProtocol.ChallengeGradePath, body.ToJsonString());
+    }
+
+    /// <summary>
+    /// CLIENT staff: pulls every submission from the server and merges them into
+    /// the local <see cref="ChallengeService"/> so grading views show live data.
+    /// </summary>
+    public async System.Threading.Tasks.Task<bool> PullSubmissionsAsync()
+    {
+        if (!_active) return false;
+        try
+        {
+            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+            using var req  = new HttpRequestMessage(HttpMethod.Get,
+                $"{AuthClient.BaseUrl(_host)}{ShareProtocol.ChallengeSubmissionsPath}");
+            req.Headers.TryAddWithoutValidation("Authorization", $"Bearer {_token}");
+            using var resp = await http.SendAsync(req);
+            if (!resp.IsSuccessStatusCode) return false;
+
+            var subs = System.Text.Json.JsonSerializer.Deserialize(
+                await resp.Content.ReadAsStringAsync(),
+                AppJsonContext.Default.ListChallengeSubmission);
+            if (subs is null) return false;
+
+            foreach (var group in subs.GroupBy(s => s.ChallengeId))
+            {
+                var ch = ChallengeService.Instance.GetById(group.Key);
+                if (ch is null) continue;
+                foreach (var sub in group)
+                {
+                    ch.Submissions.RemoveAll(s =>
+                        string.Equals(s.StudentId, sub.StudentId, StringComparison.OrdinalIgnoreCase));
+                    ch.Submissions.Add(sub);
+                }
+                ChallengeService.Instance.UpdateChallenge(ch);
+            }
+            return true;
+        }
+        catch { return false; }
     }
 
     private async System.Threading.Tasks.Task PostAsync(string path, string json)

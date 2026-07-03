@@ -20,19 +20,11 @@ public sealed class AiProviderSettings
 
 public class AppSettings
 {
-    // OPC protocol selection: "UA" | "DA"
-    public string OpcProtocol             { get; set; } = "UA";
-
-    // OPC UA server connection settings
-    public string OpcUaEndpointUrl        { get; set; } = "opc.tcp://localhost:4840";
-    public string OpcUaSecurityMode       { get; set; } = "None";   // None | Sign | SignAndEncrypt
-    public bool   OpcUaUseAnonymous       { get; set; } = true;
-    public string OpcUaUsername           { get; set; } = "";
-    public int    OpcUaPublishingIntervalMs { get; set; } = 1000;
-    public OpcUaNodeConfig OpcUaNodeConfig { get; set; } = new();
-
-    // OPC DA server connection settings
-    public string OpcDaProgId             { get; set; } = "";
+    // ── PLC via LabVIEW HMI (direct TCP — replaces the former OPC UA/DA path) ──
+    // LabVIEW runs a TCP listener that bridges to the PLC; the server connects
+    // to it as a plain TCP client (see PlcTcpService).
+    public string PlcTcpHost              { get; set; } = "127.0.0.1";
+    public int    PlcTcpPort              { get; set; } = 5000;
 
     // ── Sharing: server side ──────────────────────────────────────────────
     // The server broadcasts its camera + HMI screen and proxies AI chat.
@@ -62,7 +54,7 @@ public class AppSettings
     // cleanly into AiProviderConfigs below; no longer the source of truth.
     public string AiApiUrl       { get; set; } = "https://api.deepseek.com";
     public string AiApiKey       { get; set; } = "";
-    public string AiModel        { get; set; } = "deepseek-chat";
+    public string AiModel        { get; set; } = "deepseek-v4-flash";
     public string AiSystemPrompt { get; set; } = "You are a helpful assistant integrated in TLIG Dashboard, an industrial HMI dashboard and AI connector.";
 
     // Multi-provider config (DeepSeek / OpenAI / Anthropic). On the server each

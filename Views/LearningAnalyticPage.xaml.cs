@@ -36,26 +36,32 @@ public sealed partial class LearningAnalyticPage : Page
         Loaded += OnLoaded;
     }
 
+    // Progress tracking (overall performance + task summary) is student-facing:
+    // hidden on the Server flavor and for staff (Dosen/Asisten) on the Client.
+    private static bool ShowAnalyticOverview =>
+        BuildInfo.IsClient && !(App.Session.IsSignedIn && UserRoles.IsStaff(App.Session.Role));
+
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
+        AnalyticView.Visibility = ShowAnalyticOverview ? Visibility.Visible : Visibility.Collapsed;
+
         if (!ChallengeFrame.CanGoBack && ChallengeFrame.Content is null)
             ChallengeFrame.Navigate(typeof(ChallengeLearningPage));
 
-#if CLIENT
-        PenilaianDivider.Visibility = Visibility.Collapsed;
-        GradingCard.Visibility      = Visibility.Collapsed;
-#else
+        // Penilaian is a staff feature on BOTH flavors: Dosen/Asisten signed in
+        // on the Client get the same grading section as on the Server.
         InitGradingCombo();
         _ = LoadGradingSectionAsync();
         ChallengeLearningPage.GradeSaved += OnChallengeGradeSaved;
         Unloaded += (_, _) => { ChallengeLearningPage.GradeSaved -= OnChallengeGradeSaved; };
-#endif
     }
 
     protected override void OnNavigatedTo(NavigationEventArgs e)
     {
         base.OnNavigatedTo(e);
-        _ = AnalyticView.ReloadAsync();
+        AnalyticView.Visibility = ShowAnalyticOverview ? Visibility.Visible : Visibility.Collapsed;
+        if (ShowAnalyticOverview)
+            _ = AnalyticView.ReloadAsync();
         _ = LoadGradingSectionAsync();
     }
 
@@ -73,39 +79,23 @@ public sealed partial class LearningAnalyticPage : Page
 
     private async System.Threading.Tasks.Task LoadGradingSectionAsync()
     {
-        if (!App.Session.IsSignedIn)
-        {
-            GradingCard.Visibility = Visibility.Collapsed;
-            return;
-        }
+        // Staff-only section (Dosen/Asisten) on both flavors. Students keep the
+        // Challenge Learning submission view instead.
+        bool showGrading = App.Session.IsSignedIn && UserRoles.IsStaff(App.Session.Role);
+        PenilaianDivider.Visibility = showGrading ? Visibility.Visible : Visibility.Collapsed;
+        GradingCard.Visibility      = showGrading ? Visibility.Visible : Visibility.Collapsed;
+        if (!showGrading) return;
 
-        await StudentService.Instance.EnsureLoadedAsync();
+        // Refresh the roster cache (server: UserStore; client: GET /students)
+        // and, on the client, pull the latest submissions from the server.
+        await StudentDirectory.GetStudentsAsync();
+        if (BuildInfo.IsClient)
+            await SyncClient.Instance.PullSubmissionsAsync();
 
-        GradingCard.Visibility = Visibility.Visible;
-        bool isStaff = UserRoles.IsStaff(App.Session.Role);
-
-        if (isStaff)
-        {
-            GradingSubtitle.Text = "Kelola dan pantau seluruh penilaian mahasiswa";
-            StudentGradingPivot.Visibility  = Visibility.Collapsed;
-            LecturerGradingPivot.Visibility = Visibility.Visible;
-            ManageStudentsBtn.Visibility    = Visibility.Visible;
-            await LoadLecturerGradingAsync();
-        }
-        else
-        {
-            GradingSubtitle.Text = "Nilai rekan kelompokmu dan lihat nilai yang kamu terima";
-            LecturerGradingPivot.Visibility = Visibility.Collapsed;
-            StudentGradingPivot.Visibility  = Visibility.Visible;
-            ManageStudentsBtn.Visibility    = Visibility.Collapsed;
-
-            _groupMembers = StudentService.Instance.GetAll()
-                .Where(s => s.Id != CurrentStudentId)
-                .Select(s => new GradingGroupMemberVm(s.Id, s.Name))
-                .ToList();
-
-            await LoadStudentGradingAsync();
-        }
+        GradingSubtitle.Text = "Kelola dan pantau seluruh penilaian mahasiswa";
+        StudentGradingPivot.Visibility  = Visibility.Collapsed;
+        LecturerGradingPivot.Visibility = Visibility.Visible;
+        await LoadLecturerGradingAsync();
     }
 
     internal void GradingAssignmentCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -327,6 +317,7 @@ public sealed partial class LearningAnalyticPage : Page
     {
         if (sender is not Button btn) return;
         _lecGradingStudentId = btn.Tag?.ToString();
+        if (string.IsNullOrEmpty(_lecGradingStudentId)) return;
         var summaries = await _grading.GetGradeSummaryByAssignmentAsync(_gradingAssignmentId);
         var s = summaries.FirstOrDefault(x => x.StudentId == _lecGradingStudentId);
         if (s == null) return;
@@ -420,110 +411,6 @@ public sealed partial class LearningAnalyticPage : Page
         }
     }
 
-    // ═══════════════════════════════════════════════════════════════════
-    //  MANAGE STUDENTS dialog
-    // ═══════════════════════════════════════════════════════════════════
-
-    internal async void ManageStudents_Click(object sender, RoutedEventArgs e)
-    {
-        await StudentService.Instance.EnsureLoadedAsync();
-        var students = StudentService.Instance.GetAll()
-            .Select(s => new StudentEditVm { Id = s.Id, Name = s.Name, GroupId = s.GroupId ?? "" })
-            .ToList();
-
-        var listView = new ListView
-        {
-            SelectionMode = ListViewSelectionMode.None,
-            ItemsSource   = students,
-            ItemTemplate  = BuildStudentItemTemplate(),
-            Height        = 280,
-        };
-
-        var addIdBox    = new TextBox { PlaceholderText = "ID (mis. STU006)", MinWidth = 100 };
-        var addNameBox  = new TextBox { PlaceholderText = "Nama Lengkap", MinWidth = 180, Margin = new Thickness(8, 0, 0, 0) };
-        var addGroupBox = new TextBox { PlaceholderText = "Grup (mis. GRP-01)", MinWidth = 100, Margin = new Thickness(8, 0, 0, 0) };
-        var addBtn      = new Button  { Content = "Tambah", Margin = new Thickness(8, 0, 0, 0) };
-
-        var addRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 0, Margin = new Thickness(0, 8, 0, 0) };
-        addRow.Children.Add(addIdBox);
-        addRow.Children.Add(addNameBox);
-        addRow.Children.Add(addGroupBox);
-        addRow.Children.Add(addBtn);
-
-        var infoBar = new InfoBar { IsClosable = false, Margin = new Thickness(0, 6, 0, 0) };
-
-        var content = new StackPanel { Width = 500, Spacing = 0 };
-        content.Children.Add(new TextBlock { Text = "Daftar Mahasiswa (klik nama untuk edit)", FontSize = 13, Margin = new Thickness(0, 0, 0, 6) });
-        content.Children.Add(listView);
-        content.Children.Add(addRow);
-        content.Children.Add(infoBar);
-
-        var dialog = new ContentDialog
-        {
-            Title             = "Kelola Mahasiswa",
-            Content           = content,
-            PrimaryButtonText = "Simpan",
-            CloseButtonText   = "Batal",
-            DefaultButton     = ContentDialogButton.Primary,
-            XamlRoot          = XamlRoot,
-        };
-
-        addBtn.Click += (_, _) =>
-        {
-            string newId   = addIdBox.Text.Trim();
-            string newName = addNameBox.Text.Trim();
-            string newGrp  = addGroupBox.Text.Trim();
-            if (string.IsNullOrEmpty(newId) || string.IsNullOrEmpty(newName))
-            {
-                infoBar.Severity = InfoBarSeverity.Warning;
-                infoBar.Title    = "ID dan Nama wajib diisi.";
-                infoBar.IsOpen   = true;
-                return;
-            }
-            if (students.Any(s => s.Id == newId))
-            {
-                infoBar.Severity = InfoBarSeverity.Warning;
-                infoBar.Title    = $"ID '{newId}' sudah ada.";
-                infoBar.IsOpen   = true;
-                return;
-            }
-            students.Add(new StudentEditVm { Id = newId, Name = newName, GroupId = newGrp });
-            listView.ItemsSource = null;
-            listView.ItemsSource = students;
-            addIdBox.Text = addNameBox.Text = addGroupBox.Text = "";
-            infoBar.IsOpen = false;
-        };
-
-        var result = await dialog.ShowAsync();
-        if (result != ContentDialogResult.Primary) return;
-
-        var toSave = students
-            .Where(s => !string.IsNullOrWhiteSpace(s.Name))
-            .Select(s => new StudentInfo { Id = s.Id, Name = s.Name.Trim(), GroupId = string.IsNullOrWhiteSpace(s.GroupId) ? null : s.GroupId.Trim() });
-        await StudentService.Instance.ReplaceAllAsync(toSave);
-
-        await LoadGradingSectionAsync();
-    }
-
-    private static DataTemplate BuildStudentItemTemplate() =>
-        (DataTemplate)Microsoft.UI.Xaml.Markup.XamlReader.Load("""
-            <DataTemplate xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
-                <Grid ColumnSpacing="8" Margin="0,2">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="90"/>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="80"/>
-                    </Grid.ColumnDefinitions>
-                    <TextBlock Grid.Column="0" Text="{Binding Id}" VerticalAlignment="Center"
-                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="12"/>
-                    <TextBox Grid.Column="1" Text="{Binding Name, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                             PlaceholderText="Nama mahasiswa"/>
-                    <TextBox Grid.Column="2" Text="{Binding GroupId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                             PlaceholderText="Grup"/>
-                </Grid>
-            </DataTemplate>
-            """);
-
     private static string GetInitials(string name)
     {
         var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
@@ -569,10 +456,21 @@ public sealed partial class LearningAnalyticPage : Page
 
         var subs = challenge.Submissions;
 
+        // One row per registered student account (real roster, no dummy data);
+        // submissions from accounts no longer in the roster are appended after.
+        var roster = StudentDirectory.Cached;
+        var rows = new List<(string Id, string Name, string Kelas, ChallengeSubmission? Sub)>();
+        foreach (var st in roster)
+            rows.Add((st.Id, st.Name, st.Kelas,
+                subs.FirstOrDefault(s => string.Equals(s.StudentId, st.Id, StringComparison.OrdinalIgnoreCase))));
+        foreach (var s in subs)
+            if (!roster.Any(st => string.Equals(st.Id, s.StudentId, StringComparison.OrdinalIgnoreCase)))
+                rows.Add((s.StudentId, s.StudentName.Length > 0 ? s.StudentName : s.StudentId, "", s));
+
         bool hasRows = false;
-        foreach (var sub in subs)
+        foreach (var (stId, stName, stKelas, sub) in rows)
         {
-            double? finalScore = sub.ComputeFinalScore(challenge);
+            double? finalScore = sub?.ComputeFinalScore(challenge);
             string scoreStr = finalScore.HasValue ? $"{finalScore.Value:F1}" : "—";
             string grade    = finalScore.HasValue ? ChallengeScoreToGrade(finalScore.Value) : "—";
 
@@ -592,20 +490,21 @@ public sealed partial class LearningAnalyticPage : Page
             var nameStack = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
             nameStack.Children.Add(new TextBlock
             {
-                Text = sub.StudentName.Length > 0 ? sub.StudentName : sub.StudentId,
+                Text = stName,
                 FontSize = 13, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
             });
             nameStack.Children.Add(new TextBlock
             {
-                Text = sub.StudentId, FontSize = 11,
+                Text = stId, FontSize = 11,
                 Opacity = 0.5
             });
             Grid.SetColumn(nameStack, 0);
 
-            // Kelompok
+            // Kelas
             var grpText = new TextBlock
             {
-                Text = "—", FontSize = 13,
+                Text = string.IsNullOrWhiteSpace(stKelas) ? "—" : stKelas,
+                FontSize = 13,
                 VerticalAlignment = VerticalAlignment.Center
             };
             Grid.SetColumn(grpText, 1);
@@ -621,11 +520,12 @@ public sealed partial class LearningAnalyticPage : Page
             Grid.SetColumn(finalText, 2);
 
             // Grade badge
+            var (gradeBg, gradeFg) = ChallengeGradeBrushes(grade);
             var gradeBadge = new Border
             {
                 CornerRadius = new CornerRadius(4),
                 Padding = new Thickness(7, 2, 7, 2),
-                Background = ChallengeGradeToBrush(grade),
+                Background = gradeBg,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center
             };
@@ -633,13 +533,13 @@ public sealed partial class LearningAnalyticPage : Page
             {
                 Text = grade, FontSize = 11,
                 FontWeight = Microsoft.UI.Text.FontWeights.Bold,
-                Foreground = new SolidColorBrush(Colors.White)
+                Foreground = gradeFg
             };
             Grid.SetColumn(gradeBadge, 3);
 
             // Tombol Detail
-            var capturedStudentId   = sub.StudentId;
-            var capturedStudentName = sub.StudentName.Length > 0 ? sub.StudentName : sub.StudentId;
+            var capturedStudentId   = stId;
+            var capturedStudentName = stName;
             var detailBtn = new Button
             {
                 Content = "Detail", FontSize = 12,
@@ -715,18 +615,19 @@ public sealed partial class LearningAnalyticPage : Page
             titleSp.Children.Add(new TextBlock { Text = ch.Title, FontSize = 13, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold });
             titleSp.Children.Add(new TextBlock { Text = ch.Status.ToString(), FontSize = 10, Opacity = 0.55 });
 
+            var (sBg, sFg) = ChallengeGradeBrushes(sub != null ? grade : "—");
             var statusBadge = new Border
             {
                 CornerRadius = new CornerRadius(4),
                 Padding = new Thickness(7, 2, 7, 2),
-                Background = sub != null ? ChallengeGradeToBrush(grade) : new SolidColorBrush(Windows.UI.Color.FromArgb(60, 128, 128, 128)),
+                Background = sBg,
                 VerticalAlignment = VerticalAlignment.Center
             };
             statusBadge.Child = new TextBlock
             {
                 Text = sub != null ? grade : "Belum submit",
                 FontSize = 10, FontWeight = Microsoft.UI.Text.FontWeights.Bold,
-                Foreground = new SolidColorBrush(Colors.White)
+                Foreground = sFg
             };
 
             Grid.SetColumn(titleSp, 0); Grid.SetColumn(statusBadge, 1);
@@ -902,18 +803,18 @@ public sealed partial class LearningAnalyticPage : Page
                 {
                     CornerRadius = new CornerRadius(4),
                     Padding = new Thickness(6, 2, 6, 2),
-                    Background = achieved.Value
-                        ? new SolidColorBrush(Windows.UI.Color.FromArgb(40, 16, 185, 129))
-                        : new SolidColorBrush(Windows.UI.Color.FromArgb(40, 239, 68, 68)),
+                    Background = (Brush)Application.Current.Resources[achieved.Value
+                        ? "SystemFillColorSuccessBackgroundBrush"
+                        : "SystemFillColorCriticalBackgroundBrush"],
                     VerticalAlignment = VerticalAlignment.Center
                 };
                 badge.Child = new TextBlock
                 {
                     Text = achieved.Value ? "✓ Tercapai" : "✗ Belum",
                     FontSize = 10, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-                    Foreground = achieved.Value
-                        ? new SolidColorBrush(Windows.UI.Color.FromArgb(255, 16, 185, 129))
-                        : new SolidColorBrush(Windows.UI.Color.FromArgb(255, 239, 68, 68))
+                    Foreground = (Brush)Application.Current.Resources[achieved.Value
+                        ? "SystemFillColorSuccessBrush"
+                        : "SystemFillColorCriticalBrush"]
                 };
                 nameRow.Children.Add(badge);
             }
@@ -1062,23 +963,26 @@ public sealed partial class LearningAnalyticPage : Page
         _     => "E"
     };
 
-    private static SolidColorBrush ChallengeGradeToBrush(string grade) => grade switch
+    /// <summary>Semantic WinUI badge colours (background, foreground) per grade.</summary>
+    private static (Brush Bg, Brush Fg) ChallengeGradeBrushes(string grade)
     {
-        "A"  => new SolidColorBrush(Windows.UI.Color.FromArgb(255, 16, 185, 129)),
-        "AB" => new SolidColorBrush(Windows.UI.Color.FromArgb(255, 5, 150, 105)),
-        "B"  => new SolidColorBrush(Windows.UI.Color.FromArgb(255, 59, 130, 246)),
-        "BC" => new SolidColorBrush(Windows.UI.Color.FromArgb(255, 99, 102, 241)),
-        "C"  => new SolidColorBrush(Windows.UI.Color.FromArgb(255, 245, 158, 11)),
-        "D"  => new SolidColorBrush(Windows.UI.Color.FromArgb(255, 239, 68, 68)),
-        "E"  => new SolidColorBrush(Windows.UI.Color.FromArgb(255, 120, 10, 10)),
-        _    => new SolidColorBrush(Windows.UI.Color.FromArgb(255, 128, 128, 128))
-    };
+        static Brush R(string k) => (Brush)Application.Current.Resources[k];
+        return grade switch
+        {
+            "A" or "AB" => (R("SystemFillColorSuccessBackgroundBrush"),  R("SystemFillColorSuccessBrush")),
+            "B" or "BC" => (R("SubtleFillColorSecondaryBrush"),          R("AccentTextFillColorPrimaryBrush")),
+            "C"         => (R("SystemFillColorCautionBackgroundBrush"),  R("SystemFillColorCautionBrush")),
+            "D" or "E"  => (R("SystemFillColorCriticalBackgroundBrush"), R("SystemFillColorCriticalBrush")),
+            _           => (R("SubtleFillColorSecondaryBrush"),          R("TextFillColorSecondaryBrush")),
+        };
+    }
 
     internal void ChallengeRecapCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
         => BuildChallengeRecap();
 
-    internal void ChallengeRecapRefresh_Click(object sender, RoutedEventArgs e)
+    internal async void ChallengeRecapRefresh_Click(object sender, RoutedEventArgs e)
     {
+        await StudentDirectory.GetStudentsAsync();   // refresh roster first
         InitChallengeRecapCombo();
         BuildChallengeRecap();
     }
@@ -1126,23 +1030,3 @@ internal class GLecActivityVm
     public string AutoScoreStr { get; set; } = "";
 }
 
-public class StudentEditVm : System.ComponentModel.INotifyPropertyChanged
-{
-    public string Id { get; set; } = "";
-
-    private string _name = "";
-    public string Name
-    {
-        get => _name;
-        set { _name = value; PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(Name))); }
-    }
-
-    private string _groupId = "";
-    public string GroupId
-    {
-        get => _groupId;
-        set { _groupId = value; PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(GroupId))); }
-    }
-
-    public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged;
-}

@@ -6,7 +6,7 @@ using TLIGDashboard.Services;
 namespace TLIGDashboard.Views;
 
 /// <summary>
-/// Shared staff dialog for configuring AI providers (DeepSeek / OpenAI / Anthropic):
+/// Shared staff dialog for configuring AI providers (DeepSeek / OpenAI / Anthropic / Gemini):
 /// per provider an enable toggle, API key, and which models to offer, plus the shared
 /// system prompt. Edits go through <see cref="AiConfigService"/> — on the Server flavor
 /// they hit local settings; on the Client flavor (staff) they POST to the server.

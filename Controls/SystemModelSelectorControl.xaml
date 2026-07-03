@@ -5,18 +5,26 @@
 
     <UserControl.Resources>
 
-        <!-- Dark card base -->
+        <!-- Card base — standard WinUI card surface -->
         <Style x:Key="SmsCardBase" TargetType="Border">
-            <Setter Property="CornerRadius"    Value="10"/>
+            <Setter Property="CornerRadius"    Value="8"/>
             <Setter Property="Padding"         Value="12,10"/>
-            <Setter Property="BorderThickness" Value="1.5"/>
-            <Setter Property="Background"      Value="#1E1E2E"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Background"      Value="{ThemeResource CardBackgroundFillColorDefaultBrush}"/>
+            <Setter Property="BorderBrush"     Value="{ThemeResource CardStrokeColorDefaultBrush}"/>
         </Style>
 
         <!-- Small label -->
         <Style x:Key="SmsMuted" TargetType="TextBlock">
             <Setter Property="FontSize" Value="10"/>
             <Setter Property="Opacity"  Value="0.55"/>
+        </Style>
+
+        <!-- Parameter pill -->
+        <Style x:Key="SmsPill" TargetType="Border">
+            <Setter Property="CornerRadius" Value="4"/>
+            <Setter Property="Padding"      Value="5,2"/>
+            <Setter Property="Background"   Value="{ThemeResource SubtleFillColorSecondaryBrush}"/>
         </Style>
 
     </UserControl.Resources>
@@ -30,10 +38,10 @@
 
         <!-- Collapsed view: shows current selection -->
         <Border x:Name="CollapsedView"
-                Background="#1E1E2E"
-                BorderBrush="#7c3aed"
-                BorderThickness="1.5"
-                CornerRadius="8"
+                Background="{ThemeResource ControlFillColorDefaultBrush}"
+                BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}"
+                BorderThickness="1"
+                CornerRadius="{ThemeResource ControlCornerRadius}"
                 Padding="10,4"
                 Height="28"
                 VerticalAlignment="Center">
@@ -44,17 +52,15 @@
                 <TextBlock x:Name="CollapsedName"
                            FontSize="11"
                            FontWeight="SemiBold"
-                           Foreground="#E0E0F0"
                            VerticalAlignment="Center"/>
                 <TextBlock x:Name="CollapsedUnit"
                            FontSize="10"
-                           Foreground="#7c3aed"
-                           Opacity="0.9"
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                            VerticalAlignment="Center"/>
                 <FontIcon FontFamily="Segoe MDL2 Assets"
                           Glyph="&#xE70D;"
                           FontSize="9"
-                          Foreground="#7c3aed"
+                          Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                           VerticalAlignment="Center"/>
             </StackPanel>
         </Border>
@@ -66,17 +72,15 @@
                 <StackPanel Spacing="8" Padding="4">
 
                     <!-- Header -->
-                    <TextBlock Text="PILIH SISTEM PROSES"
-                               FontSize="10"
+                    <TextBlock Text="Pilih sistem proses"
+                               FontSize="12"
                                FontWeight="SemiBold"
-                               Foreground="#7c3aed"
-                               Opacity="0.85"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                Margin="2,0,0,4"/>
 
                     <!-- Flow card -->
                     <Border x:Name="CardFlow"
                             Style="{StaticResource SmsCardBase}"
-                            BorderBrush="#2D2D3E"
                             PointerPressed="CardFlow_Pressed"
                             PointerEntered="Card_PointerEntered"
                             PointerExited="Card_PointerExited">
@@ -91,11 +95,11 @@
                             <Border Grid.Column="0"
                                     Width="36" Height="36"
                                     CornerRadius="8"
-                                    Background="#1A2A3A">
+                                    Background="{ThemeResource SubtleFillColorSecondaryBrush}">
                                 <FontIcon FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
-                                          Glyph="&#xF4E0;"
+                                          Glyph="&#xEB42;"
                                           FontSize="18"
-                                          Foreground="#38BDF8"
+                                          Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"
                                           HorizontalAlignment="Center"
                                           VerticalAlignment="Center"/>
                             </Border>
@@ -104,20 +108,19 @@
                             <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
                                 <TextBlock Text="Flow"
                                            FontSize="13"
-                                           FontWeight="SemiBold"
-                                           Foreground="#E0E0F0"/>
+                                           FontWeight="SemiBold"/>
                                 <TextBlock Text="Control laju aliran fluida dalam pipa"
                                            Style="{StaticResource SmsMuted}"
                                            TextWrapping="Wrap"/>
                                 <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,2,0,0">
-                                    <Border Background="#1A2A3A" CornerRadius="4" Padding="5,2">
-                                        <TextBlock Text="K = 1.2" FontSize="10" Foreground="#38BDF8"/>
+                                    <Border Style="{StaticResource SmsPill}">
+                                        <TextBlock Text="K = 1.2" FontSize="10" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
                                     </Border>
-                                    <Border Background="#1A2A3A" CornerRadius="4" Padding="5,2">
-                                        <TextBlock Text="τ = 5 s" FontSize="10" Foreground="#38BDF8"/>
+                                    <Border Style="{StaticResource SmsPill}">
+                                        <TextBlock Text="τ = 5 s" FontSize="10" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
                                     </Border>
-                                    <Border Background="#1A2A3A" CornerRadius="4" Padding="5,2">
-                                        <TextBlock Text="L/min" FontSize="10" Foreground="#38BDF8"/>
+                                    <Border Style="{StaticResource SmsPill}">
+                                        <TextBlock Text="L/min" FontSize="10" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
                                     </Border>
                                 </StackPanel>
                             </StackPanel>
@@ -128,7 +131,7 @@
                                       FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
                                       Glyph="&#xE73E;"
                                       FontSize="14"
-                                      Foreground="#7c3aed"
+                                      Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"
                                       VerticalAlignment="Center"
                                       Visibility="Collapsed"/>
                         </Grid>
@@ -137,7 +140,6 @@
                     <!-- Level card -->
                     <Border x:Name="CardLevel"
                             Style="{StaticResource SmsCardBase}"
-                            BorderBrush="#2D2D3E"
                             PointerPressed="CardLevel_Pressed"
                             PointerEntered="Card_PointerEntered"
                             PointerExited="Card_PointerExited">
@@ -151,11 +153,11 @@
                             <Border Grid.Column="0"
                                     Width="36" Height="36"
                                     CornerRadius="8"
-                                    Background="#1A2D1A">
+                                    Background="{ThemeResource SubtleFillColorSecondaryBrush}">
                                 <FontIcon FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
-                                          Glyph="&#xE9CA;"
+                                          Glyph="&#xE9E9;"
                                           FontSize="18"
-                                          Foreground="#34D399"
+                                          Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"
                                           HorizontalAlignment="Center"
                                           VerticalAlignment="Center"/>
                             </Border>
@@ -163,20 +165,19 @@
                             <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
                                 <TextBlock Text="Level"
                                            FontSize="13"
-                                           FontWeight="SemiBold"
-                                           Foreground="#E0E0F0"/>
+                                           FontWeight="SemiBold"/>
                                 <TextBlock Text="Kontrol ketinggian cairan dalam tangki"
                                            Style="{StaticResource SmsMuted}"
                                            TextWrapping="Wrap"/>
                                 <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,2,0,0">
-                                    <Border Background="#1A2D1A" CornerRadius="4" Padding="5,2">
-                                        <TextBlock Text="K = 2.0" FontSize="10" Foreground="#34D399"/>
+                                    <Border Style="{StaticResource SmsPill}">
+                                        <TextBlock Text="K = 2.0" FontSize="10" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
                                     </Border>
-                                    <Border Background="#1A2D1A" CornerRadius="4" Padding="5,2">
-                                        <TextBlock Text="τ = 10 s" FontSize="10" Foreground="#34D399"/>
+                                    <Border Style="{StaticResource SmsPill}">
+                                        <TextBlock Text="τ = 10 s" FontSize="10" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
                                     </Border>
-                                    <Border Background="#1A2D1A" CornerRadius="4" Padding="5,2">
-                                        <TextBlock Text="cm" FontSize="10" Foreground="#34D399"/>
+                                    <Border Style="{StaticResource SmsPill}">
+                                        <TextBlock Text="cm" FontSize="10" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
                                     </Border>
                                 </StackPanel>
                             </StackPanel>
@@ -186,7 +187,7 @@
                                       FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
                                       Glyph="&#xE73E;"
                                       FontSize="14"
-                                      Foreground="#7c3aed"
+                                      Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"
                                       VerticalAlignment="Center"
                                       Visibility="Collapsed"/>
                         </Grid>
@@ -195,7 +196,6 @@
                     <!-- Temperature card -->
                     <Border x:Name="CardTemp"
                             Style="{StaticResource SmsCardBase}"
-                            BorderBrush="#2D2D3E"
                             PointerPressed="CardTemp_Pressed"
                             PointerEntered="Card_PointerEntered"
                             PointerExited="Card_PointerExited">
@@ -209,11 +209,11 @@
                             <Border Grid.Column="0"
                                     Width="36" Height="36"
                                     CornerRadius="8"
-                                    Background="#2D1A1A">
+                                    Background="{ThemeResource SubtleFillColorSecondaryBrush}">
                                 <FontIcon FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
                                           Glyph="&#xE9CA;"
                                           FontSize="18"
-                                          Foreground="#F87171"
+                                          Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"
                                           HorizontalAlignment="Center"
                                           VerticalAlignment="Center"/>
                             </Border>
@@ -221,20 +221,19 @@
                             <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
                                 <TextBlock Text="Temperature"
                                            FontSize="13"
-                                           FontWeight="SemiBold"
-                                           Foreground="#E0E0F0"/>
+                                           FontWeight="SemiBold"/>
                                 <TextBlock Text="Regulasi suhu pada heat exchanger"
                                            Style="{StaticResource SmsMuted}"
                                            TextWrapping="Wrap"/>
                                 <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,2,0,0">
-                                    <Border Background="#2D1A1A" CornerRadius="4" Padding="5,2">
-                                        <TextBlock Text="K = 0.8" FontSize="10" Foreground="#F87171"/>
+                                    <Border Style="{StaticResource SmsPill}">
+                                        <TextBlock Text="K = 0.8" FontSize="10" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
                                     </Border>
-                                    <Border Background="#2D1A1A" CornerRadius="4" Padding="5,2">
-                                        <TextBlock Text="τ = 30 s" FontSize="10" Foreground="#F87171"/>
+                                    <Border Style="{StaticResource SmsPill}">
+                                        <TextBlock Text="τ = 30 s" FontSize="10" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
                                     </Border>
-                                    <Border Background="#2D1A1A" CornerRadius="4" Padding="5,2">
-                                        <TextBlock Text="°C" FontSize="10" Foreground="#F87171"/>
+                                    <Border Style="{StaticResource SmsPill}">
+                                        <TextBlock Text="°C" FontSize="10" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
                                     </Border>
                                 </StackPanel>
                             </StackPanel>
@@ -244,7 +243,7 @@
                                       FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
                                       Glyph="&#xE73E;"
                                       FontSize="14"
-                                      Foreground="#7c3aed"
+                                      Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"
                                       VerticalAlignment="Center"
                                       Visibility="Collapsed"/>
                         </Grid>

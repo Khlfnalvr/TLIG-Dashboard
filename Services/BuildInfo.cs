@@ -13,16 +13,17 @@ namespace TLIGDashboard.Services;
 /// compiled in both flavors; <c>#if SERVER/CLIENT</c> is used only for branding.
 /// </summary>
 internal static class BuildInfo
-{  
+{
 #if SERVER
-    public const bool   IsServer    = true;
     public const string Flavor      = "Server";
     public const string ProductName = "TLIG Dashboard Server";
 #else
-    public const bool   IsServer    = false;
     public const string Flavor      = "Client";
     public const string ProductName = "TLIG Dashboard Client";
 #endif
 
-    public const bool IsClient = !IsServer;
+    // static readonly (not const) so both flavor branches stay compiled without
+    // CS0162 unreachable-code warnings; the JIT still folds these to constants.
+    public static readonly bool IsServer = Flavor == "Server";
+    public static readonly bool IsClient = !IsServer;
 }

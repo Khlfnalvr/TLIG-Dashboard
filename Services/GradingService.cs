@@ -10,9 +10,9 @@ using TLIGDashboard.Models;
 namespace TLIGDashboard.Services
 {
     /// <summary>
-    /// Service penilaian mahasiswa.
-    /// Dalam implementasi nyata, ganti metode-metode ini dengan panggilan ke API/database.
-    /// Saat ini menggunakan data dummy untuk demonstrasi UI.
+    /// Service penilaian mahasiswa. Data diisi dari aktivitas nyata (tuning,
+    /// AI, simulasi, peer review) — tidak ada lagi data dummy; daftar mahasiswa
+    /// berasal dari akun asli via <see cref="StudentDirectory"/>.
     /// </summary>
     public class GradingService
     {
@@ -29,10 +29,7 @@ namespace TLIGDashboard.Services
         private readonly List<TuningRecord>     _tuningRecords     = new();
         private readonly List<AiUsageRecord>    _aiUsageRecords    = new();
 
-        private GradingService()
-        {
-            SeedDemoData();
-        }
+        private GradingService() { }
 
         // ─────────────────────────────────────────────────────────────────────
         //  PEER EVALUATION
@@ -324,229 +321,10 @@ namespace TLIGDashboard.Services
         }
 
         // ─────────────────────────────────────────────────────────────────────
-        //  DEMO DATA SEED
+        //  NAME RESOLUTION
         // ─────────────────────────────────────────────────────────────────────
 
         private static string GetDemoStudentName(string id) =>
-            StudentService.Instance.GetName(id);
-
-        private void SeedDemoData()
-        {
-            var students = new[] { "STU001", "STU002", "STU003", "STU004", "STU005" };
-            const string assignId = "ASGN-001";
-            var rnd = new Random(42);
-
-            // ── Group Activities ─────────────────────────────────────────────
-            // AutoScore per jenis aktivitas (digunakan juga untuk skor sistem)
-            var actAutoScore = new Dictionary<string, double>
-            {
-                ["Submit"]  = 10,
-                ["Edit"]    =  5,
-                ["Upload"]  =  8,
-                ["Comment"] =  3,
-                ["Review"]  =  4,
-            };
-
-            var actTypes = new[] { "Submit", "Edit", "Upload", "Comment", "Review" };
-            var descriptions = new Dictionary<string, string[]>
-            {
-                ["Submit"]  = new[] { "Mensubmit draft laporan", "Push kode implementasi", "Submit hasil akhir" },
-                ["Edit"]    = new[] { "Mengedit bagian pendahuluan", "Update diagram blok", "Revisi bab 3" },
-                ["Upload"]  = new[] { "Upload video demo", "Upload data percobaan", "Upload foto komponen" },
-                ["Comment"] = new[] { "Memberi komentar review", "Feedback diagram sistem", "Review kode teman" },
-                ["Review"]  = new[] { "Review laporan kelompok", "Cek hasil simulasi", "Verifikasi data" },
-            };
-            // Nama file demo untuk aktivitas Upload
-            var demoFiles = new[]
-            {
-                ("Laporan_PID_Control.pdf",   "laporan"),
-                ("Video_Demo_Simulasi.mp4",   "video"),
-                ("Data_Percobaan.xlsx",       "data"),
-                ("Diagram_Sistem.png",        "gambar"),
-                ("Kode_Kontroler.zip",        "arsip"),
-                ("Presentasi_Kelompok.pptx",  "presentasi"),
-                ("Hasil_Tuning_Parameter.pdf","laporan"),
-                ("Screenshot_Simulasi.png",   "gambar"),
-            };
-
-            foreach (var sid in students)
-            {
-                int actCount = rnd.Next(5, 13);
-                for (int i = 0; i < actCount; i++)
-                {
-                    var type = actTypes[rnd.Next(actTypes.Length)];
-                    var desc = descriptions[type][rnd.Next(descriptions[type].Length)];
-                    var act  = new GroupActivity
-                    {
-                        StudentId           = sid,
-                        StudentName         = GetDemoStudentName(sid),
-                        AssignmentId        = assignId,
-                        GroupId             = "GRP-01",
-                        ActivityType        = type,
-                        Description         = desc,
-                        ActivityTime        = DateTime.Now.AddHours(-rnd.Next(1, 80)),
-                        AutoScore           = actAutoScore[type],
-                        CountsToSystemScore = true,
-                    };
-                    // Untuk Upload: tambahkan nama file demo
-                    if (type == "Upload")
-                    {
-                        var (fn, _) = demoFiles[rnd.Next(demoFiles.Length)];
-                        act.FileName = fn;
-                        act.FilePath = $"C:\\Demo\\{sid}\\{fn}";   // path demo (tidak nyata)
-                        act.Description = $"Upload: {fn}";
-                    }
-                    _groupActivities.Add(act);
-                }
-            }
-
-            // ── System Evaluations — dihitung dari aktivitas nyata (bukan random) ──
-            foreach (var sid in students)
-                _systemEvaluations.Add(ComputeSystemScore(sid, assignId));
-
-            // ── Tuning Records ───────────────────────────────────────────────
-            // Setiap mahasiswa mencoba beberapa konfigurasi Kp/Ki/Kd
-            var tuningAttempts = new[]
-            {
-                // (Kp, Ki, Kd, RiseTime, Overshoot, Settling, SSE, QualityScore)
-                (1.2, 0.05, 0.01, 3.2, 18.5, 12.4, 2.1, 72.0),
-                (1.8, 0.08, 0.02, 2.8, 12.0,  9.6, 1.5, 84.0),
-                (2.5, 0.10, 0.05, 2.1,  8.0,  7.2, 0.8, 91.0),
-                (0.8, 0.03, 0.00, 4.8, 25.0, 18.0, 4.0, 52.0),
-                (1.5, 0.06, 0.03, 3.0, 15.0, 11.0, 1.8, 77.0),
-                (3.0, 0.12, 0.08, 1.8,  6.5,  6.0, 0.5, 95.0),
-            };
-            var plantTypes = new[] { "Flow", "Level", "Temperature" };
-
-            foreach (var sid in students)
-            {
-                int tuningCount = rnd.Next(2, 6);
-                var picked = tuningAttempts.OrderBy(_ => rnd.Next()).Take(tuningCount);
-                foreach (var (kp, ki, kd, rt, os, st, sse, qs) in picked)
-                {
-                    _tuningRecords.Add(new TuningRecord
-                    {
-                        StudentId    = sid,
-                        AssignmentId = assignId,
-                        PlantType    = plantTypes[rnd.Next(plantTypes.Length)],
-                        Kp           = kp + rnd.NextDouble() * 0.2 - 0.1,
-                        Ki           = ki + rnd.NextDouble() * 0.01 - 0.005,
-                        Kd           = kd + rnd.NextDouble() * 0.01 - 0.005,
-                        RiseTime         = rt   + rnd.NextDouble() * 0.4 - 0.2,
-                        Overshoot        = os   + rnd.NextDouble() * 3   - 1.5,
-                        SettlingTime     = st   + rnd.NextDouble() * 1   - 0.5,
-                        SteadyStateError = sse  + rnd.NextDouble() * 0.4 - 0.2,
-                        QualityScore     = Math.Clamp(qs + rnd.NextDouble() * 8 - 4, 0, 100),
-                        RecordedAt   = DateTime.Now.AddHours(-rnd.Next(2, 70)),
-                    });
-                }
-            }
-
-            // ── AI Usage Records ─────────────────────────────────────────────
-            var aiTopics = new[]
-            {
-                "Cara tuning PID untuk sistem Flow Control",
-                "Penjelasan rise time dan overshoot",
-                "Perbedaan kontroler P, PI, PID",
-                "Cara menganalisis respons step",
-                "Metode Ziegler-Nichols untuk tuning PID",
-                "Kenapa steady-state error tidak nol pada kontroler P?",
-                "Cara membaca grafik respons transien",
-                "Apa itu stability margin?",
-            };
-            var aiProviders = new[] { "DeepSeek", "Claude", "GPT-4o" };
-
-            foreach (var sid in students)
-            {
-                int sessionCount = rnd.Next(1, 6);
-                for (int i = 0; i < sessionCount; i++)
-                {
-                    bool productive = rnd.NextDouble() > 0.25;
-                    _aiUsageRecords.Add(new AiUsageRecord
-                    {
-                        StudentId    = sid,
-                        AssignmentId = assignId,
-                        Topic        = aiTopics[rnd.Next(aiTopics.Length)],
-                        MessageCount = rnd.Next(2, 12),
-                        IsProductive = productive,
-                        AiProvider   = aiProviders[rnd.Next(aiProviders.Length)],
-                        SessionAt    = DateTime.Now.AddHours(-rnd.Next(1, 96)),
-                    });
-                }
-            }
-
-            // ── Simulation Results ───────────────────────────────────────────
-            var sessions = new[]
-            {
-                ("PID Control — Sesi 1",      6, 8, 0.85, -48),
-                ("Heat Exchanger Simulation",  4, 6, 0.72, -72),
-                ("PID Control — Sesi 2",      7, 8, 0.91, -24),
-                ("Level Control",             5, 6, 0.78, -96),
-                ("Pressure Control",          3, 6, 0.60, -120),
-            };
-
-            foreach (var sid in students)
-            {
-                int sessCount = rnd.Next(1, 4);
-                var picked = sessions.OrderBy(_ => rnd.Next()).Take(sessCount);
-                foreach (var (name, hit, total, stab, hoursAgo) in picked)
-                {
-                    var start = DateTime.Now.AddHours(hoursAgo + rnd.Next(-4, 4));
-                    int durMin = rnd.Next(18, 55);
-                    double score = 55 + rnd.NextDouble() * 40;
-                    _simulationResults.Add(new SimulationResult
-                    {
-                        StudentId      = sid,
-                        StudentName    = GetDemoStudentName(sid),
-                        SessionName    = name,
-                        AssignmentId   = assignId,
-                        StartedAt      = start,
-                        FinishedAt     = start.AddMinutes(durMin),
-                        Score          = score,
-                        ParametersHit  = hit,
-                        ParametersTotal = total,
-                        StabilityIndex = stab + rnd.NextDouble() * 0.08 - 0.04,
-                    });
-                }
-            }
-
-            // ── Peer Evaluations (sebagian sudah ada) ────────────────────────
-            // STU001 menilai STU002, STU003
-            _peerEvaluations.Add(new PeerEvaluation
-            {
-                EvaluatorId = "STU001", EvaluatorName = GetDemoStudentName("STU001"),
-                EvaluateeId = "STU002", EvaluateeName = GetDemoStudentName("STU002"),
-                AssignmentId = assignId, AssignmentTitle = "Tugas Kelompok - Sistem Kontrol PID",
-                GroupId = "GRP-01",
-                CriteriaContribution = 80, CriteriaCooperation = 85,
-                CriteriaResponsibility = 75, CriteriaCreativity = 78,
-                Comment = "Aktif berkontribusi, komunikasi baik.",
-                EvaluatedAt = DateTime.Now.AddHours(-5),
-            });
-            _peerEvaluations.Add(new PeerEvaluation
-            {
-                EvaluatorId = "STU001", EvaluatorName = GetDemoStudentName("STU001"),
-                EvaluateeId = "STU003", EvaluateeName = GetDemoStudentName("STU003"),
-                AssignmentId = assignId, AssignmentTitle = "Tugas Kelompok - Sistem Kontrol PID",
-                GroupId = "GRP-01",
-                CriteriaContribution = 70, CriteriaCooperation = 65,
-                CriteriaResponsibility = 72, CriteriaCreativity = 68,
-                Comment = "Perlu lebih aktif dalam diskusi.",
-                EvaluatedAt = DateTime.Now.AddHours(-4),
-            });
-
-            // STU002 menilai STU001
-            _peerEvaluations.Add(new PeerEvaluation
-            {
-                EvaluatorId = "STU002", EvaluatorName = GetDemoStudentName("STU002"),
-                EvaluateeId = "STU001", EvaluateeName = GetDemoStudentName("STU001"),
-                AssignmentId = assignId, AssignmentTitle = "Tugas Kelompok - Sistem Kontrol PID",
-                GroupId = "GRP-01",
-                CriteriaContribution = 90, CriteriaCooperation = 88,
-                CriteriaResponsibility = 92, CriteriaCreativity = 85,
-                Comment = "Pemimpin kelompok yang baik, sangat aktif.",
-                EvaluatedAt = DateTime.Now.AddHours(-3),
-            });
-        }
+            StudentDirectory.GetName(id);
     }
 }

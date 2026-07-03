@@ -732,7 +732,8 @@
                     PointerReleased="HSplitter_PointerReleased"
                     PointerCaptureLost="HSplitter_PointerCaptureLost"/>
 
-            <!-- Bottom section: Learning Analytic -->
+            <!-- Bottom section: Learning Analytic — students see progress
+                 tracking; Server/staff see the Challenge Learning manager -->
             <Border Grid.Row="3"
                     Margin="8,4,8,8"
                     Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
@@ -765,7 +766,8 @@
                         </Grid>
                     </Border>
 
-                    <controls:LearningAnalyticView Grid.Row="1" Margin="0,0,0,6"/>
+                    <controls:LearningAnalyticView x:Name="DashLearningView" Grid.Row="1" Margin="0,0,0,6"/>
+                    <Frame x:Name="DashChallengeFrame" Grid.Row="1" Margin="0,0,0,6" Visibility="Collapsed"/>
                 </Grid>
             </Border>
         </Grid>

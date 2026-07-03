@@ -101,21 +101,11 @@ public sealed class LocalizationManager : INotifyPropertyChanged
     public string Ui_SwitchToDark   => T(nameof(Ui_SwitchToDark));
     public string Ui_ChangeLanguage => T(nameof(Ui_ChangeLanguage));
 
-    // ── Caption-bar OPC UA picker ─────────────────────────────────────────
+    // ── Caption-bar PLC (TCP → LabVIEW HMI) picker ────────────────────────
     public string Ui_OpcUaConnection  => T(nameof(Ui_OpcUaConnection));
-    public string Ui_OpcUaEndpoint    => T(nameof(Ui_OpcUaEndpoint));
-    public string Ui_OpcUaSecurity    => T(nameof(Ui_OpcUaSecurity));
-    public string Ui_OpcUaAuth        => T(nameof(Ui_OpcUaAuth));
-    public string Ui_OpcUaAnonymous   => T(nameof(Ui_OpcUaAnonymous));
-    public string Ui_OpcUaUsernameAuth=> T(nameof(Ui_OpcUaUsernameAuth));
-    public string Ui_OpcUaUsername    => T(nameof(Ui_OpcUaUsername));
-    public string Ui_OpcUaPassword    => T(nameof(Ui_OpcUaPassword));
-    public string Ui_OpcUaSecNone       => T(nameof(Ui_OpcUaSecNone));
-    public string Ui_OpcUaSecSign       => T(nameof(Ui_OpcUaSecSign));
-    public string Ui_OpcUaSecSignEnc    => T(nameof(Ui_OpcUaSecSignEnc));
-    public string Ui_OpcUaOpenCertFolder  => T(nameof(Ui_OpcUaOpenCertFolder));
-    public string Ui_OpcProtocol          => T(nameof(Ui_OpcProtocol));
-    public string Ui_OpcDaProgId          => T(nameof(Ui_OpcDaProgId));
+    public string Ui_PlcTcpHint       => T(nameof(Ui_PlcTcpHint));
+    public string Ui_PlcTcpHost       => T(nameof(Ui_PlcTcpHost));
+    public string Ui_PlcTcpPort       => T(nameof(Ui_PlcTcpPort));
 
     // ── Alert history ─────────────────────────────────────────────────────
     public string Ui_AlertHistory   => T(nameof(Ui_AlertHistory));
@@ -753,20 +743,10 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             [nameof(Ui_SwitchToLight)] = "Switch to Light mode",
             [nameof(Ui_SwitchToDark)]  = "Switch to Dark mode",
             [nameof(Ui_ChangeLanguage)] = "Change language",
-            [nameof(Ui_OpcUaConnection)]  = "OPC UA Connection",
-            [nameof(Ui_OpcUaEndpoint)]    = "Endpoint URL",
-            [nameof(Ui_OpcUaSecurity)]    = "Security Mode",
-            [nameof(Ui_OpcUaAuth)]        = "Authentication",
-            [nameof(Ui_OpcUaAnonymous)]   = "Anonymous",
-            [nameof(Ui_OpcUaUsernameAuth)]= "Username / Password",
-            [nameof(Ui_OpcUaUsername)]    = "Username",
-            [nameof(Ui_OpcUaPassword)]    = "Password",
-            [nameof(Ui_OpcUaSecNone)]        = "None (No Security)",
-            [nameof(Ui_OpcUaSecSign)]        = "Sign",
-            [nameof(Ui_OpcUaSecSignEnc)]     = "Sign & Encrypt",
-            [nameof(Ui_OpcUaOpenCertFolder)] = "Open Certificate Folder",
-            [nameof(Ui_OpcProtocol)]         = "Protocol",
-            [nameof(Ui_OpcDaProgId)]         = "Server ProgID",
+            [nameof(Ui_OpcUaConnection)]  = "PLC Connection (TCP)",
+            [nameof(Ui_PlcTcpHint)]       = "Connects directly to the LabVIEW HMI over TCP; LabVIEW bridges reads/writes to the PLC.",
+            [nameof(Ui_PlcTcpHost)]       = "Host / IP address (LabVIEW HMI)",
+            [nameof(Ui_PlcTcpPort)]       = "TCP Port",
             ["OpcDa_ServerNotRunning"]       = "OPC DA server state: {0} (not running)",
             ["Ui_ServerOpcDaNotConnected"]   = "OPC DA: NOT CONNECTED",
             [nameof(Ui_AlertHistory)]   = "Alert History",
@@ -1346,20 +1326,10 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             [nameof(Ui_SwitchToLight)] = "Beralih ke Mode Terang",
             [nameof(Ui_SwitchToDark)]  = "Beralih ke Mode Gelap",
             [nameof(Ui_ChangeLanguage)] = "Ubah bahasa",
-            [nameof(Ui_OpcUaConnection)]  = "Koneksi OPC UA",
-            [nameof(Ui_OpcUaEndpoint)]    = "URL Endpoint",
-            [nameof(Ui_OpcUaSecurity)]    = "Mode Keamanan",
-            [nameof(Ui_OpcUaAuth)]        = "Autentikasi",
-            [nameof(Ui_OpcUaAnonymous)]   = "Anonim",
-            [nameof(Ui_OpcUaUsernameAuth)]= "Nama Pengguna / Kata Sandi",
-            [nameof(Ui_OpcUaUsername)]    = "Nama Pengguna",
-            [nameof(Ui_OpcUaPassword)]    = "Kata Sandi",
-            [nameof(Ui_OpcUaSecNone)]        = "Tidak Ada (Tanpa Keamanan)",
-            [nameof(Ui_OpcUaSecSign)]        = "Tanda Tangan",
-            [nameof(Ui_OpcUaSecSignEnc)]     = "Tanda Tangan & Enkripsi",
-            [nameof(Ui_OpcUaOpenCertFolder)] = "Buka Folder Sertifikat",
-            [nameof(Ui_OpcProtocol)]         = "Protokol",
-            [nameof(Ui_OpcDaProgId)]         = "ProgID Server",
+            [nameof(Ui_OpcUaConnection)]  = "Koneksi PLC (TCP)",
+            [nameof(Ui_PlcTcpHint)]       = "Terhubung langsung ke HMI LabVIEW melalui TCP; LabVIEW meneruskan baca/tulis ke PLC.",
+            [nameof(Ui_PlcTcpHost)]       = "Host / Alamat IP (HMI LabVIEW)",
+            [nameof(Ui_PlcTcpPort)]       = "Port TCP",
             ["OpcDa_ServerNotRunning"]       = "Status server OPC DA: {0} (tidak berjalan)",
             ["Ui_ServerOpcDaNotConnected"]   = "OPC DA: TIDAK TERHUBUNG",
             [nameof(Ui_AlertHistory)]   = "Riwayat Alert",
@@ -1938,8 +1908,8 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             ["Ui_SourceNotConnected"] = "SOURCE: NOT CONNECTED",
             ["Ui_SourceConnected"] = "SOURCE: {0} @ {1}",
             ["Ui_InitialConnectionHint"] = "Not connected - open Control Panel to connect to the server",
-            ["Ui_ServerOpcNotConnected"] = "OPC UA: NOT CONNECTED",
-            ["Ui_ServerOpcHint"] = "OPC UA not connected — open the connection flyout to connect to a PLC/OPC UA server",
+            ["Ui_ServerOpcNotConnected"] = "PLC: NOT CONNECTED",
+            ["Ui_ServerOpcHint"] = "PLC not connected — open the connection flyout to connect to the LabVIEW HMI over TCP",
             ["Ui_ClientNotConnected"] = "SERVER: NOT CONNECTED",
             ["Ui_ClientNotConnectedHint"] = "Not connected to TLIG Dashboard Server — open the connection flyout and enter the server address",
             ["Ui_ClientConnected"] = "SERVER: {0}",
@@ -2080,8 +2050,8 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             ["Ui_SourceNotConnected"] = "SUMBER: TIDAK TERHUBUNG",
             ["Ui_SourceConnected"] = "SUMBER: {0} @ {1}",
             ["Ui_InitialConnectionHint"] = "Tidak terhubung - buka Panel Kontrol untuk terhubung ke server",
-            ["Ui_ServerOpcNotConnected"] = "OPC UA: TIDAK TERHUBUNG",
-            ["Ui_ServerOpcHint"] = "OPC UA belum terhubung — buka flyout koneksi untuk menyambung ke PLC/server OPC UA",
+            ["Ui_ServerOpcNotConnected"] = "PLC: TIDAK TERHUBUNG",
+            ["Ui_ServerOpcHint"] = "PLC belum terhubung — buka flyout koneksi untuk menyambung ke HMI LabVIEW melalui TCP",
             ["Ui_ClientNotConnected"] = "SERVER: TIDAK TERHUBUNG",
             ["Ui_ClientNotConnectedHint"] = "Belum terhubung ke TLIG Dashboard Server — buka flyout koneksi dan masukkan alamat server",
             ["Ui_ClientConnected"] = "SERVER: {0}",
