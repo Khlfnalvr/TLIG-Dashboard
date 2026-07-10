@@ -8,18 +8,22 @@ using TLIGDashboard.Models;
 namespace TLIGDashboard.Services;
 
 /// <summary>
-/// Streaming AI chat client supporting two wire protocols (see <see cref="AiProtocols"/>):
+/// Streaming AI chat client supporting three wire protocols (see <see cref="AiProtocols"/>):
 ///
 /// <list type="bullet">
 /// <item><b>openai</b> — DeepSeek, OpenAI, Ollama, and the server's own <c>/ai</c> proxy.
 ///   POSTs to <c>{ApiUrl}/chat/completions</c>, Bearer auth, <c>choices[].delta.content</c> SSE.</item>
 /// <item><b>anthropic</b> — Anthropic Messages API. POSTs to <c>{ApiUrl}/v1/messages</c>,
 ///   <c>x-api-key</c> auth, system prompt as a top-level field, <c>content_block_delta</c> SSE.</item>
+/// <item><b>gemini</b> — Google Generative Language API. POSTs to
+///   <c>{ApiUrl}/v1beta/models/{Model}:streamGenerateContent</c> (model in the URL, not the
+///   body), <c>x-goog-api-key</c> auth, <c>contents[].parts[].text</c> body with a top-level
+///   <c>systemInstruction</c>, <c>candidates[].content.parts[].text</c> SSE.</item>
 /// </list>
 ///
 /// On the client flavor the service always speaks <b>openai</b> to the server proxy;
-/// the server does any Anthropic translation. On the server flavor the protocol is
-/// the active provider's protocol.
+/// the server does any Anthropic/Gemini translation. On the server flavor the protocol
+/// is the active provider's protocol.
 /// </summary>
 public sealed class AiService : IDisposable
 {
@@ -48,11 +52,16 @@ public sealed class AiService : IDisposable
     private readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(120) };
 
     private bool IsAnthropic => Protocol == AiProtocols.Anthropic;
+    private bool IsGemini    => Protocol == AiProtocols.Gemini;
 
     // ── Endpoint per protocol ──────────────────────────────────────────────────
-    private string Endpoint() => IsAnthropic
-        ? $"{ApiUrl.TrimEnd('/')}/v1/messages"
-        : $"{ApiUrl.TrimEnd('/')}/chat/completions";
+    // Gemini embeds the model in the URL path rather than the request body.
+    private string Endpoint() => Protocol switch
+    {
+        AiProtocols.Anthropic => $"{ApiUrl.TrimEnd('/')}/v1/messages",
+        AiProtocols.Gemini    => $"{ApiUrl.TrimEnd('/')}/v1beta/models/{Model}:streamGenerateContent?alt=sse",
+        _                     => $"{ApiUrl.TrimEnd('/')}/chat/completions",
+    };
 
     // ── Streaming chat (callback-based, no IAsyncEnumerable) ─────────────────
     /// <summary>
@@ -86,6 +95,10 @@ public sealed class AiService : IDisposable
         {
             request.Headers.TryAddWithoutValidation("x-api-key", ApiKey);
             request.Headers.TryAddWithoutValidation("anthropic-version", AnthropicVersion);
+        }
+        else if (IsGemini)
+        {
+            request.Headers.TryAddWithoutValidation("x-goog-api-key", ApiKey);
         }
         else
         {
@@ -121,7 +134,7 @@ public sealed class AiService : IDisposable
             if (!line.StartsWith("data: "))       continue;
 
             var data = line[6..].Trim();
-            if (data == "[DONE]") break;           // OpenAI sentinel (Anthropic ends on stream close)
+            if (data == "[DONE]") break;           // OpenAI sentinel (Anthropic/Gemini end on stream close)
 
             var token = ExtractToken(data);
             if (string.IsNullOrEmpty(token)) continue;
@@ -147,7 +160,12 @@ public sealed class AiService : IDisposable
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    private string BuildBody() => IsAnthropic ? BuildAnthropicBody() : BuildOpenAiBody();
+    private string BuildBody() => Protocol switch
+    {
+        AiProtocols.Anthropic => BuildAnthropicBody(),
+        AiProtocols.Gemini    => BuildGeminiBody(),
+        _                     => BuildOpenAiBody(),
+    };
 
     // NOTE: built with JsonObject/JsonArray (not JsonSerializer.Serialize(new {...})) —
     // the Release publish runs with reflection-based JSON serialization disabled
@@ -188,8 +206,38 @@ public sealed class AiService : IDisposable
         }.ToJsonString();
     }
 
-    private string? ExtractToken(string data) =>
-        IsAnthropic ? ExtractAnthropicToken(data) : ExtractOpenAiToken(data);
+    // Gemini: no system-role message and no "model" field in the body — the system
+    // prompt is a top-level systemInstruction and the model is already in the URL.
+    // Roles are "user"/"model" (not "assistant").
+    private string BuildGeminiBody()
+    {
+        var contents = new JsonArray();
+        foreach (var m in _history)
+            contents.Add(new JsonObject
+            {
+                ["role"]  = m.Role == "assistant" ? "model" : "user",
+                ["parts"] = new JsonArray { new JsonObject { ["text"] = m.Content } }
+            });
+
+        var body = new JsonObject
+        {
+            ["contents"]         = contents,
+            ["generationConfig"] = new JsonObject { ["maxOutputTokens"] = 4096, ["temperature"] = 0.7 }
+        };
+        if (!string.IsNullOrWhiteSpace(SystemPrompt))
+            body["systemInstruction"] = new JsonObject
+            {
+                ["parts"] = new JsonArray { new JsonObject { ["text"] = SystemPrompt } }
+            };
+        return body.ToJsonString();
+    }
+
+    private string? ExtractToken(string data) => Protocol switch
+    {
+        AiProtocols.Anthropic => ExtractAnthropicToken(data),
+        AiProtocols.Gemini    => ExtractGeminiToken(data),
+        _                     => ExtractOpenAiToken(data),
+    };
 
     private static string? ExtractOpenAiToken(string data)
     {
@@ -217,6 +265,21 @@ public sealed class AiService : IDisposable
             if (root.TryGetProperty("delta", out var delta) &&
                 delta.TryGetProperty("text", out var text))
                 return text.GetString();
+        }
+        catch { }
+        return null;
+    }
+
+    private static string? ExtractGeminiToken(string data)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(data);
+            var candidates = doc.RootElement.GetProperty("candidates");
+            if (candidates.GetArrayLength() == 0) return null;
+            var parts = candidates[0].GetProperty("content").GetProperty("parts");
+            if (parts.GetArrayLength() > 0 && parts[0].TryGetProperty("text", out var t))
+                return t.GetString();
         }
         catch { }
         return null;

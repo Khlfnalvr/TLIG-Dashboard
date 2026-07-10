@@ -335,6 +335,11 @@ public sealed class LocalizationManager : INotifyPropertyChanged
     public string Panel_SteadyErr        => T(nameof(Panel_SteadyErr));
     public string Panel_TransferFunction => T(nameof(Panel_TransferFunction));
 
+    // ── Smart PID Designer (manual tuning + diagnosis on the Dashboard) ──
+    public string Pid_RunHint        => T(nameof(Pid_RunHint));
+    public string Pid_DiagnosisTitle => T(nameof(Pid_DiagnosisTitle));
+    public string Pid_ErrorUnavailable => T(nameof(Pid_ErrorUnavailable));
+
     // ── Live view / HMI ──────────────────────────────────────────────────
     public string Live_Header      => T(nameof(Live_Header));
     public string Live_CamInfo     => T(nameof(Live_CamInfo));
@@ -521,7 +526,7 @@ public sealed class LocalizationManager : INotifyPropertyChanged
     public string Ai_Thinking      => T(nameof(Ai_Thinking));
     public string Ai_StopGen       => T(nameof(Ai_StopGen));
     public string Ai_ModelLabel    => T(nameof(Ai_ModelLabel));
-    // Multi-provider AI (DeepSeek / OpenAI / Anthropic)
+    // Multi-provider AI (DeepSeek / OpenAI / Anthropic / Gemini)
     public string Ai_ConfigTitle        => T(nameof(Ai_ConfigTitle));
     public string Ai_ConfigureProviders => T(nameof(Ai_ConfigureProviders));
     public string Ai_ProvidersHint      => T(nameof(Ai_ProvidersHint));
@@ -970,6 +975,10 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             [nameof(Panel_Settling)]         = "SETTLING",
             [nameof(Panel_SteadyErr)]        = "STEADY ERR",
             [nameof(Panel_TransferFunction)] = "TRANSFER FUNCTION",
+
+            [nameof(Pid_RunHint)]        = "Press RUN below to simulate the Kp/Ki/Kd values above.",
+            [nameof(Pid_DiagnosisTitle)] = "AI DIAGNOSIS",
+            [nameof(Pid_ErrorUnavailable)] = "PID design service unavailable — check your server connection.",
 
             [nameof(Ai_Title)]         = "AI ASSISTANT",
             [nameof(Ai_UserLabel)]     = "USER",
@@ -1563,6 +1572,10 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             [nameof(Panel_Settling)]         = "SETTLING",
             [nameof(Panel_SteadyErr)]        = "STEADY ERR",
             [nameof(Panel_TransferFunction)] = "FUNGSI TRANSFER",
+
+            [nameof(Pid_RunHint)]        = "Tekan RUN di bawah untuk mensimulasikan nilai Kp/Ki/Kd di atas.",
+            [nameof(Pid_DiagnosisTitle)] = "DIAGNOSIS AI",
+            [nameof(Pid_ErrorUnavailable)] = "Layanan desain PID tidak tersedia — periksa koneksi server Anda.",
 
             [nameof(Ai_Title)]         = "ASISTEN AI",
             [nameof(Ai_UserLabel)]     = "PENGGUNA",

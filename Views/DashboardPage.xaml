@@ -235,17 +235,25 @@
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="Kp" Style="{StaticResource DashTinyLabelStyle}" VerticalAlignment="Center"/>
-                                <NumberBox Grid.Column="1" Value="10" Minimum="0" SmallChange="1" SpinButtonPlacementMode="Compact" FontSize="11" Style="{StaticResource DashNumberBoxStyle}"/>
+                                <NumberBox x:Name="KpBox" Grid.Column="1" Value="1" Minimum="0" SmallChange="0.1" SpinButtonPlacementMode="Compact" FontSize="11" Style="{StaticResource DashNumberBoxStyle}"/>
                                 <TextBlock Grid.Column="2" Text="Ki" Style="{StaticResource DashTinyLabelStyle}" VerticalAlignment="Center"/>
-                                <NumberBox Grid.Column="3" Value="10" Minimum="0" SmallChange="1" SpinButtonPlacementMode="Compact" FontSize="11" Style="{StaticResource DashNumberBoxStyle}"/>
+                                <NumberBox x:Name="KiBox" Grid.Column="3" Value="0.1" Minimum="0" SmallChange="0.01" SpinButtonPlacementMode="Compact" FontSize="11" Style="{StaticResource DashNumberBoxStyle}"/>
                                 <TextBlock Grid.Column="4" Text="Kd" Style="{StaticResource DashTinyLabelStyle}" VerticalAlignment="Center"/>
-                                <NumberBox Grid.Column="5" Value="10" Minimum="0" SmallChange="1" SpinButtonPlacementMode="Compact" FontSize="11" Style="{StaticResource DashNumberBoxStyle}"/>
+                                <NumberBox x:Name="KdBox" Grid.Column="5" Value="0.01" Minimum="0" SmallChange="0.01" SpinButtonPlacementMode="Compact" FontSize="11" Style="{StaticResource DashNumberBoxStyle}"/>
                             </Grid>
+
+                            <TextBlock Text="{x:Bind Lang.Pid_RunHint, Mode=OneWay}"
+                                       Style="{StaticResource DashTinyLabelStyle}"
+                                       Opacity="0.65" TextWrapping="Wrap"/>
                         </StackPanel>
                     </Border>
 
-                    <!-- System Response -->
-                    <Border Style="{StaticResource DashCardStyle}" Height="142">
+                    <!-- System Response — the left panel is already inside a ScrollViewer
+                         (see Grid.Row="1" above), so a taller card here just means users
+                         scroll a bit further; it doesn't break the layout. 142px was only
+                         enough for the placeholder label — a real Chart.js line chart with
+                         axis titles needs more room or it renders squeezed/clipped. -->
+                    <Border Style="{StaticResource DashCardStyle}" Height="300">
                         <Grid RowSpacing="8">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto"/>
@@ -257,10 +265,8 @@
                             <Border Grid.Row="1"
                                     x:Name="ResponSistemChart"
                                     Style="{StaticResource DashInputBoxStyle}"
-                                    Padding="10">
-                                <TextBlock Text="{x:Bind Lang.Resp_Step, Mode=OneWay}"
-                                           Style="{StaticResource DashTinyLabelStyle}"
-                                           VerticalAlignment="Top"/>
+                                    Padding="2">
+                                <WebView2 x:Name="RespWebView" DefaultBackgroundColor="Transparent"/>
                             </Border>
                         </Grid>
                     </Border>
@@ -321,6 +327,17 @@
                         </Border>
                     </Grid>
 
+                    <!-- AI Diagnosis — multiclass classification of the current gains'
+                         actual response (SISTEM_SUDAH_IDEAL / TURUNKAN_KP_DAN_KI / dst.) -->
+                    <Border Style="{StaticResource DashCardStyle}" Padding="10,8">
+                        <StackPanel Spacing="7">
+                            <TextBlock Text="{x:Bind Lang.Pid_DiagnosisTitle, Mode=OneWay}" Style="{StaticResource DashCardTitleStyle}"/>
+                            <Border Style="{StaticResource DashInputBoxStyle}">
+                                <TextBlock x:Name="DiagnosisValue" Text="--" FontSize="11" HorizontalAlignment="Center"/>
+                            </Border>
+                        </StackPanel>
+                    </Border>
+
                     <!-- Transfer Function -->
                     <Border Style="{StaticResource DashCardStyle}" MinHeight="56">
                         <Grid RowSpacing="8">
@@ -332,8 +349,10 @@
                                        Text="{x:Bind Lang.Panel_TransferFunction, Mode=OneWay}"
                                        Style="{StaticResource DashCardTitleStyle}"/>
                             <Border Grid.Row="1" Style="{StaticResource DashInputBoxStyle}" Padding="10">
+                                <!-- Fixed plant the Smart PID Designer's local RK4 simulator models
+                                     (see PidSimulator.cs) — not tied to the System Model selector above. -->
                                 <TextBlock x:Name="TransferFunctionText"
-                                           Text="G(s) = K / (tau s + 1)"
+                                           Text="G(s) = 6.223 / (s² + 6.556s + 0.2516)"
                                            FontFamily="Consolas"
                                            FontSize="12"
                                            Opacity="0.72"
@@ -396,8 +415,10 @@
                                 </Border>
 
                                 <StackPanel Grid.Column="2" Width="106" Spacing="5" VerticalAlignment="Center">
-                                    <!-- RUN — green, inline Button.Resources overrides native visual states -->
-                                    <Button HorizontalAlignment="Stretch" FontSize="11">
+                                    <!-- RUN — green, inline Button.Resources overrides native visual states.
+                                         Doubles as the Smart PID Designer's "Simulate": runs the RK4 step-response
+                                         simulation using the current Kp/Ki/Kd boxes above. -->
+                                    <Button x:Name="CtlRunBtn" HorizontalAlignment="Stretch" FontSize="11" Click="CtlRun_Click">
                                         <Button.Resources>
                                             <SolidColorBrush x:Key="ButtonBackground"             Color="{ThemeResource SystemFillColorSuccess}"/>
                                             <SolidColorBrush x:Key="ButtonBackgroundPointerOver"  Color="{ThemeResource SystemFillColorSuccess}"/>

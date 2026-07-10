@@ -43,6 +43,7 @@ public static class ShareProtocol
     public const string TasksCompletePath      = "/tasks/complete";      // POST {id, completed}
     public const string ActivityPath           = "/activity";            // POST ActivityLog (client→server sync)
     public const string ChallengeSubmitPath    = "/challenge/submit";    // POST ChallengeSubmission (client→server)
+    public const string PidSimPath             = "/sim/pid";             // POST {Kp, Ki, Kd}
     public const string GuidWs            = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 
     /// <summary>Generates an opaque, high-entropy session token (URL-safe base64).</summary>
@@ -90,6 +91,10 @@ public sealed class ShareServer
     // validated by the WebSocket + AI proxy, revoked by /auth/logout and on Stop.
     private readonly ConcurrentDictionary<string, Session> _sessions = new();
     private sealed record Session(string Username, string DisplayName, string Role, DateTime IssuedUtc);
+
+    // Control Engineering Services
+    private readonly TLIGDashboard.Services.ControlEngineering.PidSimulator _pidSim = new();
+    private readonly TLIGDashboard.Services.ControlEngineering.PidDiagnosisAgent _pidDiagnosis = new();
 
     private string IssueSession(UserAccount user)
     {
@@ -241,6 +246,10 @@ public sealed class ShareServer
             {
                 await HandleChallengeSubmitSyncAsync(stream, headers, ct);
             }
+            else if (method == "POST" && path == ShareProtocol.PidSimPath)
+            {
+                await HandlePidSimulationAsync(stream, headers, ct);
+            }
             else if (method == "GET" && path == "/info")
             {
                 await WriteJsonAsync(stream, "{\"app\":\"TLIG Dashboard Server\"}", ct);
@@ -386,9 +395,9 @@ public sealed class ShareServer
 
     // ── AI proxy: resolve the chosen provider, inject its key, stream back ──────
     // The client always POSTs an OpenAI-shaped body. For OpenAI-protocol providers
-    // we forward it (overriding the model); for Anthropic we translate the request
-    // and translate the Anthropic SSE reply back into OpenAI SSE so the client's
-    // parser is unchanged.
+    // we forward it (overriding the model); for Anthropic/Gemini we translate the
+    // request and translate the upstream SSE reply back into OpenAI SSE so the
+    // client's parser is unchanged.
 
     private async Task HandleAiProxyAsync(
         NetworkStream stream, Dictionary<string, string> headers, CancellationToken ct)
@@ -418,12 +427,20 @@ public sealed class ShareServer
 
         string model       = ResolveModel(body, config, settings, info);
         bool   isAnthropic = info.Protocol == AiProtocols.Anthropic;
-        string providerUrl = isAnthropic
-            ? $"{info.BaseUrl.TrimEnd('/')}/v1/messages"
-            : $"{info.BaseUrl.TrimEnd('/')}/chat/completions";
-        string forwardBody = isAnthropic
-            ? OpenAiToAnthropicBody(body, model)
-            : OverrideModel(body, model);
+        bool   isGemini    = info.Protocol == AiProtocols.Gemini;
+        string providerUrl = info.Protocol switch
+        {
+            AiProtocols.Anthropic => $"{info.BaseUrl.TrimEnd('/')}/v1/messages",
+            // Gemini takes the model in the URL path, not the request body.
+            AiProtocols.Gemini    => $"{info.BaseUrl.TrimEnd('/')}/v1beta/models/{model}:streamGenerateContent?alt=sse",
+            _                     => $"{info.BaseUrl.TrimEnd('/')}/chat/completions",
+        };
+        string forwardBody = info.Protocol switch
+        {
+            AiProtocols.Anthropic => OpenAiToAnthropicBody(body, model),
+            AiProtocols.Gemini    => OpenAiToGeminiBody(body),
+            _                     => OverrideModel(body, model),
+        };
 
         using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(120) };
         using var req  = new HttpRequestMessage(HttpMethod.Post, providerUrl)
@@ -435,6 +452,10 @@ public sealed class ShareServer
         {
             req.Headers.TryAddWithoutValidation("x-api-key", config.ApiKey);
             req.Headers.TryAddWithoutValidation("anthropic-version", "2023-06-01");
+        }
+        else if (isGemini)
+        {
+            req.Headers.TryAddWithoutValidation("x-goog-api-key", config.ApiKey);
         }
         else
         {
@@ -475,6 +496,8 @@ public sealed class ShareServer
             await using var upstream = await resp.Content.ReadAsStreamAsync(ct);
             if (isAnthropic)
                 await RelayAnthropicAsOpenAiAsync(upstream, stream, ct);
+            else if (isGemini)
+                await RelayGeminiAsOpenAiAsync(upstream, stream, ct);
             else
                 await RelayRawChunkedAsync(upstream, stream, ct);
 
@@ -519,6 +542,44 @@ public sealed class ShareServer
                 var node = JsonNode.Parse(data);
                 if ((string?)node?["type"] == "content_block_delta")
                     text = (string?)node?["delta"]?["text"];
+            }
+            catch { }
+
+            if (string.IsNullOrEmpty(text)) continue;
+
+            var chunk = new JsonObject
+            {
+                ["choices"] = new JsonArray
+                {
+                    new JsonObject { ["index"] = 0, ["delta"] = new JsonObject { ["content"] = text } }
+                }
+            }.ToJsonString();
+
+            await WriteSseChunkAsync(stream, $"data: {chunk}\n\n", ct);
+        }
+        await WriteSseChunkAsync(stream, "data: [DONE]\n\n", ct);
+    }
+
+    /// <summary>
+    /// Translates a Gemini <c>streamGenerateContent</c> SSE stream into OpenAI
+    /// chat-completion SSE (<c>choices[].delta.content</c> + a terminal <c>[DONE]</c>)
+    /// so the client's OpenAI parser handles it without knowing the provider.
+    /// </summary>
+    private static async Task RelayGeminiAsOpenAiAsync(Stream upstream, NetworkStream stream, CancellationToken ct)
+    {
+        using var reader = new StreamReader(upstream);
+        string? line;
+        while ((line = await reader.ReadLineAsync(ct)) != null)
+        {
+            if (!line.StartsWith("data: ")) continue;
+            var data = line[6..].Trim();
+            if (data.Length == 0) continue;
+
+            string? text = null;
+            try
+            {
+                var node = JsonNode.Parse(data);
+                text = (string?)node?["candidates"]?[0]?["content"]?["parts"]?[0]?["text"];
             }
             catch { }
 
@@ -611,6 +672,55 @@ public sealed class ShareServer
             ["messages"]   = outMsgs,
         };
         if (system.Length > 0) body["system"] = system.ToString();
+        return body.ToJsonString();
+    }
+
+    // Gemini: no "model" field (it's in the URL), no system-role message — the
+    // system prompt becomes a top-level systemInstruction, roles are "user"/"model".
+    private static string OpenAiToGeminiBody(string openAiBody)
+    {
+        var system    = new StringBuilder();
+        var contents  = new JsonArray();
+        int maxTokens = 4096;
+
+        try
+        {
+            var node = JsonNode.Parse(openAiBody)?.AsObject();
+            if ((int?)node?["max_tokens"] is int mi && mi > 0) maxTokens = mi;
+            if (node?["messages"] is JsonArray msgs)
+            {
+                foreach (var m in msgs)
+                {
+                    var role    = (string?)m?["role"]    ?? "";
+                    var content = (string?)m?["content"] ?? "";
+                    if (role == "system")
+                    {
+                        if (system.Length > 0) system.Append("\n\n");
+                        system.Append(content);
+                    }
+                    else if (role is "user" or "assistant")
+                    {
+                        contents.Add(new JsonObject
+                        {
+                            ["role"]  = role == "assistant" ? "model" : "user",
+                            ["parts"] = new JsonArray { new JsonObject { ["text"] = content } }
+                        });
+                    }
+                }
+            }
+        }
+        catch { }
+
+        var body = new JsonObject
+        {
+            ["contents"]         = contents,
+            ["generationConfig"] = new JsonObject { ["maxOutputTokens"] = maxTokens }
+        };
+        if (system.Length > 0)
+            body["systemInstruction"] = new JsonObject
+            {
+                ["parts"] = new JsonArray { new JsonObject { ["text"] = system.ToString() } }
+            };
         return body.ToJsonString();
     }
 
@@ -922,7 +1032,7 @@ public sealed class ShareServer
             await WriteSimpleAsync(stream, "401 Unauthorized", "text/plain", "Invalid or expired session", ct);
             return;
         }
-
+        
         var body = await ReadBodyAsync(stream, headers, ct);
         try
         {
@@ -954,11 +1064,81 @@ public sealed class ShareServer
             }
         }
         catch { }
-
+        
         await WriteJsonAsync(stream, "{\"ok\":true}", ct);
     }
 
+    private async Task HandlePidSimulationAsync(NetworkStream stream, Dictionary<string, string> headers, CancellationToken ct)
+    {
+        var session = GetSession(BearerToken(headers));
+        if (session is null)
+        {
+            await WriteSimpleAsync(stream, "401 Unauthorized", "text/plain", "Invalid or expired session", ct);
+            return;
+        }
+
+        var body = await ReadBodyAsync(stream, headers, ct);
+        try
+        {
+            var input = System.Text.Json.JsonSerializer.Deserialize<TLIGDashboard.Models.ControlEngineering.PidInput>(body);
+            if (input == null) throw new Exception("Invalid input");
+
+            var finalPid = new TLIGDashboard.Models.ControlEngineering.PidPrediction
+            {
+                Kp = input.Kp,
+                Ki = input.Ki,
+                Kd = input.Kd
+            };
+
+            // CPU-bound: Simulation
+            var simResult = await Task.Run(() => _pidSim.SimulateStepResponse(finalPid), ct);
+
+            // Diagnose the resulting response (local classifier, async, no external quota).
+            var diagnosis = await Task.Run(() =>
+            {
+                var (rise, overshootPct, settling, steadyErrPct) =
+                    TLIGDashboard.Services.ControlEngineering.PidSimulator.ComputeStepMetrics(simResult.Time, simResult.Amplitude);
+                bool stable = TLIGDashboard.Services.ControlEngineering.PidSimulator.IsResponseStable(simResult.Amplitude);
+                return _pidDiagnosis.Predict(new TLIGDashboard.Models.ControlEngineering.PidDiagnosisInput
+                {
+                    Kp_Saat_Ini        = finalPid.Kp,
+                    Ki_Saat_Ini        = finalPid.Ki,
+                    Kd_Saat_Ini        = finalPid.Kd,
+                    Overshoot_Riil     = (float)overshootPct,
+                    RiseTime_Riil      = (float)rise,
+                    SettlingTime_Riil  = (float)settling,
+                    SteadyStateError   = (float)(steadyErrPct / 100.0),
+                    Is_Stable          = stable ? 1f : 0f,
+                }).Rekomendasi_Aksi;
+            }, ct);
+
+            var response = new JsonObject
+            {
+                ["prediction"] = new JsonObject
+                {
+                    ["Kp"] = finalPid.Kp,
+                    ["Ki"] = finalPid.Ki,
+                    ["Kd"] = finalPid.Kd
+                },
+                ["simulation"] = new JsonObject
+                {
+                    ["time"] = new JsonArray(simResult.Time.Select(t => (JsonNode)t).ToArray()),
+                    ["amplitude"] = new JsonArray(simResult.Amplitude.Select(a => (JsonNode)a).ToArray())
+                },
+                ["diagnosis"] = diagnosis
+            };
+
+            await WriteJsonAsync(stream, response.ToJsonString(), ct);
+        }
+        catch (Exception ex)
+        {
+            await WriteSimpleAsync(stream, "400 Bad Request", "application/json", 
+                new JsonObject { ["error"] = ex.Message }.ToJsonString(), ct);
+        }
+    }
+
     // ── HTTP parsing helpers ──────────────────────────────────────────────────
+
 
     private static string? GetTokenQuery(string rawPath)
     {

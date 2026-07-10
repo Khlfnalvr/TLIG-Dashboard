@@ -2,16 +2,19 @@ namespace TLIGDashboard.Services;
 
 /// <summary>
 /// Wire protocol an AI provider speaks. DeepSeek and OpenAI use the OpenAI
-/// chat-completions shape; Anthropic uses the Messages API (different endpoint,
-/// auth header, body shape, and SSE event format). <see cref="AiService"/> and the
-/// server proxy branch on these constants.
+/// chat-completions shape; Anthropic uses the Messages API; Gemini uses Google's
+/// Generative Language API (model in the URL path, <c>contents</c>/<c>parts</c>
+/// body shape, <c>candidates[].content.parts[].text</c> SSE). Each has a different
+/// endpoint, auth header, body shape, and SSE event format — <see cref="AiService"/>
+/// and the server proxy branch on these constants.
 /// </summary>
 public static class AiProtocols
 {
     public const string OpenAi    = "openai";
     public const string Anthropic = "anthropic";
+    public const string Gemini    = "gemini";
 
-    public static bool IsValid(string? p) => p is OpenAi or Anthropic;
+    public static bool IsValid(string? p) => p is OpenAi or Anthropic or Gemini;
 }
 
 /// <summary>
@@ -37,6 +40,7 @@ public static class AiProviders
     public const string DeepSeek  = "deepseek";
     public const string OpenAi    = "openai";
     public const string Anthropic = "anthropic";
+    public const string Gemini    = "gemini";
 
     public static readonly IReadOnlyList<AiProviderInfo> All = new[]
     {
@@ -51,6 +55,10 @@ public static class AiProviders
         new AiProviderInfo(
             Anthropic, "Anthropic", "https://api.anthropic.com", AiProtocols.Anthropic,
             new[] { "claude-opus-4-8", "claude-sonnet-4-6", "claude-haiku-4-5-20251001" }, "sk-ant-..."),
+
+        new AiProviderInfo(
+            Gemini, "Gemini", "https://generativelanguage.googleapis.com", AiProtocols.Gemini,
+            new[] { "gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.0-flash" }, "AIza..."),
     };
 
     public static AiProviderInfo? Find(string? id) =>

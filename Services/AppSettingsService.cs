@@ -91,6 +91,7 @@ public class AppSettings
     public bool   ShowNav_LiveView       { get; set; } = true;
     public bool   ShowNav_LearningAnalytic { get; set; } = true;
     public bool   ShowNav_AI             { get; set; } = true;
+    public bool   ShowNav_ControlEngineering { get; set; } = true;
 
     // UI zoom level (1.0 = 100%). Adjusted via the Zoom menu / Ctrl +/-/0.
     public double ZoomLevel              { get; set; } = 1.0;

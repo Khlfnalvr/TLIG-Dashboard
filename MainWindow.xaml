@@ -522,7 +522,7 @@
                                             Spacing="10"
                                             Visibility="Collapsed">
 
-                                    <!-- Multi-provider config (DeepSeek / OpenAI / Anthropic) -->
+                                    <!-- Multi-provider config (DeepSeek / OpenAI / Anthropic / Gemini) -->
                                     <TextBlock Text="{x:Bind Lang.Ai_ProvidersHint, Mode=OneWay}"
                                                FontSize="11" Opacity="0.65"
                                                TextWrapping="Wrap"/>

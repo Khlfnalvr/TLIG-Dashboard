@@ -7,7 +7,9 @@ using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
 using TLIGDashboard.Helpers;
+using TLIGDashboard.Models.ControlEngineering;
 using TLIGDashboard.Services;
+using TLIGDashboard.Services.ControlEngineering;
 using Windows.Devices.Enumeration;
 using Windows.Media.Capture;
 using Windows.Media.Capture.Frames;
@@ -84,6 +86,8 @@ public sealed partial class DashboardPage : Page
         // Subscribe to simulation type changes so all HMI labels update.
         App.SimType.SimulationTypeChanged += OnSimulationTypeChanged;
         ApplySimulationType(App.SimType.CurrentType);
+
+        _ = InitializePidChartAsync();
     }
 
     private void OnSimulationTypeChanged(object? sender, Services.SimulationType type)
@@ -98,8 +102,116 @@ public sealed partial class DashboardPage : Page
         // Control panel label + unit
         if (CtlSetpointLabel != null) CtlSetpointLabel.Text = svc.SetpointLabel;
         if (CtlSetpointUnit  != null) CtlSetpointUnit.Text  = svc.ProcessVariableUnit;
-        // Transfer function with actual K and tau
-        if (TransferFunctionText != null) TransferFunctionText.Text = svc.TransferFunctionText;
+        // NOTE: TransferFunctionText is intentionally NOT updated here — that card now
+        // shows the Smart PID Designer's fixed plant (see PidSimulator.cs), not the
+        // selected System Model's own transfer function.
+    }
+
+    // ── Smart PID Designer (AI-assisted tuning + RK4 step-response chart) ──
+    private bool _pidChartReady;
+
+    private async Task InitializePidChartAsync()
+    {
+        await RespWebView.EnsureCoreWebView2Async();
+        const string html = """
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+            <style>
+                body { margin: 0; padding: 4px; background: transparent; overflow: hidden; font-family: sans-serif; }
+                canvas { width: 100% !important; height: 100% !important; }
+            </style>
+        </head>
+        <body>
+            <canvas id="pidChart"></canvas>
+            <script>
+                let chart;
+                function updateChart(time, amp) {
+                    const ctx = document.getElementById('pidChart').getContext('2d');
+                    if (chart) chart.destroy();
+                    chart = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: time,
+                            datasets: [{
+                                label: 'Step Response',
+                                data: amp,
+                                borderColor: 'rgb(75, 192, 192)',
+                                tension: 0.1,
+                                pointRadius: 0
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            animation: false,
+                            plugins: { legend: { display: false } },
+                            scales: {
+                                x: { ticks: { maxTicksLimit: 6 }, title: { display: true, text: 'Time (s)', font: { size: 9 } } },
+                                y: { title: { display: true, text: 'Amplitude', font: { size: 9 } } }
+                            }
+                        }
+                    });
+                }
+            </script>
+        </body>
+        </html>
+        """;
+        RespWebView.NavigateToString(html);
+        _pidChartReady = true;
+    }
+
+    // RUN in the Control card is the PID Designer's "Simulate": it runs the RK4
+    // step-response preview for the Kp/Ki/Kd values currently in the boxes above,
+    // then asks PidDiagnosisAgent for a corrective-action recommendation.
+    private async void CtlRun_Click(object sender, RoutedEventArgs e)
+    {
+        var input = new PidInput
+        {
+            Kp = (float)KpBox.Value,
+            Ki = (float)KiBox.Value,
+            Kd = (float)KdBox.Value,
+        };
+
+        CtlRunBtn.IsEnabled = false;
+        try
+        {
+            var result = await PidDesignService.RunAsync(input);
+            if (result is null)
+            {
+                AddChatBubble("ai", Lang.Pid_ErrorUnavailable);
+                ScrollChat();
+                return;
+            }
+
+            RenderPidResult(result);
+        }
+        finally
+        {
+            CtlRunBtn.IsEnabled = true;
+        }
+    }
+
+    private void RenderPidResult(PidDesignResult result)
+    {
+        if (_pidChartReady)
+        {
+            string timeJson = "[" + string.Join(',', result.Simulation.Time.Select(
+                t => t.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture))) + "]";
+            string ampJson = "[" + string.Join(',', result.Simulation.Amplitude.Select(
+                a => a.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture))) + "]";
+            _ = RespWebView.ExecuteScriptAsync($"updateChart({timeJson}, {ampJson})");
+        }
+
+        var (rise, overshoot, settling, steadyErr) = PidSimulator.ComputeStepMetrics(result.Simulation.Time, result.Simulation.Amplitude);
+        RiseTimeValue.Text  = rise.ToString("0.00");
+        OvershootValue.Text = overshoot.ToString("0.0");
+        SettlingValue.Text  = settling.ToString("0.00");
+        SteadyErrValue.Text = steadyErr.ToString("0.0");
+
+        DiagnosisValue.Text = string.IsNullOrEmpty(result.Diagnosis)
+            ? "--" : result.Diagnosis;
     }
 
     private void OnActualThemeChanged(FrameworkElement sender, object args)
