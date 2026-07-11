@@ -48,6 +48,11 @@ public sealed class AiService : IDisposable
     private readonly List<ChatMessage> _history = new();
     public void ClearHistory() => _history.Clear();
 
+    /// Injects a turn into history without calling the API — lets a caller (e.g. the
+    /// PID Designer's advisor exchange) fold context into a shared AiService instance
+    /// so a later StreamChatAsync call carries it forward as prior conversation.
+    public void AddHistoryEntry(string role, string content) => _history.Add(new ChatMessage(role, content));
+
     // ── HTTP ──────────────────────────────────────────────────────────────────
     private readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(120) };
 

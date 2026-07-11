@@ -162,10 +162,18 @@ public sealed partial class DashboardPage : Page
         _pidChartReady = true;
     }
 
+    // Human-in-the-loop: the AI Advisor's last recommended gains, held until the
+    // student explicitly accepts or declines them.
+    private PidPrediction? _pendingAdvisorRecommendation;
+
     // RUN in the Control card is the PID Designer's "Simulate": it runs the RK4
     // step-response preview for the Kp/Ki/Kd values currently in the boxes above,
-    // then asks PidDiagnosisAgent for a corrective-action recommendation.
-    private async void CtlRun_Click(object sender, RoutedEventArgs e)
+    // asks PidDiagnosisAgent for a corrective-action label, asks PidMetricsRegressor
+    // for an instant ML estimate of the response metrics, and asks the AI Advisor
+    // (LLM) to review that estimate and propose new gains.
+    private async void CtlRun_Click(object sender, RoutedEventArgs e) => await RunPidAsync();
+
+    private async Task RunPidAsync()
     {
         var input = new PidInput
         {
@@ -204,14 +212,73 @@ public sealed partial class DashboardPage : Page
             _ = RespWebView.ExecuteScriptAsync($"updateChart({timeJson}, {ampJson})");
         }
 
-        var (rise, overshoot, settling, steadyErr) = PidSimulator.ComputeStepMetrics(result.Simulation.Time, result.Simulation.Amplitude);
-        RiseTimeValue.Text  = rise.ToString("0.00");
-        OvershootValue.Text = overshoot.ToString("0.0");
-        SettlingValue.Text  = settling.ToString("0.00");
-        SteadyErrValue.Text = steadyErr.ToString("0.0");
+        // result.Metrics is read off the exact RK4 curve above — always consistent
+        // with what's plotted (result.MlEstimate exists but isn't shown here; see
+        // the comment on PidDesignResult for why).
+        RiseTimeValue.Text  = result.Metrics.RiseTime.ToString("0.00");
+        OvershootValue.Text = result.Metrics.Overshoot.ToString("0.0");
+        SettlingValue.Text  = result.Metrics.SettlingTime.ToString("0.00");
+        SteadyErrValue.Text = result.Metrics.SteadyStateError.ToString("0.000");
 
         DiagnosisValue.Text = string.IsNullOrEmpty(result.Diagnosis)
             ? "--" : result.Diagnosis;
+
+        if (!string.IsNullOrWhiteSpace(result.AdvisorExplanation))
+        {
+            AddChatBubble("ai", result.AdvisorExplanation);
+            ScrollChat();
+
+            // Fold this exchange into App.Ai's own history (not just a visual bubble)
+            // so a follow-up question typed in the chat box below carries the actual
+            // simulation numbers as context instead of the LLM answering blind. The
+            // synthetic "user" turn is never rendered as its own bubble — bump
+            // _renderedCount past it so SyncBubblesWithHistory() doesn't re-render it
+            // as a message the student never actually typed.
+            App.Ai.AddHistoryEntry("user",
+                $"[Ringkasan simulasi RUN] Kp={result.Prediction.Kp:F3}, Ki={result.Prediction.Ki:F3}, Kd={result.Prediction.Kd:F3} " +
+                $"-> hasil simulasi RK4: Overshoot={result.Metrics.Overshoot:F2}%, Rise Time={result.Metrics.RiseTime:F3}s, " +
+                $"Settling Time={result.Metrics.SettlingTime:F2}s, Steady-State Error={result.Metrics.SteadyStateError:F3}. " +
+                $"Diagnosis: {result.Diagnosis}.");
+            App.Ai.AddHistoryEntry("assistant", result.AdvisorExplanation);
+            _renderedCount = App.Ai.History.Count;
+        }
+
+        if (result.AdvisorRecommendation is { } rec)
+        {
+            _pendingAdvisorRecommendation = rec;
+            PidAdvisorText.Text = Lang.Pid_AdvisorPrompt;
+            PidAdvisorRecommendationText.Text = $"Kp={rec.Kp:F3}  Ki={rec.Ki:F3}  Kd={rec.Kd:F3}";
+            PidAdvisorPanel.Visibility = Visibility.Visible;
+        }
+        else
+        {
+            PidAdvisorPanel.Visibility = Visibility.Collapsed;
+            _pendingAdvisorRecommendation = null;
+        }
+    }
+
+    // "Ya (Terapkan)" — fills Kp/Ki/Kd with the Advisor's recommendation and
+    // immediately re-runs the simulation (Auto-Run), same as the JS-driven
+    // apply-and-rerun a web frontend would do, just via native C# instead of DOM.
+    private async void PidAdvisorAccept_Click(object sender, RoutedEventArgs e)
+    {
+        if (_pendingAdvisorRecommendation is not { } rec) return;
+
+        KpBox.Value = rec.Kp;
+        KiBox.Value = rec.Ki;
+        KdBox.Value = rec.Kd;
+
+        PidAdvisorPanel.Visibility = Visibility.Collapsed;
+        _pendingAdvisorRecommendation = null;
+
+        await RunPidAsync();
+    }
+
+    // "Tidak" — leaves Kp/Ki/Kd untouched so the student can keep tuning manually.
+    private void PidAdvisorDecline_Click(object sender, RoutedEventArgs e)
+    {
+        PidAdvisorPanel.Visibility = Visibility.Collapsed;
+        _pendingAdvisorRecommendation = null;
     }
 
     private void OnActualThemeChanged(FrameworkElement sender, object args)

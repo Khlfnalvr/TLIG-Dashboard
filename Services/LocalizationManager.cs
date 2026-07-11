@@ -338,6 +338,10 @@ public sealed class LocalizationManager : INotifyPropertyChanged
     // ── Smart PID Designer (manual tuning + diagnosis on the Dashboard) ──
     public string Pid_RunHint        => T(nameof(Pid_RunHint));
     public string Pid_DiagnosisTitle => T(nameof(Pid_DiagnosisTitle));
+    public string Pid_AdvisorTitle   => T(nameof(Pid_AdvisorTitle));
+    public string Pid_AdvisorPrompt  => T(nameof(Pid_AdvisorPrompt));
+    public string Pid_AdvisorAccept  => T(nameof(Pid_AdvisorAccept));
+    public string Pid_AdvisorDecline => T(nameof(Pid_AdvisorDecline));
     public string Pid_ErrorUnavailable => T(nameof(Pid_ErrorUnavailable));
 
     // ── Live view / HMI ──────────────────────────────────────────────────
@@ -978,6 +982,10 @@ public sealed class LocalizationManager : INotifyPropertyChanged
 
             [nameof(Pid_RunHint)]        = "Press RUN below to simulate the Kp/Ki/Kd values above.",
             [nameof(Pid_DiagnosisTitle)] = "AI DIAGNOSIS",
+            [nameof(Pid_AdvisorTitle)]   = "AI ADVISOR",
+            [nameof(Pid_AdvisorPrompt)]  = "The advisor recommends the gains below. Apply and re-run?",
+            [nameof(Pid_AdvisorAccept)]  = "Yes (Apply)",
+            [nameof(Pid_AdvisorDecline)] = "No",
             [nameof(Pid_ErrorUnavailable)] = "PID design service unavailable — check your server connection.",
 
             [nameof(Ai_Title)]         = "AI ASSISTANT",
@@ -1575,6 +1583,10 @@ public sealed class LocalizationManager : INotifyPropertyChanged
 
             [nameof(Pid_RunHint)]        = "Tekan RUN di bawah untuk mensimulasikan nilai Kp/Ki/Kd di atas.",
             [nameof(Pid_DiagnosisTitle)] = "DIAGNOSIS AI",
+            [nameof(Pid_AdvisorTitle)]   = "PENASIHAT AI",
+            [nameof(Pid_AdvisorPrompt)]  = "Penasihat merekomendasikan gain di bawah ini. Terapkan dan jalankan ulang?",
+            [nameof(Pid_AdvisorAccept)]  = "Ya (Terapkan)",
+            [nameof(Pid_AdvisorDecline)] = "Tidak",
             [nameof(Pid_ErrorUnavailable)] = "Layanan desain PID tidak tersedia — periksa koneksi server Anda.",
 
             [nameof(Ai_Title)]         = "ASISTEN AI",

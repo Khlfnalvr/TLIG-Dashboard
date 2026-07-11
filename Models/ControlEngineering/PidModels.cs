@@ -22,3 +22,13 @@ public class SimulationResult
     public double[] Amplitude { get; set; } = Array.Empty<double>();
     public PidPrediction UsedParameters { get; set; } = new();
 }
+
+/// Output of PidMetricsRegressor — an instant ML.NET estimate of step-response
+/// metrics straight from Kp/Ki/Kd, independent of PidSimulator's exact RK4 curve.
+public class PidMetricsPrediction
+{
+    public float Overshoot { get; set; }
+    public float RiseTime { get; set; }
+    public float SettlingTime { get; set; }
+    public float SteadyStateError { get; set; }
+}

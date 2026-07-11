@@ -248,6 +248,31 @@
                         </StackPanel>
                     </Border>
 
+                    <!-- Human-in-the-loop: the AI Advisor's recommended next gains sit here,
+                         pending, until the student explicitly accepts or declines — never
+                         written to Kp/Ki/Kd on their own. Accepting auto re-runs the sim. -->
+                    <Border x:Name="PidAdvisorPanel" Style="{StaticResource DashCardStyle}"
+                            Visibility="Collapsed" Padding="10,8">
+                        <StackPanel Spacing="7">
+                            <TextBlock Text="{x:Bind Lang.Pid_AdvisorTitle, Mode=OneWay}" Style="{StaticResource DashCardTitleStyle}"/>
+                            <TextBlock x:Name="PidAdvisorText" FontSize="11" TextWrapping="Wrap"/>
+                            <TextBlock x:Name="PidAdvisorRecommendationText" FontSize="11" FontFamily="Consolas" Opacity="0.75"/>
+                            <Grid ColumnSpacing="8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Button x:Name="PidAdvisorDeclineBtn" Grid.Column="0" HorizontalAlignment="Stretch" FontSize="11"
+                                        Content="{x:Bind Lang.Pid_AdvisorDecline, Mode=OneWay}"
+                                        Click="PidAdvisorDecline_Click"/>
+                                <Button x:Name="PidAdvisorAcceptBtn" Grid.Column="1" HorizontalAlignment="Stretch" FontSize="11"
+                                        Style="{ThemeResource AccentButtonStyle}"
+                                        Content="{x:Bind Lang.Pid_AdvisorAccept, Mode=OneWay}"
+                                        Click="PidAdvisorAccept_Click"/>
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+
                     <!-- System Response — the left panel is already inside a ScrollViewer
                          (see Grid.Row="1" above), so a taller card here just means users
                          scroll a bit further; it doesn't break the layout. 142px was only
@@ -271,7 +296,9 @@
                         </Grid>
                     </Border>
 
-                    <!-- Rise/Overshoot/Settling/SteadyErr metrics -->
+                    <!-- Rise/Overshoot/Settling/SteadyErr metrics — read directly off the RK4
+                         curve above (see PidSimulator.ComputeStepMetrics), so these numbers
+                         and the chart can never disagree. -->
                     <Grid ColumnSpacing="8" RowSpacing="8">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>

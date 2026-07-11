@@ -95,6 +95,7 @@ public sealed class ShareServer
     // Control Engineering Services
     private readonly TLIGDashboard.Services.ControlEngineering.PidSimulator _pidSim = new();
     private readonly TLIGDashboard.Services.ControlEngineering.PidDiagnosisAgent _pidDiagnosis = new();
+    private readonly TLIGDashboard.Services.ControlEngineering.PidMetricsRegressor _pidMlMetrics = new();
 
     private string IssueSession(UserAccount user)
     {
@@ -1093,24 +1094,43 @@ public sealed class ShareServer
             // CPU-bound: Simulation
             var simResult = await Task.Run(() => _pidSim.SimulateStepResponse(finalPid), ct);
 
-            // Diagnose the resulting response (local classifier, async, no external quota).
-            var diagnosis = await Task.Run(() =>
+            // Exact metrics off the real RK4 curve — the single source of truth for
+            // the diagnosis classifier, the metric cards, and the LLM advisor.
+            var (rise, overshootPct, settling, steadyErrPct) =
+                TLIGDashboard.Services.ControlEngineering.PidSimulator.ComputeStepMetrics(simResult.Time, simResult.Amplitude);
+            bool stable = TLIGDashboard.Services.ControlEngineering.PidSimulator.IsResponseStable(simResult.Amplitude);
+            var metrics = new TLIGDashboard.Models.ControlEngineering.PidMetricsPrediction
             {
-                var (rise, overshootPct, settling, steadyErrPct) =
-                    TLIGDashboard.Services.ControlEngineering.PidSimulator.ComputeStepMetrics(simResult.Time, simResult.Amplitude);
-                bool stable = TLIGDashboard.Services.ControlEngineering.PidSimulator.IsResponseStable(simResult.Amplitude);
-                return _pidDiagnosis.Predict(new TLIGDashboard.Models.ControlEngineering.PidDiagnosisInput
-                {
-                    Kp_Saat_Ini        = finalPid.Kp,
-                    Ki_Saat_Ini        = finalPid.Ki,
-                    Kd_Saat_Ini        = finalPid.Kd,
-                    Overshoot_Riil     = (float)overshootPct,
-                    RiseTime_Riil      = (float)rise,
-                    SettlingTime_Riil  = (float)settling,
-                    SteadyStateError   = (float)(steadyErrPct / 100.0),
-                    Is_Stable          = stable ? 1f : 0f,
-                }).Rekomendasi_Aksi;
-            }, ct);
+                Overshoot        = (float)overshootPct,
+                RiseTime         = (float)rise,
+                SettlingTime     = (float)settling,
+                SteadyStateError = (float)(steadyErrPct / 100.0),
+            };
+
+            // Diagnose the resulting response (local classifier, async, no external quota).
+            var diagnosis = await Task.Run(() => _pidDiagnosis.Predict(new TLIGDashboard.Models.ControlEngineering.PidDiagnosisInput
+            {
+                Kp_Saat_Ini        = finalPid.Kp,
+                Ki_Saat_Ini        = finalPid.Ki,
+                Kd_Saat_Ini        = finalPid.Kd,
+                Overshoot_Riil     = metrics.Overshoot,
+                RiseTime_Riil      = metrics.RiseTime,
+                SettlingTime_Riil  = metrics.SettlingTime,
+                SteadyStateError   = metrics.SteadyStateError,
+                Is_Stable          = stable ? 1f : 0f,
+            }).Rekomendasi_Aksi, ct);
+
+            // Multi-output ML.NET estimate straight from Kp/Ki/Kd — kept computed and
+            // returned to the client (see PidDesignResult.MlEstimate) but no longer
+            // what drives the Advisor prompt or the metric cards; it was found to
+            // diverge sharply from the RK4 ground truth for gain combinations sparse
+            // in the training data (e.g. low Kp), producing Advisor text that
+            // contradicted the plotted chart.
+            var mlEstimate = await Task.Run(
+                () => _pidMlMetrics.Predict(finalPid.Kp, finalPid.Ki, finalPid.Kd), ct);
+
+            var advisor = await new TLIGDashboard.Services.ControlEngineering.PidAdvisorService()
+                .ReviewAsync(finalPid, metrics, ct);
 
             var response = new JsonObject
             {
@@ -1125,7 +1145,28 @@ public sealed class ShareServer
                     ["time"] = new JsonArray(simResult.Time.Select(t => (JsonNode)t).ToArray()),
                     ["amplitude"] = new JsonArray(simResult.Amplitude.Select(a => (JsonNode)a).ToArray())
                 },
-                ["diagnosis"] = diagnosis
+                ["diagnosis"] = diagnosis,
+                ["metrics"] = new JsonObject
+                {
+                    ["overshoot"]        = metrics.Overshoot,
+                    ["riseTime"]         = metrics.RiseTime,
+                    ["settlingTime"]     = metrics.SettlingTime,
+                    ["steadyStateError"] = metrics.SteadyStateError,
+                },
+                ["mlEstimate"] = new JsonObject
+                {
+                    ["overshoot"]        = mlEstimate.Overshoot,
+                    ["riseTime"]         = mlEstimate.RiseTime,
+                    ["settlingTime"]     = mlEstimate.SettlingTime,
+                    ["steadyStateError"] = mlEstimate.SteadyStateError,
+                },
+                ["advisorExplanation"] = advisor.Explanation,
+                ["advisorRecommendation"] = advisor.Recommendation is null ? null : new JsonObject
+                {
+                    ["Kp"] = advisor.Recommendation.Kp,
+                    ["Ki"] = advisor.Recommendation.Ki,
+                    ["Kd"] = advisor.Recommendation.Kd,
+                },
             };
 
             await WriteJsonAsync(stream, response.ToJsonString(), ct);
