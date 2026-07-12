@@ -1084,6 +1084,10 @@ public sealed class ShareServer
             var input = System.Text.Json.JsonSerializer.Deserialize<TLIGDashboard.Models.ControlEngineering.PidInput>(body);
             if (input == null) throw new Exception("Invalid input");
 
+            // Requests from older clients carry no Setpoint (model default 1); a
+            // zero/NaN one would flatline the response — fall back to a unit step.
+            if (float.IsNaN(input.Setpoint) || input.Setpoint <= 0) input.Setpoint = 1f;
+
             var finalPid = new TLIGDashboard.Models.ControlEngineering.PidPrediction
             {
                 Kp = input.Kp,
@@ -1092,13 +1096,13 @@ public sealed class ShareServer
             };
 
             // CPU-bound: Simulation
-            var simResult = await Task.Run(() => _pidSim.SimulateStepResponse(finalPid), ct);
+            var simResult = await Task.Run(() => _pidSim.SimulateStepResponse(finalPid, reference: input.Setpoint), ct);
 
             // Exact metrics off the real RK4 curve — the single source of truth for
             // the diagnosis classifier, the metric cards, and the LLM advisor.
             var (rise, overshootPct, settling, steadyErrPct) =
-                TLIGDashboard.Services.ControlEngineering.PidSimulator.ComputeStepMetrics(simResult.Time, simResult.Amplitude);
-            bool stable = TLIGDashboard.Services.ControlEngineering.PidSimulator.IsResponseStable(simResult.Amplitude);
+                TLIGDashboard.Services.ControlEngineering.PidSimulator.ComputeStepMetrics(simResult.Time, simResult.Amplitude, input.Setpoint);
+            bool stable = TLIGDashboard.Services.ControlEngineering.PidSimulator.IsResponseStable(simResult.Amplitude, input.Setpoint);
             var metrics = new TLIGDashboard.Models.ControlEngineering.PidMetricsPrediction
             {
                 Overshoot        = (float)overshootPct,
@@ -1130,7 +1134,7 @@ public sealed class ShareServer
                 () => _pidMlMetrics.Predict(finalPid.Kp, finalPid.Ki, finalPid.Kd), ct);
 
             var advisor = await new TLIGDashboard.Services.ControlEngineering.PidAdvisorService()
-                .ReviewAsync(finalPid, metrics, ct);
+                .ReviewAsync(finalPid, metrics, input.Setpoint, ct);
 
             var response = new JsonObject
             {

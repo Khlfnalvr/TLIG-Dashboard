@@ -7,6 +7,8 @@ namespace TLIGDashboard.Services.ControlEngineering;
 public sealed class PidDesignResult
 {
     public PidPrediction        Prediction            { get; set; } = new();
+    /// Reference the simulation was run against — what the curve settles toward.
+    public float                 Setpoint             { get; set; } = 1f;
     public SimulationResult     Simulation            { get; set; } = new();
     public string                Diagnosis            { get; set; } = "";
     /// Exact metrics read off the RK4 curve above — the only numbers ever shown to
@@ -42,6 +44,7 @@ public static class PidDesignClient
                 ["Kp"] = input.Kp,
                 ["Ki"] = input.Ki,
                 ["Kd"] = input.Kd,
+                ["Setpoint"] = input.Setpoint,
             };
 
             using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
@@ -54,7 +57,11 @@ public static class PidDesignClient
             using var resp = await http.SendAsync(req);
             if (!resp.IsSuccessStatusCode) return null;
 
-            return ParseResult(JsonNode.Parse(await resp.Content.ReadAsStringAsync()));
+            var result = ParseResult(JsonNode.Parse(await resp.Content.ReadAsStringAsync()));
+            // The server doesn't echo the setpoint back (older servers ignore it
+            // entirely) — carry the value we asked for so the chart can draw it.
+            if (result is not null) result.Setpoint = input.Setpoint;
+            return result;
         }
         catch { return null; }
     }
@@ -123,15 +130,19 @@ public static class PidDesignService
 
     public static async Task<PidDesignResult?> RunAsync(PidInput input, CancellationToken ct = default)
     {
+        // An empty/zero setpoint box would flatline the response and divide the
+        // steady-state-error metric by zero — fall back to the classic unit step.
+        if (float.IsNaN(input.Setpoint) || input.Setpoint <= 0) input.Setpoint = 1f;
+
         if (BuildInfo.IsServer)
         {
             var pred = new PidPrediction { Kp = input.Kp, Ki = input.Ki, Kd = input.Kd };
-            var simResult = await Task.Run(() => _sim.SimulateStepResponse(pred), ct);
+            var simResult = await Task.Run(() => _sim.SimulateStepResponse(pred, reference: input.Setpoint), ct);
 
             // Exact metrics off the real RK4 curve — the single source of truth for
             // the diagnosis classifier, the metric cards, and the LLM advisor.
-            var (rise, overshootPct, settling, steadyErrPct) = PidSimulator.ComputeStepMetrics(simResult.Time, simResult.Amplitude);
-            bool stable = PidSimulator.IsResponseStable(simResult.Amplitude);
+            var (rise, overshootPct, settling, steadyErrPct) = PidSimulator.ComputeStepMetrics(simResult.Time, simResult.Amplitude, input.Setpoint);
+            bool stable = PidSimulator.IsResponseStable(simResult.Amplitude, input.Setpoint);
             var metrics = new PidMetricsPrediction
             {
                 Overshoot        = (float)overshootPct,
@@ -157,11 +168,12 @@ public static class PidDesignService
             // Advisor prompt or the metric cards; see the comment above PidDesignResult.
             var mlEstimate = await Task.Run(() => _mlMetrics.Predict(pred.Kp, pred.Ki, pred.Kd), ct);
 
-            var advisor = await new PidAdvisorService().ReviewAsync(pred, metrics, ct);
+            var advisor = await new PidAdvisorService().ReviewAsync(pred, metrics, input.Setpoint, ct);
 
             return new PidDesignResult
             {
                 Prediction = pred,
+                Setpoint = input.Setpoint,
                 Simulation = simResult,
                 Diagnosis = diagnosis,
                 Metrics = metrics,

@@ -7,6 +7,9 @@ public class PidInput
     public float Kp { get; set; }
     public float Ki { get; set; }
     public float Kd { get; set; }
+    /// Reference value the step response should settle at. Defaults to 1 so
+    /// requests from older clients that don't send it keep the original behavior.
+    public float Setpoint { get; set; } = 1f;
 }
 
 public class PidPrediction

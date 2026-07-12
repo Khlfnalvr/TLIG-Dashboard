@@ -411,7 +411,8 @@
                                                 <ColumnDefinition Width="*"/>
                                                 <ColumnDefinition Width="Auto"/>
                                              </Grid.ColumnDefinitions>
-                                             <NumberBox Value="10" Minimum="0" SmallChange="1"
+                                             <NumberBox x:Name="CtlSetpointBox"
+                                                        Value="10" Minimum="0" SmallChange="1"
                                                         SpinButtonPlacementMode="Compact"
                                                         FontSize="11"
                                                         Style="{StaticResource DashNumberBoxStyle}"/>

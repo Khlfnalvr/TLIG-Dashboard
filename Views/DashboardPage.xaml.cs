@@ -127,20 +127,31 @@ public sealed partial class DashboardPage : Page
             <canvas id="pidChart"></canvas>
             <script>
                 let chart;
-                function updateChart(time, amp) {
+                function updateChart(time, amp, sp) {
                     const ctx = document.getElementById('pidChart').getContext('2d');
                     if (chart) chart.destroy();
+                    const datasets = [{
+                        label: 'Step Response',
+                        data: amp,
+                        borderColor: 'rgb(75, 192, 192)',
+                        tension: 0.1,
+                        pointRadius: 0
+                    }];
+                    if (typeof sp === 'number' && isFinite(sp)) {
+                        datasets.push({
+                            label: 'Setpoint',
+                            data: time.map(() => sp),
+                            borderColor: 'rgba(255, 99, 132, 0.8)',
+                            borderDash: [6, 4],
+                            borderWidth: 1.5,
+                            pointRadius: 0
+                        });
+                    }
                     chart = new Chart(ctx, {
                         type: 'line',
                         data: {
                             labels: time,
-                            datasets: [{
-                                label: 'Step Response',
-                                data: amp,
-                                borderColor: 'rgb(75, 192, 192)',
-                                tension: 0.1,
-                                pointRadius: 0
-                            }]
+                            datasets: datasets
                         },
                         options: {
                             responsive: true,
@@ -175,11 +186,17 @@ public sealed partial class DashboardPage : Page
 
     private async Task RunPidAsync()
     {
+        // NumberBox yields NaN when cleared; a zero setpoint would flatline the
+        // response — normalize to a unit step and show the value actually used.
+        double sp = CtlSetpointBox.Value;
+        if (double.IsNaN(sp) || sp <= 0) { sp = 1.0; CtlSetpointBox.Value = sp; }
+
         var input = new PidInput
         {
             Kp = (float)KpBox.Value,
             Ki = (float)KiBox.Value,
             Kd = (float)KdBox.Value,
+            Setpoint = (float)sp,
         };
 
         CtlRunBtn.IsEnabled = false;
@@ -209,7 +226,8 @@ public sealed partial class DashboardPage : Page
                 t => t.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture))) + "]";
             string ampJson = "[" + string.Join(',', result.Simulation.Amplitude.Select(
                 a => a.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture))) + "]";
-            _ = RespWebView.ExecuteScriptAsync($"updateChart({timeJson}, {ampJson})");
+            string spJson = result.Setpoint.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture);
+            _ = RespWebView.ExecuteScriptAsync($"updateChart({timeJson}, {ampJson}, {spJson})");
         }
 
         // result.Metrics is read off the exact RK4 curve above — always consistent
@@ -235,7 +253,8 @@ public sealed partial class DashboardPage : Page
             // _renderedCount past it so SyncBubblesWithHistory() doesn't re-render it
             // as a message the student never actually typed.
             App.Ai.AddHistoryEntry("user",
-                $"[Ringkasan simulasi RUN] Kp={result.Prediction.Kp:F3}, Ki={result.Prediction.Ki:F3}, Kd={result.Prediction.Kd:F3} " +
+                $"[Ringkasan simulasi RUN] Setpoint={result.Setpoint:F2}, " +
+                $"Kp={result.Prediction.Kp:F3}, Ki={result.Prediction.Ki:F3}, Kd={result.Prediction.Kd:F3} " +
                 $"-> hasil simulasi RK4: Overshoot={result.Metrics.Overshoot:F2}%, Rise Time={result.Metrics.RiseTime:F3}s, " +
                 $"Settling Time={result.Metrics.SettlingTime:F2}s, Steady-State Error={result.Metrics.SteadyStateError:F3}. " +
                 $"Diagnosis: {result.Diagnosis}.");

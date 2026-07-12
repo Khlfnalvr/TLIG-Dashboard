@@ -97,7 +97,9 @@ public class PidSimulator
     }
 
     /// True if the simulated response stayed bounded (didn't blow up under the given
-    /// gains) — a practical stand-in for the training data's Is_Stable flag.
-    public static bool IsResponseStable(double[] amplitude) =>
-        amplitude.All(a => !double.IsNaN(a) && !double.IsInfinity(a) && Math.Abs(a) < 1000.0);
+    /// gains) — a practical stand-in for the training data's Is_Stable flag. The
+    /// bound scales with the reference so a large setpoint isn't misread as unstable.
+    public static bool IsResponseStable(double[] amplitude, double reference = 1.0) =>
+        amplitude.All(a => !double.IsNaN(a) && !double.IsInfinity(a)
+            && Math.Abs(a) < 1000.0 * Math.Max(1.0, Math.Abs(reference)));
 }

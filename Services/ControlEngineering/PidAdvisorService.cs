@@ -36,9 +36,10 @@ public class PidAdvisorService
         Services.AiConfigService.ApplyActive(_aiService);
         _aiService.SystemPrompt =
             "You are a Senior Professor of Control Systems Engineering reviewing a student's " +
-            "PID tuning attempt. You will be given the current Kp, Ki, Kd and the predicted " +
-            "Overshoot (%), Rise Time (s), Settling Time (s), and Steady-State Error for those " +
-            "gains. Write a brief (3-5 sentence) educational review explaining what is good or " +
+            "PID tuning attempt. You will be given the setpoint (reference value), the current " +
+            "Kp, Ki, Kd, and the resulting Overshoot (%), Rise Time (s), Settling Time (s), and " +
+            "Steady-State Error for those gains. " +
+            "Write a brief (3-5 sentence) educational review explaining what is good or " +
             "bad about this response and why, in terms of the physical meaning of each gain. " +
             "Then, on its own line, always end your reply with a fenced JSON block giving your " +
             "recommended next gains to try, in exactly this shape and nothing else after it:\n" +
@@ -46,11 +47,12 @@ public class PidAdvisorService
     }
 
     public async Task<PidAdvisorResult> ReviewAsync(
-        PidPrediction gains, PidMetricsPrediction metrics, CancellationToken ct = default)
+        PidPrediction gains, PidMetricsPrediction metrics, float setpoint = 1f, CancellationToken ct = default)
     {
         string prompt =
+            $"Setpoint (reference): {setpoint:F2}.\n" +
             $"Current gains: Kp = {gains.Kp:F3}, Ki = {gains.Ki:F3}, Kd = {gains.Kd:F3}.\n" +
-            $"Predicted response: Overshoot = {metrics.Overshoot:F2}%, Rise Time = {metrics.RiseTime:F3}s, " +
+            $"Simulated response: Overshoot = {metrics.Overshoot:F2}%, Rise Time = {metrics.RiseTime:F3}s, " +
             $"Settling Time = {metrics.SettlingTime:F2}s, Steady-State Error = {metrics.SteadyStateError:F3}.\n\n" +
             "Review this tuning and recommend new gains.";
 
