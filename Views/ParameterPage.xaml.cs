@@ -83,6 +83,9 @@ public sealed partial class ParameterPage : Page
         double ki = double.IsNaN(KiBox.Value) ? 0 : KiBox.Value;
         double kd = double.IsNaN(KdBox.Value) ? 0 : KdBox.Value;
 
+        // Tulis parameter ke PLC melalui HMI LabVIEW (TCP) bila terhubung.
+        App.ViewModel?.Plc.WriteTags(("kp", kp), ("ki", ki), ("kd", kd));
+
         ActivityStore.Instance.LogSession(
             ActivityCategory.ControlParameter,
             ActivityActions.ParameterChanged,
@@ -109,6 +112,9 @@ public sealed partial class ParameterPage : Page
         double ki = double.IsNaN(KiBox.Value) ? 0 : KiBox.Value;
         double kd = double.IsNaN(KdBox.Value) ? 0 : KdBox.Value;
 
+        // Perintahkan HMI LabVIEW menjalankan proses (cmd=run) bila terhubung.
+        App.ViewModel?.Plc.WriteTag("cmd", "run");
+
         ActivityStore.Instance.LogSession(
             ActivityCategory.Simulation,
             ActivityActions.SimulationStarted,
@@ -124,6 +130,9 @@ public sealed partial class ParameterPage : Page
 
     private void StopBtn_Click(object sender, RoutedEventArgs e)
     {
+        // Perintahkan HMI LabVIEW menghentikan proses (cmd=stop) bila terhubung.
+        App.ViewModel?.Plc.WriteTag("cmd", "stop");
+
         ActivityStore.Instance.LogSession(
             ActivityCategory.Simulation,
             ActivityActions.SimulationCompleted,

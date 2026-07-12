@@ -11,8 +11,9 @@ namespace TLIGDashboard.Services;
 /// Streaming AI chat client supporting three wire protocols (see <see cref="AiProtocols"/>):
 ///
 /// <list type="bullet">
-/// <item><b>openai</b> — DeepSeek, OpenAI, Ollama, and the server's own <c>/ai</c> proxy.
-///   POSTs to <c>{ApiUrl}/chat/completions</c>, Bearer auth, <c>choices[].delta.content</c> SSE.</item>
+/// <item><b>openai</b> — DeepSeek, OpenAI, Gemini (OpenAI-compatible endpoint), Ollama,
+///   and the server's own <c>/ai</c> proxy. POSTs to <c>{ApiUrl}/chat/completions</c>,
+///   Bearer auth, <c>choices[].delta.content</c> SSE.</item>
 /// <item><b>anthropic</b> — Anthropic Messages API. POSTs to <c>{ApiUrl}/v1/messages</c>,
 ///   <c>x-api-key</c> auth, system prompt as a top-level field, <c>content_block_delta</c> SSE.</item>
 /// <item><b>gemini</b> — Google Generative Language API. POSTs to
@@ -30,7 +31,7 @@ public sealed class AiService : IDisposable
     // ── Configuration ─────────────────────────────────────────────────────────
     public string ApiUrl       { get; set; } = "https://api.deepseek.com";
     public string ApiKey       { get; set; } = "";
-    public string Model        { get; set; } = "deepseek-chat";
+    public string Model        { get; set; } = "deepseek-v4-flash";
     public string Protocol     { get; set; } = AiProtocols.OpenAi;
     public string SystemPrompt { get; set; } =
         "You are a helpful assistant integrated in TLIG Dashboard, " +
@@ -180,9 +181,9 @@ public sealed class AiService : IDisposable
     {
         var msgs = new JsonArray();
         if (!string.IsNullOrWhiteSpace(SystemPrompt))
-            msgs.Add(new JsonObject { ["role"] = "system", ["content"] = SystemPrompt });
+            msgs.Add((JsonNode)new JsonObject { ["role"] = "system", ["content"] = SystemPrompt });
         foreach (var m in _history)
-            msgs.Add(new JsonObject { ["role"] = m.Role, ["content"] = m.Content });
+            msgs.Add((JsonNode)new JsonObject { ["role"] = m.Role, ["content"] = m.Content });
 
         return new JsonObject
         {
@@ -199,7 +200,7 @@ public sealed class AiService : IDisposable
         // Anthropic carries the system prompt as a top-level field, not a message.
         var msgs = new JsonArray();
         foreach (var m in _history)
-            msgs.Add(new JsonObject { ["role"] = m.Role, ["content"] = m.Content });
+            msgs.Add((JsonNode)new JsonObject { ["role"] = m.Role, ["content"] = m.Content });
 
         return new JsonObject
         {

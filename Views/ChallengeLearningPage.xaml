@@ -6,17 +6,6 @@
 
     <Page.Resources>
 
-        <!-- ── Colour tokens ──────────────────────────────────────── -->
-        <SolidColorBrush x:Key="CL_Purple"  Color="#7c3aed"/>
-        <SolidColorBrush x:Key="CL_Orange"  Color="#f59e0b"/>
-        <SolidColorBrush x:Key="CL_Green"   Color="#10b981"/>
-        <SolidColorBrush x:Key="CL_Red"     Color="#ef4444"/>
-        <SolidColorBrush x:Key="CL_Surface" Color="#1e1e2e"/>
-        <SolidColorBrush x:Key="CL_CardBg"  Color="#252535"/>
-        <SolidColorBrush x:Key="CL_Border"  Color="#2d2d3e"/>
-        <SolidColorBrush x:Key="CL_Text"    Color="#e0e0f0"/>
-        <SolidColorBrush x:Key="CL_Muted"   Color="#8080a0"/>
-
         <!-- ── Shared styles ──────────────────────────────────────── -->
         <Style x:Key="CL_Card" TargetType="Border">
             <Setter Property="Background"      Value="{ThemeResource CardBackgroundFillColorDefaultBrush}"/>
@@ -60,23 +49,21 @@
 
             <!-- Header -->
             <Border Grid.Row="0" Padding="14,12,14,10"
-                    BorderBrush="#2d2d3e" BorderThickness="0,0,0,1">
+                    BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}" BorderThickness="0,0,0,1">
                 <StackPanel Spacing="2">
                     <TextBlock Text="Challenge Learning"
-                               FontSize="14" FontWeight="SemiBold"
-                               Foreground="#e0e0f0"/>
+                               FontSize="14" FontWeight="SemiBold"/>
                     <TextBlock x:Name="ModeLabel"
-                               FontSize="10" Foreground="#7c3aed"/>
+                               FontSize="10" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
                 </StackPanel>
             </Border>
 
             <!-- Action bar (admin: + New | student: hidden) -->
-            <Border Grid.Row="1" Padding="12,8" BorderBrush="#2d2d3e" BorderThickness="0,0,0,1">
+            <Border Grid.Row="1" Padding="12,8" BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}" BorderThickness="0,0,0,1">
                 <Grid>
                     <Button x:Name="NewChallengeBtn"
                             Content="+ Buat Challenge"
-                            Background="#7c3aed"
-                            Foreground="White"
+                            Style="{ThemeResource AccentButtonStyle}"
                             FontSize="11" FontWeight="SemiBold"
                             CornerRadius="6"
                             Padding="10,6"
@@ -120,10 +107,9 @@
                                 <StackPanel Grid.Column="0" Spacing="3">
                                     <TextBlock x:Name="ItemTitle"
                                                FontSize="12" FontWeight="SemiBold"
-                                               Foreground="#e0e0f0"
                                                TextTrimming="CharacterEllipsis"/>
                                     <TextBlock x:Name="ItemMeta"
-                                               FontSize="10" Foreground="#8080a0"
+                                               FontSize="10" Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                                TextTrimming="CharacterEllipsis"/>
                                 </StackPanel>
                                 <Border x:Name="StatusBadge"
@@ -141,7 +127,7 @@
         </Grid>
 
         <!-- Divider -->
-        <Border Grid.Column="1" Background="#2d2d3e"/>
+        <Border Grid.Column="1" Background="{ThemeResource DividerStrokeColorDefaultBrush}"/>
 
         <!-- ══════════════════════════════════
              RIGHT — Detail / Form
@@ -154,9 +140,9 @@
                         Spacing="10">
                 <FontIcon FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
                           Glyph="&#xE8F9;" FontSize="48"
-                          Foreground="#2d2d3e" HorizontalAlignment="Center"/>
+                          Foreground="{ThemeResource TextFillColorTertiaryBrush}" HorizontalAlignment="Center"/>
                 <TextBlock x:Name="EmptyHint"
-                           FontSize="13" Foreground="#8080a0"
+                           FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                            HorizontalAlignment="Center" TextAlignment="Center"/>
             </StackPanel>
 
@@ -168,8 +154,7 @@
                 <StackPanel Spacing="12">
 
                     <TextBlock x:Name="FormTitleLabel"
-                               FontSize="16" FontWeight="SemiBold"
-                               Foreground="#e0e0f0"/>
+                               FontSize="16" FontWeight="SemiBold"/>
 
                     <!-- Title -->
                     <StackPanel Spacing="4">
@@ -305,7 +290,7 @@
                     <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,4,0,0">
                         <Button x:Name="SaveChallengeBtn"
                                 Content="Simpan Challenge"
-                                Background="#7c3aed" Foreground="White"
+                                Style="{ThemeResource AccentButtonStyle}"
                                 FontSize="12" FontWeight="SemiBold"
                                 CornerRadius="6" Padding="14,8"
                                 Click="SaveChallengeBtn_Click"/>
@@ -336,9 +321,9 @@
                         <StackPanel Grid.Column="0" Spacing="4">
                             <TextBlock x:Name="DetailTitle"
                                        FontSize="18" FontWeight="SemiBold"
-                                       Foreground="#e0e0f0" TextWrapping="Wrap"/>
+                                       TextWrapping="Wrap"/>
                             <TextBlock x:Name="DetailMeta"
-                                       FontSize="11" Foreground="#8080a0"/>
+                                       FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                         </StackPanel>
                         <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6"
                                     VerticalAlignment="Top">
@@ -348,13 +333,14 @@
                                     Click="EditChallengeBtn_Click"/>
                             <Button x:Name="PublishBtn"
                                     Content="Publish"
-                                    Background="#10b981" Foreground="White"
+                                    Style="{ThemeResource AccentButtonStyle}"
                                     FontSize="11" FontWeight="SemiBold"
                                     CornerRadius="6" Padding="10,5"
                                     Click="PublishBtn_Click"/>
                             <Button x:Name="CloseBtn"
                                     Content="Tutup"
-                                    Background="#ef4444" Foreground="White"
+                                    Background="{ThemeResource SystemFillColorCriticalBrush}"
+                                    Foreground="White"
                                     FontSize="11" FontWeight="SemiBold"
                                     CornerRadius="6" Padding="10,5"
                                     Click="CloseBtn_Click"/>
@@ -380,7 +366,7 @@
                                        Style="{StaticResource CL_SectionHeader}"/>
                             <StackPanel x:Name="StudentListRows" Spacing="6"/>
                             <TextBlock x:Name="NoStudentText"
-                                       Text="Belum ada mahasiswa yang submit."
+                                       Text="Belum ada akun mahasiswa terdaftar."
                                        Style="{StaticResource CL_Label}"
                                        HorizontalAlignment="Center"/>
                         </StackPanel>
@@ -395,8 +381,7 @@
                             <Grid>
                                 <StackPanel Spacing="2">
                                     <TextBlock x:Name="SelectedStudentName"
-                                               FontSize="14" FontWeight="SemiBold"
-                                               Foreground="#e0e0f0"/>
+                                               FontSize="14" FontWeight="SemiBold"/>
                                     <TextBlock x:Name="SelectedStudentMeta"
                                                Style="{StaticResource CL_Label}"/>
                                 </StackPanel>
@@ -416,7 +401,7 @@
                                        Style="{StaticResource CL_Label}"
                                        HorizontalAlignment="Center"/>
 
-                            <Rectangle Height="1" Fill="#2d2d3e"
+                            <Rectangle Height="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}"
                                        Opacity="0.5" Margin="0,4,0,4"/>
 
                             <!-- Form penilaian dosen -->
@@ -448,7 +433,7 @@
                             <StackPanel Orientation="Horizontal" Spacing="8">
                                 <Button x:Name="SaveGradeBtn"
                                         Content="Simpan Nilai"
-                                        Background="#7c3aed" Foreground="White"
+                                        Style="{ThemeResource AccentButtonStyle}"
                                         FontSize="12" FontWeight="SemiBold"
                                         CornerRadius="6" Padding="14,8"
                                         Click="SaveGradeBtn_Click"/>
@@ -473,7 +458,7 @@
                         VerticalAlignment="Center" HorizontalAlignment="Center"
                         Spacing="8" Padding="24">
                 <FontIcon Glyph="&#xE82D;" FontSize="32"
-                          Foreground="#7c3aed" HorizontalAlignment="Center"
+                          Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" HorizontalAlignment="Center"
                           FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"/>
                 <TextBlock Text="Pilih challenge di kiri untuk melihat detail dan submit jawabanmu."
                            Style="{StaticResource CL_Label}"
@@ -492,17 +477,17 @@
                         <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                             <TextBlock x:Name="StDetailTitle"
                                        FontSize="18" FontWeight="SemiBold"
-                                       Foreground="#e0e0f0" TextWrapping="Wrap"/>
+                                       TextWrapping="Wrap"/>
                             <Border x:Name="StSystemBadge"
-                                    Background="#2d2d3e" CornerRadius="5"
+                                    Background="{ThemeResource SubtleFillColorSecondaryBrush}" CornerRadius="5"
                                     Padding="8,3" VerticalAlignment="Center">
                                 <TextBlock x:Name="StSystemText"
                                            FontSize="10" FontWeight="SemiBold"
-                                           Foreground="#7c3aed"/>
+                                           Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
                             </Border>
                         </StackPanel>
                         <TextBlock x:Name="StDetailMeta"
-                                   FontSize="11" Foreground="#8080a0"/>
+                                   FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                     </StackPanel>
 
                     <!-- Description -->
@@ -510,7 +495,7 @@
                         <StackPanel Spacing="6">
                             <TextBlock Text="DESKRIPSI" Style="{StaticResource CL_SectionHeader}"/>
                             <TextBlock x:Name="StDetailDesc"
-                                       FontSize="12" Foreground="#c0c0d8"
+                                       FontSize="12"
                                        TextWrapping="Wrap" LineHeight="20"/>
                         </StackPanel>
                     </Border>
@@ -520,7 +505,7 @@
                         <StackPanel Spacing="6">
                             <TextBlock Text="INSTRUKSI" Style="{StaticResource CL_SectionHeader}"/>
                             <TextBlock x:Name="StDetailInstr"
-                                       FontSize="12" Foreground="#c0c0d8"
+                                       FontSize="12"
                                        TextWrapping="Wrap" LineHeight="20"/>
                         </StackPanel>
                     </Border>
@@ -567,7 +552,7 @@
                             <StackPanel Orientation="Horizontal" Spacing="8">
                                 <Button x:Name="SubmitBtn"
                                         Content="Kirim Jawaban"
-                                        Background="#7c3aed" Foreground="White"
+                                        Style="{ThemeResource AccentButtonStyle}"
                                         FontSize="12" FontWeight="SemiBold"
                                         CornerRadius="6" Padding="14,8"
                                         Click="SubmitBtn_Click"/>

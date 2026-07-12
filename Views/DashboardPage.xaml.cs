@@ -88,6 +88,27 @@ public sealed partial class DashboardPage : Page
         ApplySimulationType(App.SimType.CurrentType);
 
         _ = InitializePidChartAsync();
+
+        ApplyLearningPanelContent();
+        App.Session.Changed += OnSessionChanged;
+    }
+
+    // Progress tracking in the bottom "Learning Analytic" panel is
+    // student-facing: on the Server flavor and for staff (Dosen/Asisten) on
+    // the Client the panel shows the Challenge Learning manager instead.
+    private static bool StaffLearningPanel =>
+        BuildInfo.IsServer || (App.Session.IsSignedIn && App.Session.IsStaff);
+
+    private void OnSessionChanged()
+        => DispatcherQueue.TryEnqueue(ApplyLearningPanelContent);
+
+    private void ApplyLearningPanelContent()
+    {
+        bool staff = StaffLearningPanel;
+        DashLearningView.Visibility   = staff ? Visibility.Collapsed : Visibility.Visible;
+        DashChallengeFrame.Visibility = staff ? Visibility.Visible   : Visibility.Collapsed;
+        if (staff && DashChallengeFrame.Content is null)
+            DashChallengeFrame.Navigate(typeof(ChallengeLearningPage));
     }
 
     private void OnSimulationTypeChanged(object? sender, Services.SimulationType type)
@@ -312,6 +333,14 @@ public sealed partial class DashboardPage : Page
     {
         base.OnNavigatedTo(e);
         _isDashboardPageActive = true;
+
+        // (Re)subscribe on every navigation — OnNavigatedFrom unsubscribes and the
+        // page is cached (NavigationCacheMode.Required), so a Loaded-time
+        // subscription would not survive leaving and re-entering the page.
+        // `-=` first keeps it single even if navigation events ever unbalance.
+        App.SimType.SimulationTypeChanged -= OnSimulationTypeChanged;
+        App.SimType.SimulationTypeChanged += OnSimulationTypeChanged;
+        ApplySimulationType(App.SimType.CurrentType);
         // If theme changed while this page was not in the visual tree, force full re-render.
         if (_renderedCount > 0 && _renderedTheme != ActualTheme)
             ClearChatPanel();

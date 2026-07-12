@@ -45,8 +45,8 @@ public sealed partial class BroadcastSettingsPage : Page
         ShareServer.Instance.StateChanged             += OnServerStateChanged;
         CloudflareTunnelService.Instance.StateChanged += OnTunnelStateChanged;
         Lang.PropertyChanged                          += OnLangChanged;
-        if (App.ViewModel?.OpcUa is { } opc)
-            opc.StatusChanged += OnOpcStatusChanged;
+        if (App.ViewModel?.Plc is { } plc)
+            plc.StatusChanged += OnOpcStatusChanged;
 
         RefreshServerStatus();
         RefreshTunnelUI();
@@ -59,8 +59,8 @@ public sealed partial class BroadcastSettingsPage : Page
         ShareServer.Instance.StateChanged             -= OnServerStateChanged;
         CloudflareTunnelService.Instance.StateChanged -= OnTunnelStateChanged;
         Lang.PropertyChanged                          -= OnLangChanged;
-        if (App.ViewModel?.OpcUa is { } opc)
-            opc.StatusChanged -= OnOpcStatusChanged;
+        if (App.ViewModel?.Plc is { } plc)
+            plc.StatusChanged -= OnOpcStatusChanged;
     }
 
     private void OnServerStateChanged() => DispatcherQueue.TryEnqueue(RefreshServerStatus);
@@ -340,174 +340,59 @@ public sealed partial class BroadcastSettingsPage : Page
         TunnelCopyBtn.Content = Lang.Tunnel_CopyUrl;
     }
 
-    // ── OPC connection (UA or DA; flyout mirrors the same config) ────────────────
-
-    private bool IsOpcDaSelected => OpcProtocolCombo?.SelectedIndex == 1;
+    // ── PLC connection (TCP → LabVIEW HMI; flyout mirrors the same config) ──────
 
     private void InitOpcSection(AppSettings s)
     {
-        // Protocol selector
-        OpcProtocolCombo.SelectedIndex = s.OpcProtocol == "DA" ? 1 : 0;
-        ApplyOpcProtocolPanel();
-
-        // OPC UA fields
-        OpcEndpointBox.Text = s.OpcUaEndpointUrl;
-
-        OpcSecNone.Content    = Lang.Ui_OpcUaSecNone;
-        OpcSecSign.Content    = Lang.Ui_OpcUaSecSign;
-        OpcSecSignEnc.Content = Lang.Ui_OpcUaSecSignEnc;
-        OpcSecurityCombo.SelectedIndex = s.OpcUaSecurityMode switch
-        {
-            "Sign"           => 1,
-            "SignAndEncrypt" => 2,
-            _                => 0
-        };
-
-        OpcAuthAnon.Content = Lang.Ui_OpcUaAnonymous;
-        OpcAuthUser.Content = Lang.Ui_OpcUaUsernameAuth;
-        OpcAuthCombo.SelectedIndex = s.OpcUaUseAnonymous ? 0 : 1;
-        OpcUsernameBox.Text        = s.OpcUaUsername;
-        OpcCredPanel.Visibility    = s.OpcUaUseAnonymous ? Visibility.Collapsed : Visibility.Visible;
-
-        // OPC DA fields
-        OpcDaProgIdBox.Text = s.OpcDaProgId;
-
+        PlcHostBox.Text  = s.PlcTcpHost;
+        PlcPortBox.Value = s.PlcTcpPort;
         SyncOpcConnectButton();
-    }
-
-    private void ApplyOpcProtocolPanel()
-    {
-        bool da = IsOpcDaSelected;
-        OpcUaFields.Visibility = da ? Visibility.Collapsed : Visibility.Visible;
-        OpcDaFields.Visibility = da ? Visibility.Visible   : Visibility.Collapsed;
-    }
-
-    private void OpcProtocolCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
-    {
-        if (OpcUaFields is null) return;
-        // Disconnect the protocol being left before switching panels.
-        if (IsOpcDaSelected)
-            App.ViewModel?.OpcUa.Disconnect();
-        else
-            App.ViewModel?.OpcDa.Disconnect();
-        ApplyOpcProtocolPanel();
-        SyncOpcConnectButton();
-    }
-
-    private void OpcAuthCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
-    {
-        if (OpcCredPanel is null) return;
-        OpcCredPanel.Visibility = OpcAuthCombo.SelectedIndex == 1
-            ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void SyncOpcConnectButton()
     {
-        bool da        = IsOpcDaSelected;
-        var  opcUa     = App.ViewModel?.OpcUa;
-        var  opcDa     = App.ViewModel?.OpcDa;
-        bool connected = da ? opcDa?.IsConnected == true : opcUa?.IsConnected == true;
+        var  plc       = App.ViewModel?.Plc;
+        bool connected = plc?.IsConnected == true;
 
         OpcConnectBtn.Content = connected ? Lang.Ctrl_Disconnect : Lang.Ctrl_Connect;
+        PlcHostBox.IsEnabled  = !connected;
+        PlcPortBox.IsEnabled  = !connected;
 
-        OpcEndpointBox.IsEnabled      = !connected;
-        OpcSecurityCombo.IsEnabled    = !connected;
-        OpcAuthCombo.IsEnabled        = !connected;
-        OpcCredPanel.IsHitTestVisible = !connected;
-        OpcDaProgIdBox.IsEnabled      = !connected;
-        OpcProtocolCombo.IsEnabled    = !connected;
-
-        OpcStatusText.Text = da
-            ? (connected ? Lang.Format("OpcUa_StatusConnected", opcDa!.ProgId) : Lang.Get("Ctrl_NotConnected"))
-            : (connected ? Lang.Format("OpcUa_StatusConnected", opcUa!.EndpointUrl) : Lang.Get("Ctrl_NotConnected"));
-    }
-
-    private void OpcCertFolderBtn_Click(object sender, RoutedEventArgs e)
-    {
-        var certPath = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "TLIGDashboard", "pki", "own");
-        Directory.CreateDirectory(certPath);
-        Process.Start(new ProcessStartInfo("explorer.exe", certPath) { UseShellExecute = true });
+        OpcStatusText.Text = connected
+            ? Lang.Format("OpcUa_StatusConnected", plc!.EndpointLabel)
+            : Lang.Get("Ctrl_NotConnected");
     }
 
     private async void OpcConnectBtn_Click(object sender, RoutedEventArgs e)
     {
-        if (IsOpcDaSelected) { await ConnectOpcDaAsync(); return; }
+        var plc = App.ViewModel?.Plc;
+        if (plc is null) return;
 
-        var opc = App.ViewModel?.OpcUa;
-        if (opc is null) return;
-
-        if (opc.IsConnected)
+        if (plc.IsConnected)
         {
-            opc.Disconnect();
+            plc.Disconnect();
             SyncOpcConnectButton();
             return;
         }
 
-        var endpointUrl = OpcEndpointBox.Text.Trim();
-        if (string.IsNullOrEmpty(endpointUrl)) return;
-
-        var secMode = (OpcSecurityCombo.SelectedItem as ComboBoxItem)?.Tag?.ToString() switch
-        {
-            "Sign"           => OpcUaSecurityMode.Sign,
-            "SignAndEncrypt" => OpcUaSecurityMode.SignAndEncrypt,
-            _                => OpcUaSecurityMode.None
-        };
-        var authMode = OpcAuthCombo.SelectedIndex == 1
-            ? OpcUaAuthMode.UsernamePassword
-            : OpcUaAuthMode.Anonymous;
-
-        OpcConnectBtn.IsEnabled = false;
-        OpcStatusText.Text      = Lang.Get("OpcUa_StatusConnecting");
-
-        bool ok = await opc.ConnectAsync(
-            endpointUrl, authMode, OpcUsernameBox.Text, OpcPasswordBox.Password, secMode);
-
-        if (ok)
-        {
-            var s = AppSettingsService.Load();
-            s.OpcProtocol       = "UA";
-            s.OpcUaEndpointUrl  = endpointUrl;
-            s.OpcUaSecurityMode = secMode.ToString();
-            s.OpcUaUseAnonymous = authMode == OpcUaAuthMode.Anonymous;
-            s.OpcUaUsername     = OpcUsernameBox.Text;
-            AppSettingsService.Save(s);
-        }
-
-        OpcConnectBtn.IsEnabled = true;
-        SyncOpcConnectButton();
-    }
-
-    private async Task ConnectOpcDaAsync()
-    {
-        var opc = App.ViewModel?.OpcDa;
-        if (opc is null) return;
-
-        if (opc.IsConnected)
-        {
-            opc.Disconnect();
-            SyncOpcConnectButton();
-            return;
-        }
-
-        var progId = OpcDaProgIdBox.Text.Trim();
-        if (string.IsNullOrEmpty(progId)) return;
+        var host = PlcHostBox.Text.Trim();
+        int port = double.IsNaN(PlcPortBox.Value) ? 0 : (int)PlcPortBox.Value;
+        if (string.IsNullOrEmpty(host) || port is <= 0 or > 65535) return;
 
         OpcConnectBtn.IsEnabled = false;
         OpcStatusText.Text      = Lang.Get("OpcUa_StatusConnecting");
 
         string? capturedError = null;
         void OnError(string msg) => capturedError = msg;
-        opc.ErrorOccurred += OnError;
-        bool ok = await opc.ConnectAsync(progId);
-        opc.ErrorOccurred -= OnError;
+        plc.ErrorOccurred += OnError;
+        bool ok = await plc.ConnectAsync(host, port);
+        plc.ErrorOccurred -= OnError;
 
         if (ok)
         {
             var s = AppSettingsService.Load();
-            s.OpcProtocol = "DA";
-            s.OpcDaProgId = progId;
+            s.PlcTcpHost = host;
+            s.PlcTcpPort = port;
             AppSettingsService.Save(s);
         }
         else if (capturedError is not null)
