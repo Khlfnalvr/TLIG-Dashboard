@@ -7,7 +7,6 @@ using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
 using TLIGDashboard.Helpers;
-using TLIGDashboard.Models.ControlEngineering;
 using TLIGDashboard.Services;
 using TLIGDashboard.Services.ControlEngineering;
 using Windows.Devices.Enumeration;
@@ -57,6 +56,7 @@ public sealed partial class DashboardPage : Page
         InitializeComponent();
         // Keep page cached so layout & chat bubbles survive navigation
         NavigationCacheMode = Microsoft.UI.Xaml.Navigation.NavigationCacheMode.Required;
+        WirePidInputs();
         Loaded += OnLoaded;
     }
 
@@ -87,7 +87,7 @@ public sealed partial class DashboardPage : Page
         App.SimType.SimulationTypeChanged += OnSimulationTypeChanged;
         ApplySimulationType(App.SimType.CurrentType);
 
-        _ = InitializePidChartAsync();
+        _ = RespChart.InitializeAsync();
 
         ApplyLearningPanelContent();
         App.Session.Changed += OnSessionChanged;
@@ -129,74 +129,77 @@ public sealed partial class DashboardPage : Page
     }
 
     // ── Smart PID Designer (AI-assisted tuning + RK4 step-response chart) ──
-    private bool _pidChartReady;
+    //
+    // Gains, setpoint and the last run live in App.PidSession, not in this page: the
+    // Parameter page is this panel's extended screen and must show the same state.
+    // This page keeps one extra job of its own — folding the advisor's review into the
+    // AI chat on the right, which only runs started from here do.
 
-    private async Task InitializePidChartAsync()
+    // Guards the echo when PullPidInputs() writes the boxes.
+    private bool _syncingPidInputs;
+
+    // Subscribed only while this page is navigated to — the Parameter page owns the
+    // rendering while it is up. `-=` first keeps each single if navigation unbalances.
+    private void SubscribePidSession()
     {
-        await RespWebView.EnsureCoreWebView2Async();
-        const string html = """
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-            <style>
-                body { margin: 0; padding: 4px; background: transparent; overflow: hidden; font-family: sans-serif; }
-                canvas { width: 100% !important; height: 100% !important; }
-            </style>
-        </head>
-        <body>
-            <canvas id="pidChart"></canvas>
-            <script>
-                let chart;
-                function updateChart(time, amp, sp) {
-                    const ctx = document.getElementById('pidChart').getContext('2d');
-                    if (chart) chart.destroy();
-                    const datasets = [{
-                        label: 'Step Response',
-                        data: amp,
-                        borderColor: 'rgb(75, 192, 192)',
-                        tension: 0.1,
-                        pointRadius: 0
-                    }];
-                    if (typeof sp === 'number' && isFinite(sp)) {
-                        datasets.push({
-                            label: 'Setpoint',
-                            data: time.map(() => sp),
-                            borderColor: 'rgba(255, 99, 132, 0.8)',
-                            borderDash: [6, 4],
-                            borderWidth: 1.5,
-                            pointRadius: 0
-                        });
-                    }
-                    chart = new Chart(ctx, {
-                        type: 'line',
-                        data: {
-                            labels: time,
-                            datasets: datasets
-                        },
-                        options: {
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            animation: false,
-                            plugins: { legend: { display: false } },
-                            scales: {
-                                x: { ticks: { maxTicksLimit: 6 }, title: { display: true, text: 'Time (s)', font: { size: 9 } } },
-                                y: { title: { display: true, text: 'Amplitude', font: { size: 9 } } }
-                            }
-                        }
-                    });
-                }
-            </script>
-        </body>
-        </html>
-        """;
-        RespWebView.NavigateToString(html);
-        _pidChartReady = true;
+        var s = App.PidSession;
+        s.ResultChanged         -= OnPidResultChanged;
+        s.ResultChanged         += OnPidResultChanged;
+        s.RunningChanged        -= OnPidRunningChanged;
+        s.RunningChanged        += OnPidRunningChanged;
+        s.RunFailed             -= OnPidRunFailed;
+        s.RunFailed             += OnPidRunFailed;
+        s.RecommendationCleared -= OnPidRecommendationCleared;
+        s.RecommendationCleared += OnPidRecommendationCleared;
     }
 
-    // Human-in-the-loop: the AI Advisor's last recommended gains, held until the
-    // student explicitly accepts or declines them.
-    private PidPrediction? _pendingAdvisorRecommendation;
+    private void UnsubscribePidSession()
+    {
+        var s = App.PidSession;
+        s.ResultChanged         -= OnPidResultChanged;
+        s.RunningChanged        -= OnPidRunningChanged;
+        s.RunFailed             -= OnPidRunFailed;
+        s.RecommendationCleared -= OnPidRecommendationCleared;
+    }
+
+    /// <summary>
+    /// Attached here rather than via ValueChanged= in XAML: the markup assigns Value on
+    /// each box as it is parsed, which fires the handler while the boxes declared after
+    /// it are still null — taking the page down with a XamlParseException on startup.
+    /// </summary>
+    private void WirePidInputs()
+    {
+        KpBox.ValueChanged          += PidInput_ValueChanged;
+        KiBox.ValueChanged          += PidInput_ValueChanged;
+        KdBox.ValueChanged          += PidInput_ValueChanged;
+        CtlSetpointBox.ValueChanged += PidInput_ValueChanged;
+    }
+
+    private void PidInput_ValueChanged(NumberBox sender, NumberBoxValueChangedEventArgs args)
+    {
+        if (_syncingPidInputs) return;
+        PushPidInputs();
+    }
+
+    private void PushPidInputs()
+    {
+        var s = App.PidSession;
+        s.Kp       = KpBox.Value;
+        s.Ki       = KiBox.Value;
+        s.Kd       = KdBox.Value;
+        s.Setpoint = CtlSetpointBox.Value;
+    }
+
+    private void PullPidInputs()
+    {
+        var s = App.PidSession;
+        _syncingPidInputs = true;
+        KpBox.Value          = s.Kp;
+        KiBox.Value          = s.Ki;
+        KdBox.Value          = s.Kd;
+        CtlSetpointBox.Value = s.Setpoint;
+        _syncingPidInputs = false;
+    }
 
     // RUN in the Control card is the PID Designer's "Simulate": it runs the RK4
     // step-response preview for the Kp/Ki/Kd values currently in the boxes above,
@@ -207,49 +210,36 @@ public sealed partial class DashboardPage : Page
 
     private async Task RunPidAsync()
     {
-        // NumberBox yields NaN when cleared; a zero setpoint would flatline the
-        // response — normalize to a unit step and show the value actually used.
-        double sp = CtlSetpointBox.Value;
-        if (double.IsNaN(sp) || sp <= 0) { sp = 1.0; CtlSetpointBox.Value = sp; }
-
-        var input = new PidInput
-        {
-            Kp = (float)KpBox.Value,
-            Ki = (float)KiBox.Value,
-            Kd = (float)KdBox.Value,
-            Setpoint = (float)sp,
-        };
-
-        CtlRunBtn.IsEnabled = false;
-        try
-        {
-            var result = await PidDesignService.RunAsync(input);
-            if (result is null)
-            {
-                AddChatBubble("ai", Lang.Pid_ErrorUnavailable);
-                ScrollChat();
-                return;
-            }
-
-            RenderPidResult(result);
-        }
-        finally
-        {
-            CtlRunBtn.IsEnabled = true;
-        }
+        PushPidInputs();
+        // Fires ResultChanged (-> RenderPidResult) / RunFailed on the way through.
+        var result = await App.PidSession.RunAsync();
+        PullPidInputs();  // pick up the normalized setpoint
+        if (result is not null) FoldAdvisorIntoChat(result);
     }
 
+    private void OnPidResultChanged(object? sender, PidDesignResult result)
+        => DispatcherQueue.TryEnqueue(() => RenderPidResult(result));
+
+    private void OnPidRunningChanged(object? sender, bool running)
+        => DispatcherQueue.TryEnqueue(() => CtlRunBtn.IsEnabled = !running);
+
+    private void OnPidRunFailed(object? sender, EventArgs e)
+        => DispatcherQueue.TryEnqueue(() =>
+        {
+            AddChatBubble("ai", Lang.Pid_ErrorUnavailable);
+            ScrollChat();
+        });
+
+    private void OnPidRecommendationCleared(object? sender, EventArgs e)
+        => DispatcherQueue.TryEnqueue(() => PidAdvisorPanel.Visibility = Visibility.Collapsed);
+
+    /// <summary>
+    /// Draws a run into the panel. Safe to call repeatedly for the same result — it is
+    /// also how the page catches up on a run started from the Parameter page.
+    /// </summary>
     private void RenderPidResult(PidDesignResult result)
     {
-        if (_pidChartReady)
-        {
-            string timeJson = "[" + string.Join(',', result.Simulation.Time.Select(
-                t => t.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture))) + "]";
-            string ampJson = "[" + string.Join(',', result.Simulation.Amplitude.Select(
-                a => a.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture))) + "]";
-            string spJson = result.Setpoint.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture);
-            _ = RespWebView.ExecuteScriptAsync($"updateChart({timeJson}, {ampJson}, {spJson})");
-        }
+        RespChart.Update(result.Simulation.Time, result.Simulation.Amplitude, result.Setpoint);
 
         // result.Metrics is read off the exact RK4 curve above — always consistent
         // with what's plotted (result.MlEstimate exists but isn't shown here; see
@@ -262,30 +252,10 @@ public sealed partial class DashboardPage : Page
         DiagnosisValue.Text = string.IsNullOrEmpty(result.Diagnosis)
             ? "--" : result.Diagnosis;
 
-        if (!string.IsNullOrWhiteSpace(result.AdvisorExplanation))
+        // Read the pending gains from the session, not from result: a decline made on
+        // the Parameter page must stay declined here too.
+        if (App.PidSession.PendingRecommendation is { } rec)
         {
-            AddChatBubble("ai", result.AdvisorExplanation);
-            ScrollChat();
-
-            // Fold this exchange into App.Ai's own history (not just a visual bubble)
-            // so a follow-up question typed in the chat box below carries the actual
-            // simulation numbers as context instead of the LLM answering blind. The
-            // synthetic "user" turn is never rendered as its own bubble — bump
-            // _renderedCount past it so SyncBubblesWithHistory() doesn't re-render it
-            // as a message the student never actually typed.
-            App.Ai.AddHistoryEntry("user",
-                $"[Ringkasan simulasi RUN] Setpoint={result.Setpoint:F2}, " +
-                $"Kp={result.Prediction.Kp:F3}, Ki={result.Prediction.Ki:F3}, Kd={result.Prediction.Kd:F3} " +
-                $"-> hasil simulasi RK4: Overshoot={result.Metrics.Overshoot:F2}%, Rise Time={result.Metrics.RiseTime:F3}s, " +
-                $"Settling Time={result.Metrics.SettlingTime:F2}s, Steady-State Error={result.Metrics.SteadyStateError:F3}. " +
-                $"Diagnosis: {result.Diagnosis}.");
-            App.Ai.AddHistoryEntry("assistant", result.AdvisorExplanation);
-            _renderedCount = App.Ai.History.Count;
-        }
-
-        if (result.AdvisorRecommendation is { } rec)
-        {
-            _pendingAdvisorRecommendation = rec;
             PidAdvisorText.Text = Lang.Pid_AdvisorPrompt;
             PidAdvisorRecommendationText.Text = $"Kp={rec.Kp:F3}  Ki={rec.Ki:F3}  Kd={rec.Kd:F3}";
             PidAdvisorPanel.Visibility = Visibility.Visible;
@@ -293,8 +263,34 @@ public sealed partial class DashboardPage : Page
         else
         {
             PidAdvisorPanel.Visibility = Visibility.Collapsed;
-            _pendingAdvisorRecommendation = null;
         }
+    }
+
+    /// <summary>
+    /// Puts the advisor's review in the chat panel and folds the exchange into App.Ai's
+    /// own history (not just a visual bubble) so a follow-up question typed in the chat
+    /// box below carries the actual simulation numbers as context instead of the LLM
+    /// answering blind. Only ever called for a run started from this page — replaying it
+    /// on navigation would re-post bubbles for a run the student already saw.
+    /// </summary>
+    private void FoldAdvisorIntoChat(PidDesignResult result)
+    {
+        if (string.IsNullOrWhiteSpace(result.AdvisorExplanation)) return;
+
+        AddChatBubble("ai", result.AdvisorExplanation);
+        ScrollChat();
+
+        // The synthetic "user" turn is never rendered as its own bubble — bump
+        // _renderedCount past it so SyncBubblesWithHistory() doesn't re-render it
+        // as a message the student never actually typed.
+        App.Ai.AddHistoryEntry("user",
+            $"[Ringkasan simulasi RUN] Setpoint={result.Setpoint:F2}, " +
+            $"Kp={result.Prediction.Kp:F3}, Ki={result.Prediction.Ki:F3}, Kd={result.Prediction.Kd:F3} " +
+            $"-> hasil simulasi RK4: Overshoot={result.Metrics.Overshoot:F2}%, Rise Time={result.Metrics.RiseTime:F3}s, " +
+            $"Settling Time={result.Metrics.SettlingTime:F2}s, Steady-State Error={result.Metrics.SteadyStateError:F3}. " +
+            $"Diagnosis: {result.Diagnosis}.");
+        App.Ai.AddHistoryEntry("assistant", result.AdvisorExplanation);
+        _renderedCount = App.Ai.History.Count;
     }
 
     // "Ya (Terapkan)" — fills Kp/Ki/Kd with the Advisor's recommendation and
@@ -302,24 +298,14 @@ public sealed partial class DashboardPage : Page
     // apply-and-rerun a web frontend would do, just via native C# instead of DOM.
     private async void PidAdvisorAccept_Click(object sender, RoutedEventArgs e)
     {
-        if (_pendingAdvisorRecommendation is not { } rec) return;
-
-        KpBox.Value = rec.Kp;
-        KiBox.Value = rec.Ki;
-        KdBox.Value = rec.Kd;
-
-        PidAdvisorPanel.Visibility = Visibility.Collapsed;
-        _pendingAdvisorRecommendation = null;
-
-        await RunPidAsync();
+        var result = await App.PidSession.AcceptRecommendationAsync();
+        PullPidInputs();
+        if (result is not null) FoldAdvisorIntoChat(result);
     }
 
     // "Tidak" — leaves Kp/Ki/Kd untouched so the student can keep tuning manually.
     private void PidAdvisorDecline_Click(object sender, RoutedEventArgs e)
-    {
-        PidAdvisorPanel.Visibility = Visibility.Collapsed;
-        _pendingAdvisorRecommendation = null;
-    }
+        => App.PidSession.ClearRecommendation();
 
     private void OnActualThemeChanged(FrameworkElement sender, object args)
     {
@@ -341,6 +327,15 @@ public sealed partial class DashboardPage : Page
         App.SimType.SimulationTypeChanged -= OnSimulationTypeChanged;
         App.SimType.SimulationTypeChanged += OnSimulationTypeChanged;
         ApplySimulationType(App.SimType.CurrentType);
+
+        SubscribePidSession();
+        // Catch up on anything run from the Parameter page while this page was away.
+        // The button state has to be re-synced by hand: a run in flight while we were
+        // unsubscribed would otherwise leave RUN disabled for good.
+        CtlRunBtn.IsEnabled = !App.PidSession.IsRunning;
+        PullPidInputs();
+        if (App.PidSession.LastResult is { } last) RenderPidResult(last);
+
         // If theme changed while this page was not in the visual tree, force full re-render.
         if (_renderedCount > 0 && _renderedTheme != ActualTheme)
             ClearChatPanel();
@@ -359,6 +354,7 @@ public sealed partial class DashboardPage : Page
         base.OnNavigatedFrom(e);
         _isDashboardPageActive = false;
         App.SimType.SimulationTypeChanged -= OnSimulationTypeChanged;
+        UnsubscribePidSession();
 
         if (_clientMode)
         {

@@ -36,8 +36,16 @@ public partial class App : Application
     /// </summary>
     public static Services.SimulationTypeService SimType { get; } = Services.SimulationTypeService.Instance;
 
-    /// <summary>Latest PID step-response metrics written by DashboardPage simulation runs.</summary>
+    /// <summary>Latest PID step-response metrics reported by the PLC over TCP.</summary>
     public static Services.PidMetricsService PidMetrics { get; } = Services.PidMetricsService.Instance;
+
+    /// <summary>
+    /// Shared Smart PID Designer state (gains, setpoint, last run). The Dashboard's
+    /// System Model panel and the Parameter page are two views of one designer, so a
+    /// RUN on either is reflected on the other.
+    /// </summary>
+    public static Services.ControlEngineering.PidSessionService PidSession { get; }
+        = Services.ControlEngineering.PidSessionService.Instance;
 
     public App()
     {

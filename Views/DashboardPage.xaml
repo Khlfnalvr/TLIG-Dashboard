@@ -291,7 +291,7 @@
                                     x:Name="ResponSistemChart"
                                     Style="{StaticResource DashInputBoxStyle}"
                                     Padding="2">
-                                <WebView2 x:Name="RespWebView" DefaultBackgroundColor="Transparent"/>
+                                <controls:PidResponseChart x:Name="RespChart"/>
                             </Border>
                         </Grid>
                     </Border>
