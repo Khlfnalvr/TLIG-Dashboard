@@ -205,7 +205,17 @@ public static class PidDesignService
             // Advisor prompt or the metric cards; see the comment above PidDesignResult.
             var mlEstimate = await Task.Run(() => _mlMetrics.Predict(pred.Kp, pred.Ki, pred.Kd), ct);
 
-            var advisor = await new PidAdvisorService(input.Language).ReviewAsync(pred, metrics, input.Setpoint, input.History, ct);
+            // Gains to offer come from searching the simulator (verified against the same
+            // criteria as the diagnosis), not from the LLM — so the card can't contradict the
+            // diagnosis. Null when the current tuning is already ideal. The one-time grid
+            // search is cached, so this is O(1) after the first run; wrap it anyway to keep
+            // the first run off the caller's thread.
+            var recommendation = await Task.Run(() => PidRecommender.Recommend(metrics, stable), ct);
+
+            // The LLM now only explains the recommended gains; it no longer picks numbers.
+            var advisor = await new PidAdvisorService(input.Language).ReviewAsync(
+                pred, metrics, input.Setpoint, input.History,
+                recommendation?.gains, recommendation?.metrics, ct);
 
             return new PidDesignResult
             {

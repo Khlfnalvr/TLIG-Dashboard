@@ -1156,10 +1156,18 @@ public sealed class ShareServer
             var mlEstimate = await Task.Run(
                 () => _pidMlMetrics.Predict(finalPid.Kp, finalPid.Ki, finalPid.Kd), ct);
 
+            // Gains to offer come from searching the simulator (verified against the same
+            // criteria as the diagnosis), not the LLM, so the card can't contradict the
+            // diagnosis. Null when the current tuning is already ideal.
+            var recommendation = await Task.Run(
+                () => TLIGDashboard.Services.ControlEngineering.PidRecommender.Recommend(metrics, stable), ct);
+
             // input.Language is the *student's* UI language — replying in this server's
-            // language would hand them a review they may not read.
+            // language would hand them a review they may not read. The LLM now only explains
+            // the recommended gains; it no longer picks numbers.
             var advisor = await new TLIGDashboard.Services.ControlEngineering.PidAdvisorService(input.Language)
-                .ReviewAsync(finalPid, metrics, input.Setpoint, input.History, ct);
+                .ReviewAsync(finalPid, metrics, input.Setpoint, input.History,
+                    recommendation?.gains, recommendation?.metrics, ct);
 
             var response = new JsonObject
             {
