@@ -334,6 +334,15 @@ public sealed class LocalizationManager : INotifyPropertyChanged
     public string Pid_AdvisorDecline => T(nameof(Pid_AdvisorDecline));
     public string Pid_ErrorUnavailable => T(nameof(Pid_ErrorUnavailable));
 
+    // ── Rule-based diagnosis (PidDiagnosisCalculator) ────────────────────
+    // Placeholders carry the measured number and the limit it was judged against,
+    // so the student reads why, not just what.
+    public string Diag_Unstable         => T(nameof(Diag_Unstable));
+    public string Diag_HighOvershoot    => T(nameof(Diag_HighOvershoot));
+    public string Diag_SteadyStateError => T(nameof(Diag_SteadyStateError));
+    public string Diag_SlowResponse     => T(nameof(Diag_SlowResponse));
+    public string Diag_Ideal            => T(nameof(Diag_Ideal));
+
     // ── Live view / HMI ──────────────────────────────────────────────────
     public string Live_Header      => T(nameof(Live_Header));
     public string Live_CamInfo     => T(nameof(Live_CamInfo));
@@ -968,6 +977,12 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             [nameof(Pid_AdvisorDecline)] = "No",
             [nameof(Pid_ErrorUnavailable)] = "PID design service unavailable — check your server connection.",
 
+            [nameof(Diag_Unstable)]         = "System is unstable — lower Kp and Ki.",
+            [nameof(Diag_HighOvershoot)]    = "Overshoot {0}% exceeds the {1}% limit — lower Kp or raise Kd.",
+            [nameof(Diag_SteadyStateError)] = "Steady-state error {0}% exceeds {1}% — raise Ki.",
+            [nameof(Diag_SlowResponse)]     = "Settling time {0} s is slow (limit {1} s) — raise Kp.",
+            [nameof(Diag_Ideal)]            = "Response is good — overshoot {0}%, settling {1} s.",
+
             [nameof(Ai_Title)]         = "AI ASSISTANT",
             [nameof(Ai_UserLabel)]     = "USER",
             [nameof(Ai_AiLabel)]       = "AI ASSISTANT",
@@ -1558,6 +1573,12 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             [nameof(Pid_AdvisorAccept)]  = "Ya (Terapkan)",
             [nameof(Pid_AdvisorDecline)] = "Tidak",
             [nameof(Pid_ErrorUnavailable)] = "Layanan desain PID tidak tersedia — periksa koneksi server Anda.",
+
+            [nameof(Diag_Unstable)]         = "Sistem tidak stabil — turunkan Kp dan Ki.",
+            [nameof(Diag_HighOvershoot)]    = "Overshoot {0}% melebihi batas {1}% — turunkan Kp atau naikkan Kd.",
+            [nameof(Diag_SteadyStateError)] = "Error steady-state {0}% melebihi {1}% — naikkan Ki.",
+            [nameof(Diag_SlowResponse)]     = "Settling time {0} s terlalu lama (batas {1} s) — naikkan Kp.",
+            [nameof(Diag_Ideal)]            = "Respons sudah baik — overshoot {0}%, settling {1} s.",
 
             [nameof(Ai_Title)]         = "ASISTEN AI",
             [nameof(Ai_UserLabel)]     = "PENGGUNA",
