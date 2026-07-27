@@ -47,6 +47,14 @@ public partial class App : Application
     public static Services.ControlEngineering.PidSessionService PidSession { get; }
         = Services.ControlEngineering.PidSessionService.Instance;
 
+    /// <summary>
+    /// Shared Cascade Control designer state (outer temperature PID + inner flow PI).
+    /// Backs the dedicated Cascade page the same way <see cref="PidSession"/> backs the
+    /// single-loop designer.
+    /// </summary>
+    public static Services.ControlEngineering.CascadeSessionService CascadeSession { get; }
+        = Services.ControlEngineering.CascadeSessionService.Instance;
+
     public App()
     {
         InitializeComponent();

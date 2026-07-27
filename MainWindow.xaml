@@ -79,6 +79,13 @@
                         </TextBlock.RenderTransform>
                     </TextBlock>
                 </NavigationViewItem>
+                <NavigationViewItem x:Name="NavCascade"    Tag="Cascade"    MinWidth="0" MinHeight="32" Height="32" Padding="0,0,0,2" VerticalContentAlignment="Center">
+                    <TextBlock Text="{x:Bind Lang.Nav_Cascade, Mode=OneWay}" FontSize="12" VerticalAlignment="Center">
+                        <TextBlock.RenderTransform>
+                            <TranslateTransform Y="-3"/>
+                        </TextBlock.RenderTransform>
+                    </TextBlock>
+                </NavigationViewItem>
                 <NavigationViewItem x:Name="NavLiveView"   Tag="LiveView"   MinWidth="0" MinHeight="32" Height="32" Padding="0,0,0,2" VerticalContentAlignment="Center">
                     <TextBlock Text="{x:Bind Lang.Nav_LiveView, Mode=OneWay}" FontSize="12" VerticalAlignment="Center">
                         <TextBlock.RenderTransform>

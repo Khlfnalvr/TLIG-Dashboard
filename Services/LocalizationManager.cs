@@ -90,6 +90,7 @@ public sealed class LocalizationManager : INotifyPropertyChanged
     public string Nav_Logging      => T(nameof(Nav_Logging));
     public string Nav_Playback     => T(nameof(Nav_Playback));
     public string Nav_Parameter    => T(nameof(Nav_Parameter));
+    public string Nav_Cascade      => T(nameof(Nav_Cascade));
     public string Nav_LiveView     => T(nameof(Nav_LiveView));
     public string Nav_LearningAnalytic => T(nameof(Nav_LearningAnalytic));
     public string Nav_AI           => T(nameof(Nav_AI));
@@ -333,6 +334,24 @@ public sealed class LocalizationManager : INotifyPropertyChanged
     public string Pid_AdvisorAccept  => T(nameof(Pid_AdvisorAccept));
     public string Pid_AdvisorDecline => T(nameof(Pid_AdvisorDecline));
     public string Pid_ErrorUnavailable => T(nameof(Pid_ErrorUnavailable));
+
+    // ── Cascade Control designer (outer temperature PID + inner flow PI) ──
+    public string Cas_Title                 => T(nameof(Cas_Title));
+    public string Cas_Subtitle              => T(nameof(Cas_Subtitle));
+    public string Cas_BlockDiagram          => T(nameof(Cas_BlockDiagram));
+    public string Cas_Response              => T(nameof(Cas_Response));
+    public string Cas_OuterGains            => T(nameof(Cas_OuterGains));
+    public string Cas_InnerGains            => T(nameof(Cas_InnerGains));
+    public string Cas_Setpoint              => T(nameof(Cas_Setpoint));
+    public string Cas_Disturbance           => T(nameof(Cas_Disturbance));
+    public string Cas_Run                   => T(nameof(Cas_Run));
+    public string Cas_RunHint               => T(nameof(Cas_RunHint));
+    public string Cas_PrimaryMetrics        => T(nameof(Cas_PrimaryMetrics));
+    public string Cas_DisturbanceRejection  => T(nameof(Cas_DisturbanceRejection));
+    public string Cas_Cascade               => T(nameof(Cas_Cascade));
+    public string Cas_SingleLoop            => T(nameof(Cas_SingleLoop));
+    public string Cas_Improvement           => T(nameof(Cas_Improvement));
+    public string Cas_ErrorUnavailable      => T(nameof(Cas_ErrorUnavailable));
 
     // ── Live view / HMI ──────────────────────────────────────────────────
     public string Live_Header      => T(nameof(Live_Header));
@@ -743,6 +762,7 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             [nameof(Nav_Logging)]      = "Logging",
             [nameof(Nav_Playback)]     = "Playback",
             [nameof(Nav_Parameter)]    = "Parameter",
+            [nameof(Nav_Cascade)]      = "Cascade",
             [nameof(Nav_LiveView)]     = "Live View",
             [nameof(Nav_LearningAnalytic)] = "Learning Analytic",
             [nameof(Nav_AI)]           = "AI Chat",
@@ -967,6 +987,23 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             [nameof(Pid_AdvisorAccept)]  = "Yes (Apply)",
             [nameof(Pid_AdvisorDecline)] = "No",
             [nameof(Pid_ErrorUnavailable)] = "PID design service unavailable — check your server connection.",
+
+            [nameof(Cas_Title)]                = "Cascade Control Designer",
+            [nameof(Cas_Subtitle)]             = "Primary: Temperature (PID)  ·  Secondary: Flow (PI)",
+            [nameof(Cas_BlockDiagram)]         = "CASCADE BLOCK DIAGRAM",
+            [nameof(Cas_Response)]             = "SYSTEM RESPONSE",
+            [nameof(Cas_OuterGains)]           = "OUTER LOOP · TEMPERATURE (PID)",
+            [nameof(Cas_InnerGains)]           = "INNER LOOP · FLOW (PI)",
+            [nameof(Cas_Setpoint)]             = "Temp Setpoint",
+            [nameof(Cas_Disturbance)]          = "Flow Disturbance",
+            [nameof(Cas_Run)]                  = "RUN SIMULATION",
+            [nameof(Cas_RunHint)]              = "The inner (flow) loop is tuned first and must be several times faster than the outer (temperature) loop — that is what lets cascade reject flow disturbances before they move the temperature.",
+            [nameof(Cas_PrimaryMetrics)]       = "PRIMARY LOOP · TEMPERATURE RESPONSE",
+            [nameof(Cas_DisturbanceRejection)] = "FLOW DISTURBANCE REJECTION",
+            [nameof(Cas_Cascade)]              = "Cascade",
+            [nameof(Cas_SingleLoop)]           = "Single-loop",
+            [nameof(Cas_Improvement)]          = "Improvement",
+            [nameof(Cas_ErrorUnavailable)]     = "Cascade designer unavailable — check your AI provider / server connection.",
 
             [nameof(Ai_Title)]         = "AI ASSISTANT",
             [nameof(Ai_UserLabel)]     = "USER",
@@ -1334,6 +1371,7 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             [nameof(Nav_Logging)]      = "Logging",
             [nameof(Nav_Playback)]     = "Putar Ulang",
             [nameof(Nav_Parameter)]    = "Parameter",
+            [nameof(Nav_Cascade)]      = "Cascade",
             [nameof(Nav_LiveView)]     = "Tampilan Live",
             [nameof(Nav_LearningAnalytic)] = "Learning Analytic",
             [nameof(Nav_AI)]           = "AI Chat",
@@ -1558,6 +1596,23 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             [nameof(Pid_AdvisorAccept)]  = "Ya (Terapkan)",
             [nameof(Pid_AdvisorDecline)] = "Tidak",
             [nameof(Pid_ErrorUnavailable)] = "Layanan desain PID tidak tersedia — periksa koneksi server Anda.",
+
+            [nameof(Cas_Title)]                = "Perancang Kontrol Cascade",
+            [nameof(Cas_Subtitle)]             = "Primer: Temperatur (PID)  ·  Sekunder: Flow (PI)",
+            [nameof(Cas_BlockDiagram)]         = "DIAGRAM BLOK CASCADE",
+            [nameof(Cas_Response)]             = "RESPONS SISTEM",
+            [nameof(Cas_OuterGains)]           = "LOOP LUAR · TEMPERATUR (PID)",
+            [nameof(Cas_InnerGains)]           = "LOOP DALAM · FLOW (PI)",
+            [nameof(Cas_Setpoint)]             = "Setpoint Suhu",
+            [nameof(Cas_Disturbance)]          = "Gangguan Flow",
+            [nameof(Cas_Run)]                  = "JALANKAN SIMULASI",
+            [nameof(Cas_RunHint)]              = "Loop dalam (flow) dituning lebih dulu dan harus beberapa kali lebih cepat dari loop luar (temperatur) — inilah yang membuat cascade mampu menolak gangguan flow sebelum sempat menggeser suhu.",
+            [nameof(Cas_PrimaryMetrics)]       = "LOOP PRIMER · RESPONS TEMPERATUR",
+            [nameof(Cas_DisturbanceRejection)] = "PENOLAKAN GANGGUAN FLOW",
+            [nameof(Cas_Cascade)]              = "Cascade",
+            [nameof(Cas_SingleLoop)]           = "Single-loop",
+            [nameof(Cas_Improvement)]          = "Peningkatan",
+            [nameof(Cas_ErrorUnavailable)]     = "Perancang cascade tidak tersedia — periksa koneksi AI/server Anda.",
 
             [nameof(Ai_Title)]         = "ASISTEN AI",
             [nameof(Ai_UserLabel)]     = "PENGGUNA",

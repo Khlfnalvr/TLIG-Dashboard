@@ -46,6 +46,7 @@ public sealed partial class MainWindow : Window
     {
         { "Dashboard", typeof(DashboardPage) },
         { "Parameter", typeof(ParameterPage) },
+        { "Cascade",   typeof(CascadeControlPage) },
         { "LiveView",  typeof(LiveViewPage) },
         { "LearningAnalytic", typeof(LearningAnalyticPage) },
         { "AI",        typeof(AIPage) },
