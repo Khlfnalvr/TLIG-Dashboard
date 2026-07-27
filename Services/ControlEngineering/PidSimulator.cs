@@ -7,55 +7,49 @@ namespace TLIGDashboard.Services.ControlEngineering;
 
 public class PidSimulator
 {
-    // Plant parameters: G(s) = 6.223 / (s^2 + 6.556s + 0.2516)
-    private const double B = 6.223;
-    private const double A1 = 6.556;
-    private const double A0 = 0.2516;
+    // Identified primary plant (lab open-loop test, validated against experiment):
+    //   Gp1(s) = 0.6361 / (101.53 s + 1) * e^(-52.0866 s)   temperature, shell outlet.
+    // A First-Order-Plus-Dead-Time (FOPDT) plant: a single lag plus a pure transport
+    // delay. The delay is realised in SimulateStepResponse as a ring buffer on the
+    // plant input.
+    private const double Gain     = 0.6361;
+    private const double Tau      = 101.53;
+    private const double DeadTime = 52.0866;
 
     /// <summary>
-    /// The plant's transfer function as text, built from the very B/A1/A0 the integrator
+    /// The plant's transfer function as text, built from the very constants the integrator
     /// uses. Handed to the LLM advisor so its description of the plant can never drift
     /// from what is actually simulated.
     /// </summary>
-    public static string PlantTransferFunction => $"G(s) = {B} / (s^2 + {A1}*s + {A0})";
+    public static string PlantTransferFunction =>
+        $"G(s) = {Gain} / ({Tau}s + 1) * e^(-{DeadTime}s)";
 
     /// <summary>
-    /// Steady-state (DC) gain and dominant (slowest) time constant of the open-loop plant.
-    /// The plant is heavily lag-dominant (large DC gain, long time constant), which is why
-    /// generic PID reflexes mislead on it; giving the advisor these numbers lets it reason
-    /// from the real plant rather than rules of thumb.
+    /// Steady-state (DC) gain and dominant time constant of the open-loop plant. For this
+    /// FOPDT model that is simply the plant gain and time constant; the long dead time
+    /// (see <see cref="PlantTransferFunction"/>) is what makes the loop hard to control and
+    /// is quoted to the advisor via the transfer-function string.
     /// </summary>
     public static (double dcGain, double dominantTimeConstant) PlantCharacteristics()
-    {
-        double dcGain = B / A0;
-        // Poles of s^2 + A1*s + A0; the one nearer the origin dominates the response.
-        double disc = Math.Sqrt(Math.Max(0, A1 * A1 - 4 * A0));
-        double dominantPole = (-A1 + disc) / 2.0;   // less negative => slower => dominant
-        double tau = dominantPole != 0 ? 1.0 / Math.Abs(dominantPole) : double.PositiveInfinity;
-        return (dcGain, tau);
-    }
+        => (Gain, Tau);
 
-    // Ceiling on simulated time for gains that settle very slowly (or never).
-    private const double MaxDuration = 120.0;
-    // Always simulate at least this long, so a fast response still yields a usable curve.
-    private const double MinDuration = 5.0;
+    // Ceiling on simulated time — this plant is slow (tau ~101 s + 52 s dead time), so a
+    // well-tuned closed loop still settles in a few hundred seconds.
+    private const double MaxDuration = 800.0;
+    // Always simulate at least this long. Must exceed the dead time: until t = DeadTime the
+    // output sits flat at zero, and the settle detector below would otherwise mistake that
+    // initial plateau for a settled response and stop before the plant has even reacted.
+    private const double MinDuration = 80.0;
     // The run stops once the response has stopped moving: the trailing window's spread
-    // and |dy| both fall under this fraction of the reference. 1e-5 was measured against
-    // a 400s ground-truth run — it lands overshoot and steady-state error within 0.004%
-    // at the app's default gains, where 1e-3 was still 0.41% off (the exponential tail
-    // is still creeping when a looser tolerance calls it settled).
+    // and |dy| both fall under this fraction of the reference.
     private const double SettleTolFraction = 1e-5;
-    private const double SettleWindowSeconds = 2.0;
-    private const double SettleCheckSeconds = 0.5;
+    private const double SettleWindowSeconds = 4.0;
+    private const double SettleCheckSeconds = 1.0;
 
     /// <summary>
     /// Integrates the closed-loop step response with RK4.
     /// <paramref name="duration"/> &lt;= 0 (the default) runs until the response actually
-    /// settles, capped at <see cref="MaxDuration"/>. A fixed window cannot work here: the
-    /// dominant closed-loop pole moves with the gains, so the old hard-coded 10s stopped
-    /// mid-transient at the app's own default gains (which need ~14s just to reach the 2%
-    /// band) and reported the not-yet-final value as steady state — inventing a ~3%
-    /// steady-state error on a plant whose integral action drives it to zero.
+    /// settles, capped at <see cref="MaxDuration"/>.
     /// </summary>
     /// <remarks>
     /// Returns the full-resolution run: <see cref="ComputeStepMetrics"/> must see the real
@@ -69,6 +63,7 @@ public class PidSimulator
         int minSteps = auto ? (int)(MinDuration / dt) : maxSteps;
         int window = (int)(SettleWindowSeconds / dt);
         int checkEvery = Math.Max(1, (int)(SettleCheckSeconds / dt));
+        int delay = (int)Math.Round(DeadTime / dt);
 
         double scale = Math.Max(1.0, Math.Abs(reference));
         double tol = SettleTolFraction * scale;
@@ -76,10 +71,13 @@ public class PidSimulator
 
         var time = new List<double>(Math.Min(maxSteps, 8192));
         var amplitude = new List<double>(Math.Min(maxSteps, 8192));
+        // Plant-input history feeding the dead-time buffer (u delayed by `delay` samples).
+        var uHist = new double[maxSteps];
 
-        // State: [y, dy, z] where z is integral of error
+        // State: [y, z] where z is the integral of the error. The plant is first-order,
+        // so there is no separate velocity state — dy/dt is algebraic in y and the
+        // delayed input.
         double y = 0;
-        double dy = 0;
         double z = 0;
 
         double kp = pid.Kp;
@@ -94,21 +92,27 @@ public class PidSimulator
             // Diverging gains would otherwise spend the whole budget producing infinities.
             if (double.IsNaN(y) || double.IsInfinity(y) || Math.Abs(y) > blowUp) break;
 
+            double uDel = i - delay >= 0 ? uHist[i - delay] : 0.0;
+
+            // RK4 Integration. uDel is a known past value, held constant across the four
+            // sub-steps; the valve command issued now (k1's u) is recorded for future steps.
+            double[] k1 = Derivatives(y, z, uDel, reference, kp, ki, kd, out double u);
+            uHist[i] = u;
+
+            // dy/dt is k1[0]; the loop has settled once the recent window is flat and the
+            // output has stopped moving.
             if (auto && i >= minSteps && i >= window && i % checkEvery == 0 &&
-                IsWindowFlat(amplitude, window, tol) && Math.Abs(dy) < tol)
+                IsWindowFlat(amplitude, window, tol) && Math.Abs(k1[0]) < tol)
             {
                 break;
             }
 
-            // RK4 Integration
-            double[] k1 = Derivatives(y, dy, z, reference, kp, ki, kd);
-            double[] k2 = Derivatives(y + 0.5 * dt * k1[0], dy + 0.5 * dt * k1[1], z + 0.5 * dt * k1[2], reference, kp, ki, kd);
-            double[] k3 = Derivatives(y + 0.5 * dt * k2[0], dy + 0.5 * dt * k2[1], z + 0.5 * dt * k2[2], reference, kp, ki, kd);
-            double[] k4 = Derivatives(y + dt * k3[0], dy + dt * k3[1], z + dt * k3[2], reference, kp, ki, kd);
+            double[] k2 = Derivatives(y + 0.5 * dt * k1[0], z + 0.5 * dt * k1[1], uDel, reference, kp, ki, kd, out _);
+            double[] k3 = Derivatives(y + 0.5 * dt * k2[0], z + 0.5 * dt * k2[1], uDel, reference, kp, ki, kd, out _);
+            double[] k4 = Derivatives(y + dt * k3[0], z + dt * k3[1], uDel, reference, kp, ki, kd, out _);
 
             y += (dt / 6.0) * (k1[0] + 2 * k2[0] + 2 * k3[0] + k4[0]);
-            dy += (dt / 6.0) * (k1[1] + 2 * k2[1] + 2 * k3[1] + k4[1]);
-            z += (dt / 6.0) * (k1[2] + 2 * k2[2] + 2 * k3[2] + k4[2]);
+            z += (dt / 6.0) * (k1[1] + 2 * k2[1] + 2 * k3[1] + k4[1]);
         }
 
         return new SimulationResult
@@ -166,20 +170,23 @@ public class PidSimulator
         return new SimulationResult { Time = ot, Amplitude = oa, UsedParameters = full.UsedParameters };
     }
 
-    private double[] Derivatives(double y, double dy, double z, double r, double kp, double ki, double kd)
+    // Closed-loop first-order plant with input dead time:
+    //   dy/dt = (Gain * u(t-θ) - y) / Tau       — FOPDT plant, delayed input `uDel`
+    //   u     = Kp*(r-y) + Ki*z - Kd*(dy/dt)    — PID, derivative on measurement
+    //   dz/dt = r - y
+    // u depends on dy/dt, which uses the DELAYED input (a known past value), so there is
+    // no algebraic loop.
+    private double[] Derivatives(double y, double z, double uDel, double r, double kp, double ki, double kd, out double u)
     {
-        // dy/dt = dy
-        // d(dy)/dt = B * (Kp*(r-y) + Ki*z - Kd*dy) - A1*dy - A0*y
-        // dz/dt = r - y
-
-        double d2y = B * (kp * (r - y) + ki * z - kd * dy) - A1 * dy - A0 * y;
-        double dz = r - y;
-
-        return new[] { dy, d2y, dz };
+        double dydt = (Gain * uDel - y) / Tau;
+        double e = r - y;
+        u = kp * e + ki * z - kd * dydt;
+        double dz = e;
+        return new[] { dydt, dz };
     }
 
     /// Rise time (10%→90%), overshoot %, 2%-band settling time, steady-state error % —
-    /// shared by the Dashboard's chart display and PidDiagnosisAgent's input features,
+    /// shared by the Dashboard's chart display and the diagnosis' input features,
     /// so both read the exact same numbers off a given response curve.
     public static (double rise, double overshootPct, double settling, double steadyErrPct) ComputeStepMetrics(
         double[] time, double[] amplitude, double reference = 1.0)

@@ -169,6 +169,17 @@ public sealed partial class DashboardPage : Page
     /// </summary>
     private void WirePidInputs()
     {
+        // Ki=0.015 needs more than the NumberBox default 2 fraction digits; a
+        // significant-digits formatter shows small gains exactly without trailing zeros.
+        var gainFmt = new Windows.Globalization.NumberFormatting.DecimalFormatter
+        {
+            IntegerDigits = 1,
+            FractionDigits = 0,
+            NumberRounder = new Windows.Globalization.NumberFormatting.SignificantDigitsNumberRounder { SignificantDigits = 5 },
+        };
+        foreach (var box in new[] { KpBox, KiBox, KdBox, CtlSetpointBox })
+            box.NumberFormatter = gainFmt;
+
         KpBox.ValueChanged          += PidInput_ValueChanged;
         KiBox.ValueChanged          += PidInput_ValueChanged;
         KdBox.ValueChanged          += PidInput_ValueChanged;

@@ -28,9 +28,10 @@ public static class PidRecommender
     private static readonly double[] KiGrid = { 0.01, 0.02, 0.05, 0.1, 0.2, 0.4, 0.8, 1.5 };
     private static readonly double[] KdGrid = { 0, 0.1, 0.25, 0.5, 1, 2 };
 
-    // Coarser step than the display run (0.01): the winner's metrics are identical at both
-    // (verified), and this keeps the full 576-point sweep well under a tenth of a second.
-    private const double SearchDt = 0.02;
+    // Coarser step than the display run (0.01): the winner's metrics are effectively
+    // identical, and it keeps the full 576-point sweep fast even though the FOPDT plant
+    // (tau ~101 s + 52 s dead time) runs for a few hundred simulated seconds per candidate.
+    private const double SearchDt = 0.1;
 
     // PidSimulator holds no mutable state, so a single shared instance is safe to reuse.
     private static readonly PidSimulator _sim = new();
@@ -84,9 +85,9 @@ public static class PidRecommender
             // swap. Balance response speed against total control effort: pure "fastest" runs
             // to the grid edge in an actuator-free sim, and pure "gentlest" recommends a
             // sluggish tuning that only just passes; their sum picks a crisp, well-damped,
-            // moderate-gain response (Kp=2, Ki=0.1, Kd=0 for this plant). Kd falls out at 0
-            // because the plant is already heavily damped open-loop — a correct, teachable
-            // result, not a bug.
+            // moderate-gain response (Kp=0.8, Ki=0.01, Kd=0 for this FOPDT plant). Kd falls
+            // out at 0 because a large dead time makes derivative action unhelpful here —
+            // a correct, teachable result, not a bug.
             double cost = settle + (kp + ki + kd);
             if (cost < bestCost)
             {

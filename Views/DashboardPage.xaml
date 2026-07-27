@@ -235,11 +235,11 @@
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="Kp" Style="{StaticResource DashTinyLabelStyle}" VerticalAlignment="Center"/>
-                                <NumberBox x:Name="KpBox" Grid.Column="1" Value="1" Minimum="0" SmallChange="0.1" SpinButtonPlacementMode="Compact" FontSize="11" Style="{StaticResource DashNumberBoxStyle}"/>
+                                <NumberBox x:Name="KpBox" Grid.Column="1" Value="1.5" Minimum="0" SmallChange="0.1" SpinButtonPlacementMode="Compact" FontSize="11" Style="{StaticResource DashNumberBoxStyle}"/>
                                 <TextBlock Grid.Column="2" Text="Ki" Style="{StaticResource DashTinyLabelStyle}" VerticalAlignment="Center"/>
-                                <NumberBox x:Name="KiBox" Grid.Column="3" Value="0.1" Minimum="0" SmallChange="0.01" SpinButtonPlacementMode="Compact" FontSize="11" Style="{StaticResource DashNumberBoxStyle}"/>
+                                <NumberBox x:Name="KiBox" Grid.Column="3" Value="0.015" Minimum="0" SmallChange="0.005" SpinButtonPlacementMode="Compact" FontSize="11" Style="{StaticResource DashNumberBoxStyle}"/>
                                 <TextBlock Grid.Column="4" Text="Kd" Style="{StaticResource DashTinyLabelStyle}" VerticalAlignment="Center"/>
-                                <NumberBox x:Name="KdBox" Grid.Column="5" Value="0.01" Minimum="0" SmallChange="0.01" SpinButtonPlacementMode="Compact" FontSize="11" Style="{StaticResource DashNumberBoxStyle}"/>
+                                <NumberBox x:Name="KdBox" Grid.Column="5" Value="8" Minimum="0" SmallChange="0.5" SpinButtonPlacementMode="Compact" FontSize="11" Style="{StaticResource DashNumberBoxStyle}"/>
                             </Grid>
 
                             <TextBlock Text="{x:Bind Lang.Pid_RunHint, Mode=OneWay}"
@@ -379,7 +379,7 @@
                                 <!-- Fixed plant the Smart PID Designer's local RK4 simulator models
                                      (see PidSimulator.cs) — not tied to the System Model selector above. -->
                                 <TextBlock x:Name="TransferFunctionText"
-                                           Text="G(s) = 6.223 / (s² + 6.556s + 0.2516)"
+                                           Text="G(s) = 0.6361 / (101.53s + 1) · e^(−52.09s)"
                                            FontFamily="Consolas"
                                            FontSize="12"
                                            Opacity="0.72"

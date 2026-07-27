@@ -15,20 +15,13 @@ public sealed class PidSessionService
     public static PidSessionService Instance { get; } = new();
     private PidSessionService() { }
 
-    // Gains both views start from, carried over from DashboardPage's XAML literals
-    // (commit 5173fe0). They are placeholders — not derived from the plant or from any
-    // tuning method — and the Parameter page disagreed with them (it opened at
-    // Kp=Ki=Kd=10), which is the inconsistency unifying them here fixes.
-    //
-    // Both pairs are in fact stable for PidSimulator's plant (Routh-Hurwitz on
-    // s^3 + (A1+B*Kd)s^2 + (A0+B*Kp)s + B*Ki): 10/10/10 is merely aggressive
-    // (~32% overshoot, settles ~7.9s) where these settle ~13.8s with ~4.5% overshoot.
-    // Caveat: 13.8s exceeds PidSimulator's hard-coded 10s window, so the metrics for
-    // these very gains are read off a response that has not settled yet.
-    public double Kp       { get; set; } = 1;
-    public double Ki       { get; set; } = 0.1;
-    public double Kd       { get; set; } = 0.01;
-    public double Setpoint { get; set; } = 10;
+    // Gains both views start from — SIMC-tuned for the identified plant Gp1
+    // (K=0.6361, tau=101.53 s, dead time=52.09 s): a stable temperature response with
+    // ~3% overshoot that settles at the setpoint in ~350 s, with a mild derivative term.
+    public double Kp       { get; set; } = 1.5;
+    public double Ki       { get; set; } = 0.015;
+    public double Kd       { get; set; } = 8;
+    public double Setpoint { get; set; } = 60;
 
     /// <summary>Last successful run, or null if the designer hasn't been run yet.</summary>
     public PidDesignResult? LastResult { get; private set; }

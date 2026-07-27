@@ -40,10 +40,11 @@ public static class PidDiagnosisCalculator
     /// closed the gap and the remainder is integration noise.
     public const double SteadyErrorLimitPct = 2.0;
 
-    /// The plant settles in ~104 s open-loop (dominant pole -0.0386 => tau 25.9 s), so a
-    /// closed loop still taking longer than ~20 s is barely improving on doing nothing —
-    /// a concrete, plant-derived anchor rather than an arbitrary "feels slow" number.
-    public const double SlowSettlingSeconds = 20.0;
+    /// The identified plant Gp1 is slow: time constant 101.53 s plus 52.09 s of dead time,
+    /// so it settles in ~458 s open-loop (θ + 4τ). A closed loop still taking longer than
+    /// ~400 s is barely improving on doing nothing — a concrete, plant-derived anchor
+    /// rather than an arbitrary "feels slow" number. A well-tuned loop reaches ~350 s.
+    public const double SlowSettlingSeconds = 400.0;
 
     /// <summary>
     /// Picks the single most important thing wrong with a response, most severe first:

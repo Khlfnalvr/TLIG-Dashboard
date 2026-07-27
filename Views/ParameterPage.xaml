@@ -278,7 +278,7 @@
                                  (see PidSimulator.cs) — not tied to the System Model
                                  selector above. Same text as the Dashboard's card. -->
                             <TextBlock x:Name="TransferFunctionText"
-                                       Text="G(s) = 6.223 / (s² + 6.556s + 0.2516)"
+                                       Text="G(s) = 0.6361 / (101.53s + 1) · e^(−52.09s)"
                                        FontFamily="Consolas"
                                        FontSize="13"
                                        Opacity="0.72"
@@ -346,21 +346,21 @@
                                    VerticalAlignment="Center"/>
                         <!-- Values here are seeded from App.PidSession on navigation; the
                              literals below are only what the designer shows at design time. -->
-                        <NumberBox x:Name="KpBox" Grid.Column="1" Value="1" Minimum="0" SmallChange="0.1"
+                        <NumberBox x:Name="KpBox" Grid.Column="1" Value="1.5" Minimum="0" SmallChange="0.1"
                                    SpinButtonPlacementMode="Compact"
                                    FontSize="13"
                                    Style="{StaticResource ParamNumberBoxStyle}"/>
                         <TextBlock Grid.Column="2" Text="Ki"
                                    FontSize="13" FontWeight="SemiBold" Opacity="0.65"
                                    VerticalAlignment="Center"/>
-                        <NumberBox x:Name="KiBox" Grid.Column="3" Value="0.1" Minimum="0" SmallChange="0.01"
+                        <NumberBox x:Name="KiBox" Grid.Column="3" Value="0.015" Minimum="0" SmallChange="0.005"
                                    SpinButtonPlacementMode="Compact"
                                    FontSize="13"
                                    Style="{StaticResource ParamNumberBoxStyle}"/>
                         <TextBlock Grid.Column="4" Text="Kd"
                                    FontSize="13" FontWeight="SemiBold" Opacity="0.65"
                                    VerticalAlignment="Center"/>
-                        <NumberBox x:Name="KdBox" Grid.Column="5" Value="0.01" Minimum="0" SmallChange="0.01"
+                        <NumberBox x:Name="KdBox" Grid.Column="5" Value="8" Minimum="0" SmallChange="0.5"
                                    SpinButtonPlacementMode="Compact"
                                    FontSize="13"
                                    Style="{StaticResource ParamNumberBoxStyle}"/>
