@@ -10,7 +10,20 @@ public sealed class PidDesignResult
     /// Reference the simulation was run against — what the curve settles toward.
     public float                 Setpoint             { get; set; } = 1f;
     public SimulationResult     Simulation            { get; set; } = new();
+    /// <summary>
+    /// <see cref="PidDiagnosisCode"/> name from <see cref="PidDiagnosisCalculator"/> —
+    /// a stable identifier, not display text. Render it with
+    /// <see cref="PidDiagnosisCalculator.Describe(string, PidMetricsPrediction)"/> so a
+    /// Client shows its own language rather than the Server's.
+    /// </summary>
     public string                Diagnosis            { get; set; } = "";
+    /// <summary>
+    /// <see cref="PidDiagnosisAgent"/>'s label for the same response, computed but not
+    /// shown — kept for the same reason as <see cref="MlEstimate"/>. The classifier only
+    /// ever imitated the threshold rule its training labels encode, and imitated it
+    /// imperfectly (see PidDiagnosisCalculator), so the rule itself is what students see.
+    /// </summary>
+    public string                MlDiagnosis          { get; set; } = "";
     /// Exact metrics read off the RK4 curve above — the only numbers ever shown to
     /// the student or handed to the LLM advisor, so nothing on screen can disagree
     /// with the plotted chart.
@@ -39,12 +52,30 @@ public static class PidDesignClient
 
         try
         {
+            // History keys are PascalCase to match PidAttempt's property names, so the
+            // server's case-sensitive JsonSerializer.Deserialize<PidInput> populates them.
+            var historyArr = new JsonArray();
+            foreach (var h in input.History)
+                historyArr.Add(new JsonObject
+                {
+                    ["Kp"]               = h.Kp,
+                    ["Ki"]               = h.Ki,
+                    ["Kd"]               = h.Kd,
+                    ["Overshoot"]        = h.Overshoot,
+                    ["RiseTime"]         = h.RiseTime,
+                    ["SettlingTime"]     = h.SettlingTime,
+                    ["SteadyStateError"] = h.SteadyStateError,
+                    ["Diagnosis"]        = h.Diagnosis,
+                });
+
             var body = new JsonObject
             {
                 ["Kp"] = input.Kp,
                 ["Ki"] = input.Ki,
                 ["Kd"] = input.Kd,
                 ["Setpoint"] = input.Setpoint,
+                ["Language"] = input.Language,
+                ["History"] = historyArr,
             };
 
             using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
@@ -90,6 +121,7 @@ public static class PidDesignClient
                 Amplitude = sim["amplitude"]?.AsArray().Select(n => (double?)n ?? 0).ToArray()  ?? [],
             },
             Diagnosis = (string?)node?["diagnosis"] ?? "",
+            MlDiagnosis = (string?)node?["mlDiagnosis"] ?? "",
             Metrics = new PidMetricsPrediction
             {
                 Overshoot        = (float?)metrics?["overshoot"]        ?? 0,
@@ -151,7 +183,12 @@ public static class PidDesignService
                 SteadyStateError = (float)(steadyErrPct / 100.0),
             };
 
-            var diagnosis = await Task.Run(() => _diagnosis.Predict(new PidDiagnosisInput
+            // Diagnosis is arithmetic on the metrics above — exact, instant, and able to
+            // quote the number behind the verdict (see PidDiagnosisCalculator).
+            var diagnosis = PidDiagnosisCalculator.Evaluate(metrics, stable).ToString();
+
+            // Classifier still runs for comparison, but no longer drives what is shown.
+            var mlDiagnosis = await Task.Run(() => _diagnosis.Predict(new PidDiagnosisInput
             {
                 Kp_Saat_Ini        = pred.Kp,
                 Ki_Saat_Ini        = pred.Ki,
@@ -168,14 +205,27 @@ public static class PidDesignService
             // Advisor prompt or the metric cards; see the comment above PidDesignResult.
             var mlEstimate = await Task.Run(() => _mlMetrics.Predict(pred.Kp, pred.Ki, pred.Kd), ct);
 
-            var advisor = await new PidAdvisorService().ReviewAsync(pred, metrics, input.Setpoint, ct);
+            // Gains to offer come from searching the simulator (verified against the same
+            // criteria as the diagnosis), not from the LLM — so the card can't contradict the
+            // diagnosis. Null when the current tuning is already ideal. The one-time grid
+            // search is cached, so this is O(1) after the first run; wrap it anyway to keep
+            // the first run off the caller's thread.
+            var recommendation = await Task.Run(() => PidRecommender.Recommend(metrics, stable), ct);
+
+            // The LLM now only explains the recommended gains; it no longer picks numbers.
+            var advisor = await new PidAdvisorService(input.Language).ReviewAsync(
+                pred, metrics, input.Setpoint, input.History,
+                recommendation?.gains, recommendation?.metrics, ct);
 
             return new PidDesignResult
             {
                 Prediction = pred,
                 Setpoint = input.Setpoint,
-                Simulation = simResult,
+                // Metrics above are read off the full settled run; the chart only needs
+                // the transient, so the flat tail isn't shipped or plotted.
+                Simulation = PidSimulator.BuildDisplayCurve(simResult, settling),
                 Diagnosis = diagnosis,
+                MlDiagnosis = mlDiagnosis,
                 Metrics = metrics,
                 MlEstimate = mlEstimate,
                 AdvisorExplanation = advisor.Explanation,

@@ -249,8 +249,10 @@ public sealed partial class DashboardPage : Page
         SettlingValue.Text  = result.Metrics.SettlingTime.ToString("0.00");
         SteadyErrValue.Text = result.Metrics.SteadyStateError.ToString("0.000");
 
+        // result.Diagnosis is a code, not display text — localize it here so a Client
+        // shows its own language rather than whatever the Server is set to.
         DiagnosisValue.Text = string.IsNullOrEmpty(result.Diagnosis)
-            ? "--" : result.Diagnosis;
+            ? "--" : PidDiagnosisCalculator.Describe(result.Diagnosis, result.Metrics);
 
         // Read the pending gains from the session, not from result: a decline made on
         // the Parameter page must stay declined here too.
@@ -288,7 +290,7 @@ public sealed partial class DashboardPage : Page
             $"Kp={result.Prediction.Kp:F3}, Ki={result.Prediction.Ki:F3}, Kd={result.Prediction.Kd:F3} " +
             $"-> hasil simulasi RK4: Overshoot={result.Metrics.Overshoot:F2}%, Rise Time={result.Metrics.RiseTime:F3}s, " +
             $"Settling Time={result.Metrics.SettlingTime:F2}s, Steady-State Error={result.Metrics.SteadyStateError:F3}. " +
-            $"Diagnosis: {result.Diagnosis}.");
+            $"Diagnosis: {PidDiagnosisCalculator.Describe(result.Diagnosis, result.Metrics)}");
         App.Ai.AddHistoryEntry("assistant", result.AdvisorExplanation);
         _renderedCount = App.Ai.History.Count;
     }

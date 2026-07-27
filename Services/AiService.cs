@@ -26,7 +26,7 @@ namespace TLIGDashboard.Services;
 /// the server does any Anthropic/Gemini translation. On the server flavor the protocol
 /// is the active provider's protocol.
 /// </summary>
-public sealed class AiService : IDisposable
+public sealed class AiService
 {
     // ── Configuration ─────────────────────────────────────────────────────────
     public string ApiUrl       { get; set; } = "https://api.deepseek.com";
@@ -55,7 +55,13 @@ public sealed class AiService : IDisposable
     public void AddHistoryEntry(string role, string content) => _history.Add(new ChatMessage(role, content));
 
     // ── HTTP ──────────────────────────────────────────────────────────────────
-    private readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(120) };
+    // One connection pool shared by every AiService. These are not all long-lived —
+    // the PID advisor builds one per RUN — and an HttpClient per instance leaks its
+    // pool and churns sockets into TIME_WAIT (the classic .NET socket-exhaustion
+    // antipattern), especially since nothing ever disposed them. HttpClient is
+    // thread-safe for concurrent requests, so sharing is safe for the server flavor
+    // handling several students at once.
+    private static readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(120) };
 
     private bool IsAnthropic => Protocol == AiProtocols.Anthropic;
     private bool IsGemini    => Protocol == AiProtocols.Gemini;
@@ -303,8 +309,6 @@ public sealed class AiService : IDisposable
         catch { }
         return json.Length > 400 ? json[..400] + "…" : json;
     }
-
-    public void Dispose() => _http.Dispose();
 }
 
 public record ChatMessage(string Role, string Content);

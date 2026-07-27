@@ -287,8 +287,10 @@ public sealed partial class ParameterPage : Page
         SettlingValue.Text  = result.Metrics.SettlingTime.ToString("0.00");
         SteadyErrValue.Text = result.Metrics.SteadyStateError.ToString("0.000");
 
+        // result.Diagnosis is a code, not display text — localize it here so a Client
+        // shows its own language rather than whatever the Server is set to.
         DiagnosisValue.Text = string.IsNullOrEmpty(result.Diagnosis)
-            ? "--" : result.Diagnosis;
+            ? "--" : PidDiagnosisCalculator.Describe(result.Diagnosis, result.Metrics);
 
         // The Dashboard routes the advisor's prose into its chat panel and folds it into
         // App.Ai history; this page has no chat, so it renders the text in the card and

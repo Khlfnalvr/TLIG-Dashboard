@@ -24,6 +24,10 @@ public class PidMetricsRegressor
     private PredictionEngine<PidMetricsTrainingData, PidMetricsScore>? _predSettlingTime;
     private PredictionEngine<PidMetricsTrainingData, PidMetricsScore>? _predSteadyStateError;
 
+    // PredictionEngine is not thread-safe and the server serves connections
+    // concurrently — see the matching note in PidDiagnosisAgent.
+    private readonly object _predictLock = new();
+
     private static readonly string DataPath =
         Path.Combine(AppContext.BaseDirectory, "DataDiagnosisPID_Dashboard.csv");
 
@@ -68,13 +72,16 @@ public class PidMetricsRegressor
         // Regression can extrapolate to physically impossible negative durations for
         // gain combinations sparsely represented in the training data — clamp rather
         // than surface a negative settling/rise time or steady-state error to the UI.
-        return new PidMetricsPrediction
+        lock (_predictLock)
         {
-            Overshoot        = Math.Max(0, _predOvershoot.Predict(row).Score),
-            RiseTime         = Math.Max(0, _predRiseTime.Predict(row).Score),
-            SettlingTime     = Math.Max(0, _predSettlingTime.Predict(row).Score),
-            SteadyStateError = Math.Max(0, _predSteadyStateError.Predict(row).Score),
-        };
+            return new PidMetricsPrediction
+            {
+                Overshoot        = Math.Max(0, _predOvershoot.Predict(row).Score),
+                RiseTime         = Math.Max(0, _predRiseTime.Predict(row).Score),
+                SettlingTime     = Math.Max(0, _predSettlingTime.Predict(row).Score),
+                SteadyStateError = Math.Max(0, _predSteadyStateError.Predict(row).Score),
+            };
+        }
     }
 
     // Same 9-column schema as PidDiagnosisAgent's training row — both agents train

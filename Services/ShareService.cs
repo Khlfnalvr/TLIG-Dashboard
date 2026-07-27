@@ -1080,6 +1080,13 @@ public sealed class ShareServer
         await WriteJsonAsync(stream, "{\"ok\":true}", ct);
     }
 
+    private static JsonObject BuildSimulationJson(
+        TLIGDashboard.Models.ControlEngineering.SimulationResult sim) => new()
+    {
+        ["time"]      = new JsonArray(sim.Time.Select(t => (JsonNode)t).ToArray()),
+        ["amplitude"] = new JsonArray(sim.Amplitude.Select(a => (JsonNode)a).ToArray()),
+    };
+
     private async Task HandlePidSimulationAsync(NetworkStream stream, Dictionary<string, string> headers, CancellationToken ct)
     {
         var session = GetSession(BearerToken(headers));
@@ -1122,8 +1129,13 @@ public sealed class ShareServer
                 SteadyStateError = (float)(steadyErrPct / 100.0),
             };
 
-            // Diagnose the resulting response (local classifier, async, no external quota).
-            var diagnosis = await Task.Run(() => _pidDiagnosis.Predict(new TLIGDashboard.Models.ControlEngineering.PidDiagnosisInput
+            // Diagnosis is arithmetic on the metrics above — exact and instant
+            // (see PidDiagnosisCalculator). Sent as a code; the client localizes it.
+            var diagnosis = TLIGDashboard.Services.ControlEngineering.PidDiagnosisCalculator
+                .Evaluate(metrics, stable).ToString();
+
+            // Classifier still runs for comparison, but no longer drives what is shown.
+            var mlDiagnosis = await Task.Run(() => _pidDiagnosis.Predict(new TLIGDashboard.Models.ControlEngineering.PidDiagnosisInput
             {
                 Kp_Saat_Ini        = finalPid.Kp,
                 Ki_Saat_Ini        = finalPid.Ki,
@@ -1144,8 +1156,18 @@ public sealed class ShareServer
             var mlEstimate = await Task.Run(
                 () => _pidMlMetrics.Predict(finalPid.Kp, finalPid.Ki, finalPid.Kd), ct);
 
-            var advisor = await new TLIGDashboard.Services.ControlEngineering.PidAdvisorService()
-                .ReviewAsync(finalPid, metrics, input.Setpoint, ct);
+            // Gains to offer come from searching the simulator (verified against the same
+            // criteria as the diagnosis), not the LLM, so the card can't contradict the
+            // diagnosis. Null when the current tuning is already ideal.
+            var recommendation = await Task.Run(
+                () => TLIGDashboard.Services.ControlEngineering.PidRecommender.Recommend(metrics, stable), ct);
+
+            // input.Language is the *student's* UI language — replying in this server's
+            // language would hand them a review they may not read. The LLM now only explains
+            // the recommended gains; it no longer picks numbers.
+            var advisor = await new TLIGDashboard.Services.ControlEngineering.PidAdvisorService(input.Language)
+                .ReviewAsync(finalPid, metrics, input.Setpoint, input.History,
+                    recommendation?.gains, recommendation?.metrics, ct);
 
             var response = new JsonObject
             {
@@ -1155,12 +1177,12 @@ public sealed class ShareServer
                     ["Ki"] = finalPid.Ki,
                     ["Kd"] = finalPid.Kd
                 },
-                ["simulation"] = new JsonObject
-                {
-                    ["time"] = new JsonArray(simResult.Time.Select(t => (JsonNode)t).ToArray()),
-                    ["amplitude"] = new JsonArray(simResult.Amplitude.Select(a => (JsonNode)a).ToArray())
-                },
+                // Metrics above come off the full settled run; only the transient is sent
+                // over the wire — the flat tail is neither plotted nor worth the payload.
+                ["simulation"] = BuildSimulationJson(
+                    TLIGDashboard.Services.ControlEngineering.PidSimulator.BuildDisplayCurve(simResult, settling)),
                 ["diagnosis"] = diagnosis,
+                ["mlDiagnosis"] = mlDiagnosis,
                 ["metrics"] = new JsonObject
                 {
                     ["overshoot"]        = metrics.Overshoot,

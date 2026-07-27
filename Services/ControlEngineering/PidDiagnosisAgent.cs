@@ -17,6 +17,13 @@ public class PidDiagnosisAgent
     private readonly MLContext _mlContext;
     private PredictionEngine<PidDiagnosisTrainingData, PidDiagnosisPrediction>? _predictor;
 
+    // ML.NET's PredictionEngine is explicitly documented as not thread-safe, and the
+    // server hands each connection to a fire-and-forget task (ShareService), so two
+    // students hitting /sim/pid at once would race on the same engine. A single
+    // prediction is microseconds next to the LLM call that follows, so serialising is
+    // cheaper than the PredictionEnginePool this would otherwise need.
+    private readonly object _predictLock = new();
+
     private static readonly string DataPath =
         Path.Combine(AppContext.BaseDirectory, "DataDiagnosisPID_Dashboard.csv");
 
@@ -69,7 +76,8 @@ public class PidDiagnosisAgent
             // Rekomendasi_Aksi left blank — it's the training label, unused at prediction time.
         };
 
-        var pred = _predictor.Predict(row);
+        PidDiagnosisPrediction pred;
+        lock (_predictLock) pred = _predictor.Predict(row);
         return new PidDiagnosisResult { Rekomendasi_Aksi = pred.PredictedLabel };
     }
 
