@@ -181,7 +181,10 @@ public sealed partial class CascadeControlPage : Page
         SingleDevValue.Text   = m.SingleLoopMaxDeviation.ToString("0.00");
         ImprovementValue.Text = m.DisturbanceImprovement >= 1 ? m.DisturbanceImprovement.ToString("0.0") : "--";
 
-        DiagnosisValue.Text = string.IsNullOrEmpty(result.Diagnosis) ? "--" : result.Diagnosis;
+        // result.Diagnosis is a PidDiagnosisCode name, not display text — localize it here
+        // (from the outer-loop step metrics) so a Client shows its own language, not the Server's.
+        DiagnosisValue.Text = string.IsNullOrEmpty(result.Diagnosis)
+            ? "--" : PidDiagnosisCalculator.Describe(result.Diagnosis, result.Metrics.PrimaryStepMetrics());
 
         bool hasExplanation = !string.IsNullOrWhiteSpace(result.AdvisorExplanation);
         AdvisorExplanationHost.Child = hasExplanation
