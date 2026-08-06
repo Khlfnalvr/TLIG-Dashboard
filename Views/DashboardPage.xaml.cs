@@ -222,10 +222,20 @@ public sealed partial class DashboardPage : Page
     private async Task RunPidAsync()
     {
         PushPidInputs();
+
+        // RUN drives both designers at once: the single-loop PID here and the Cascade
+        // session behind the dedicated Cascade page. Kicking the cascade off in parallel
+        // means the Cascade page always reflects the same click — it renders live if it's
+        // up, or catches up from LastResult on navigation. It keeps its own gains, so no
+        // inputs need pushing; RunAsync no-ops if a cascade run is already in flight.
+        var cascadeTask = App.CascadeSession.RunAsync();
+
         // Fires ResultChanged (-> RenderPidResult) / RunFailed on the way through.
         var result = await App.PidSession.RunAsync();
         PullPidInputs();  // pick up the normalized setpoint
         if (result is not null) FoldAdvisorIntoChat(result);
+
+        await cascadeTask;
     }
 
     private void OnPidResultChanged(object? sender, PidDesignResult result)
