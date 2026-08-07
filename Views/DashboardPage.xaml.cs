@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Reflection;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Input;
@@ -29,6 +30,12 @@ public sealed partial class DashboardPage : Page
     private CancellationTokenSource? _chatCts;
 
     private readonly bool _clientMode = BuildInfo.IsClient;
+
+    // Dashboard → LabVIEW control link (Kp/Ki/Kd/Setpoint/Pump/Mode/Run...).
+    private static HmiDataService Data => HmiDataService.Instance;
+    // Suppresses command sends until the page has finished loading, so the initial
+    // XAML values ("10", "Auto") don't fire a burst of commands before the user acts.
+    private bool _controlsReady;
 
     private readonly SemaphoreSlim _dashboardCameraSwitchLock = new(1, 1);
     private DeviceInformationCollection? _dashboardCameraDevices;
@@ -84,7 +91,65 @@ public sealed partial class DashboardPage : Page
         // Subscribe to simulation type changes so all HMI labels update.
         App.SimType.SimulationTypeChanged += OnSimulationTypeChanged;
         ApplySimulationType(App.SimType.CurrentType);
+
+        // When a LabVIEW client (re)connects, push the current control values so the VI
+        // starts in sync with what the dashboard is showing.
+        if (!_clientMode)
+            Data.ClientConnectedChanged += OnLabViewClientConnected;
+
+        // From here on, user edits to the controls are forwarded to LabVIEW.
+        _controlsReady = true;
     }
+
+    // ── Dashboard → LabVIEW control commands ────────────────────────────────────
+    // Every control writes a "key=value" line back over the LabVIEW TCP link. Values
+    // use invariant culture so decimals are sent with '.' (LabVIEW numeric parsing),
+    // never the ',' of the Indonesian UI locale.
+
+    // The VI reads one comma-separated line with "TCP Read (CRLF)" + "Scan From String"
+    // (%f,%f,%f,%f,%f,%f). So we send the WHOLE control set as ONE CRLF-terminated line —
+    // Kp,Ki,Kd,Setpoint,Pump,Run — on every change (not per-key), so a single Scan parses it.
+    private int _runState;  // 6th CSV field: 1 = RUN, 0 = STOP / RESET / E-STOP
+
+    private void SendControlLine()
+    {
+        if (!_controlsReady || _clientMode) return;
+
+        double kp = CtlKp.Value, ki = CtlKi.Value, kd = CtlKd.Value,
+               sp = CtlSetpoint.Value, pump = CtlPump.Value;
+        // Skip while a box is mid-edit / empty so we never send a partial line.
+        if (double.IsNaN(kp) || double.IsNaN(ki) || double.IsNaN(kd) ||
+            double.IsNaN(sp) || double.IsNaN(pump))
+            return;
+
+        var inv = CultureInfo.InvariantCulture;
+        string line = string.Join(",",
+            kp.ToString("0.###", inv),
+            ki.ToString("0.###", inv),
+            kd.ToString("0.###", inv),
+            sp.ToString("0.###", inv),
+            pump.ToString("0.###", inv),
+            _runState.ToString(inv));
+        Data.SendLine(line);
+    }
+
+    private void OnLabViewClientConnected(bool connected)
+    {
+        if (connected)
+            DispatcherQueue.TryEnqueue(SendControlLine);   // sync the VI on (re)connect
+    }
+
+    private void CtlKp_ValueChanged(NumberBox sender, NumberBoxValueChangedEventArgs args)       => SendControlLine();
+    private void CtlKi_ValueChanged(NumberBox sender, NumberBoxValueChangedEventArgs args)       => SendControlLine();
+    private void CtlKd_ValueChanged(NumberBox sender, NumberBoxValueChangedEventArgs args)       => SendControlLine();
+    private void CtlSetpoint_ValueChanged(NumberBox sender, NumberBoxValueChangedEventArgs args) => SendControlLine();
+    private void CtlPump_ValueChanged(NumberBox sender, NumberBoxValueChangedEventArgs args)     => SendControlLine();
+    private void CtlMode_Checked(object sender, RoutedEventArgs e)                               => SendControlLine();
+
+    private void CtlRun_Click(object sender, RoutedEventArgs e)   { _runState = 1; SendControlLine(); }
+    private void CtlStop_Click(object sender, RoutedEventArgs e)  { _runState = 0; SendControlLine(); }
+    private void CtlReset_Click(object sender, RoutedEventArgs e) { _runState = 0; SendControlLine(); }
+    private void CtlEStop_Click(object sender, RoutedEventArgs e) { _runState = 0; SendControlLine(); }
 
     private void OnSimulationTypeChanged(object? sender, Services.SimulationType type)
         => DispatcherQueue.TryEnqueue(() => ApplySimulationType(type));

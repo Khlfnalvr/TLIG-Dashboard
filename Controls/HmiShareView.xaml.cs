@@ -1,5 +1,7 @@
+using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
 using TLIGDashboard.Services;
 using Windows.Storage.Streams;
@@ -23,6 +25,18 @@ public sealed partial class HmiShareView : UserControl
 
     private LocalizationManager Lang => App.Lang;
     private static HmiCaptureService Capture => HmiCaptureService.Instance;
+    private static HmiDataService Data => HmiDataService.Instance;
+
+    // ── LabVIEW TCP data readout state ──────────────────────────────────────────
+    // Value TextBlocks keyed by tag name, so incoming frames update values in place
+    // (no flicker / reordering) instead of rebuilding the whole list each time.
+    private readonly Dictionary<string, TextBlock> _dataValueBlocks = new(StringComparer.Ordinal);
+    private bool _dataPlaceholderShown = true;
+    private DispatcherTimer? _dataStaleTimer;
+
+    private static readonly SolidColorBrush _dotLive  = new(Microsoft.UI.Colors.LimeGreen);
+    private static readonly SolidColorBrush _dotStale = new(Microsoft.UI.Colors.Orange);
+    private static readonly SolidColorBrush _dotIdle  = new(Microsoft.UI.Colors.Gray);
 
     public HmiShareView()
     {
@@ -33,9 +47,11 @@ public sealed partial class HmiShareView : UserControl
         if (_clientMode)
         {
             // Client: display the HMI stream received from the server instead of
-            // capturing a local screen.
+            // capturing a local screen. The LabVIEW TCP data readout lives on the
+            // server machine (where LabVIEW runs), so hide it here.
             SourceSelector.Visibility       = Visibility.Collapsed;
             RefreshSourcesButton.Visibility = Visibility.Collapsed;
+            DataSection.Visibility          = Visibility.Collapsed;
             ShowPlaceholder(Lang.Hmi_WaitingStream);
             // Subscribe on every load; unsubscribe on unload. (The hosting page is
             // cached, so hooking once in the ctor would be dropped after the first
@@ -75,16 +91,144 @@ public sealed partial class HmiShareView : UserControl
         SourceSelector.DisplayMemberPath = nameof(CaptureSource.Name);
         Capture.RefreshSources();   // rebuilds the list → OnSourcesChanged repopulates the combo
         OnActiveSourceChanged();    // adopt whatever source is already selected app-wide
+
+        // ── LabVIEW TCP data bridge ──
+        Data.DataReceived     -= OnHmiData;
+        Data.ListeningChanged -= OnDataListeningChanged;
+        Data.DataReceived     += OnHmiData;
+        Data.ListeningChanged += OnDataListeningChanged;
+
+        Data.Start(AppSettingsService.Load().HmiDataPort);
+        UpdateDataHeader(Data.IsListening, null);
+        RenderData(Data.Snapshot());   // adopt any values already collected app-wide
+
+        _dataStaleTimer ??= new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+        _dataStaleTimer.Tick -= DataStaleTimer_Tick;
+        _dataStaleTimer.Tick += DataStaleTimer_Tick;
+        _dataStaleTimer.Start();
     }
 
     private void HmiShareView_Unloaded(object sender, RoutedEventArgs e)
     {
         // Detach UI updates while this view is off-screen, but leave the capture engine
-        // running so HMI sharing continues in the background and the selection persists
-        // for the other view.
+        // and the UDP listener running so HMI sharing / data collection continue in the
+        // background and stay in sync for the other view.
         Capture.SourcesChanged      -= OnSourcesChanged;
         Capture.ActiveSourceChanged -= OnActiveSourceChanged;
         Capture.FrameAvailable      -= OnCaptureFrame;
+
+        Data.DataReceived     -= OnHmiData;
+        Data.ListeningChanged -= OnDataListeningChanged;
+        _dataStaleTimer?.Stop();
+    }
+
+    // ── LabVIEW UDP data readout ────────────────────────────────────────────────
+
+    private void OnHmiData(IReadOnlyList<HmiDatum> data)
+        => DispatcherQueue.TryEnqueue(() => RenderData(data));
+
+    private void OnDataListeningChanged(bool listening, string? error)
+        => DispatcherQueue.TryEnqueue(() => UpdateDataHeader(listening, error));
+
+    private void DataStaleTimer_Tick(object? sender, object e)
+    {
+        if (_dataPlaceholderShown)
+        {
+            DataLiveDot.Fill = _dotIdle;
+            return;
+        }
+        var age = DateTime.UtcNow - Data.LastReceivedUtc;
+        DataLiveDot.Fill = age.TotalSeconds <= 2.5 ? _dotLive : _dotStale;
+    }
+
+    private void UpdateDataHeader(bool listening, string? error)
+    {
+        DataHeaderText.Text = Lang.Hmi_DataHeader;
+        DataPortText.Text   = error is null
+            ? Lang.Format("Hmi_DataPort", listening ? Data.Port : AppSettingsService.Load().HmiDataPort)
+            : error;
+        if (!listening)
+            DataLiveDot.Fill = _dotIdle;
+    }
+
+    private void RenderData(IReadOnlyList<HmiDatum> data)
+    {
+        if (data.Count == 0)
+        {
+            ShowDataPlaceholder();
+            return;
+        }
+
+        if (_dataPlaceholderShown)
+        {
+            DataList.Children.Clear();
+            _dataValueBlocks.Clear();
+            _dataPlaceholderShown = false;
+        }
+
+        foreach (var (key, value) in data)
+        {
+            if (_dataValueBlocks.TryGetValue(key, out var block))
+            {
+                block.Text = value;
+            }
+            else
+            {
+                var row = CreateDataRow(key, out var valueBlock);
+                valueBlock.Text = value;
+                DataList.Children.Add(row);
+                _dataValueBlocks[key] = valueBlock;
+            }
+        }
+
+        var age = DateTime.UtcNow - Data.LastReceivedUtc;
+        DataLiveDot.Fill = age.TotalSeconds <= 2.5 ? _dotLive : _dotStale;
+    }
+
+    private void ShowDataPlaceholder()
+    {
+        DataList.Children.Clear();
+        _dataValueBlocks.Clear();
+        _dataPlaceholderShown = true;
+        DataLiveDot.Fill      = _dotIdle;
+        DataList.Children.Add(new TextBlock
+        {
+            Text        = Lang.Format("Hmi_DataWaiting", AppSettingsService.Load().HmiDataPort),
+            FontSize    = 11,
+            Opacity     = 0.55,
+            TextWrapping = TextWrapping.Wrap
+        });
+    }
+
+    private static Grid CreateDataRow(string key, out TextBlock valueBlock)
+    {
+        var grid = new Grid();
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        var keyBlock = new TextBlock
+        {
+            Text              = key,
+            FontSize          = 11,
+            Opacity           = 0.7,
+            TextTrimming      = TextTrimming.CharacterEllipsis,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        Grid.SetColumn(keyBlock, 0);
+
+        valueBlock = new TextBlock
+        {
+            FontSize            = 12,
+            FontWeight          = FontWeights.SemiBold,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            VerticalAlignment   = VerticalAlignment.Center,
+            Margin              = new Thickness(8, 0, 0, 0)
+        };
+        Grid.SetColumn(valueBlock, 1);
+
+        grid.Children.Add(keyBlock);
+        grid.Children.Add(valueBlock);
+        return grid;
     }
 
     // Shared list changed (a refresh happened here or in the other view): repopulate
@@ -189,6 +333,12 @@ public sealed partial class HmiShareView : UserControl
         SourceSelector.PlaceholderText = Lang.Hmi_SelectSource;
         RefreshSourcesButton.Content   = Lang.Hmi_RefreshSources;
         StopShareButton.Content        = Lang.Hmi_StopShare;
+
+        DataHeaderText.Text = Lang.Hmi_DataHeader;
+        DataPortText.Text   = Lang.Format("Hmi_DataPort",
+            Data.IsListening ? Data.Port : AppSettingsService.Load().HmiDataPort);
+        if (_dataPlaceholderShown)
+            ShowDataPlaceholder();   // re-render the "waiting…" text in the new language
     }
 
     private void ShowPlaceholder(string message)

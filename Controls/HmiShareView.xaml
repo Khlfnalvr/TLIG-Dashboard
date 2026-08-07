@@ -7,6 +7,7 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
         <Grid ColumnSpacing="8">
@@ -78,6 +79,56 @@
                                TextWrapping="Wrap"
                                MaxWidth="280"/>
                 </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Row 2: live numeric/text values pushed from LabVIEW over UDP. -->
+        <Border x:Name="DataSection"
+                Grid.Row="2"
+                Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                BorderThickness="1"
+                CornerRadius="6"
+                Padding="8,6">
+            <Grid RowSpacing="6">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <Grid ColumnSpacing="6">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+
+                    <Ellipse x:Name="DataLiveDot"
+                             Grid.Column="0"
+                             Width="8" Height="8"
+                             VerticalAlignment="Center"/>
+
+                    <TextBlock x:Name="DataHeaderText"
+                               Grid.Column="1"
+                               FontSize="11"
+                               FontWeight="SemiBold"
+                               Opacity="0.82"
+                               VerticalAlignment="Center"
+                               TextTrimming="CharacterEllipsis"/>
+
+                    <TextBlock x:Name="DataPortText"
+                               Grid.Column="2"
+                               FontSize="10"
+                               Opacity="0.6"
+                               VerticalAlignment="Center"/>
+                </Grid>
+
+                <ScrollViewer Grid.Row="1"
+                              VerticalScrollMode="Auto"
+                              VerticalScrollBarVisibility="Auto"
+                              MaxHeight="150">
+                    <StackPanel x:Name="DataList" Spacing="2"/>
+                </ScrollViewer>
             </Grid>
         </Border>
     </Grid>

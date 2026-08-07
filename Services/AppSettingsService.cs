@@ -34,6 +34,11 @@ public class AppSettings
     // OPC DA server connection settings
     public string OpcDaProgId             { get; set; } = "";
 
+    // ── LabVIEW → HMI data bridge (TCP telemetry) ─────────────────────────
+    // The dashboard listens on this TCP port for "key=value" lines streamed by a
+    // LabVIEW VI ("TCP Write"); the values are shown in the HMI panel.
+    public int    HmiDataPort             { get; set; } = 5005;
+
     // ── Sharing: server side ──────────────────────────────────────────────
     // The server broadcasts its camera + HMI screen and proxies AI chat.
     public int    SharePort   { get; set; } = 8088;   // TCP port the share server listens on

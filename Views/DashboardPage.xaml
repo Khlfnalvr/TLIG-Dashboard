@@ -235,11 +235,11 @@
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="Kp" Style="{StaticResource DashTinyLabelStyle}" VerticalAlignment="Center"/>
-                                <NumberBox Grid.Column="1" Value="10" Minimum="0" SmallChange="1" SpinButtonPlacementMode="Compact" FontSize="11" Style="{StaticResource DashNumberBoxStyle}"/>
+                                <NumberBox x:Name="CtlKp" ValueChanged="CtlKp_ValueChanged" Grid.Column="1" Value="10" Minimum="0" SmallChange="1" SpinButtonPlacementMode="Compact" FontSize="11" Style="{StaticResource DashNumberBoxStyle}"/>
                                 <TextBlock Grid.Column="2" Text="Ki" Style="{StaticResource DashTinyLabelStyle}" VerticalAlignment="Center"/>
-                                <NumberBox Grid.Column="3" Value="10" Minimum="0" SmallChange="1" SpinButtonPlacementMode="Compact" FontSize="11" Style="{StaticResource DashNumberBoxStyle}"/>
+                                <NumberBox x:Name="CtlKi" ValueChanged="CtlKi_ValueChanged" Grid.Column="3" Value="10" Minimum="0" SmallChange="1" SpinButtonPlacementMode="Compact" FontSize="11" Style="{StaticResource DashNumberBoxStyle}"/>
                                 <TextBlock Grid.Column="4" Text="Kd" Style="{StaticResource DashTinyLabelStyle}" VerticalAlignment="Center"/>
-                                <NumberBox Grid.Column="5" Value="10" Minimum="0" SmallChange="1" SpinButtonPlacementMode="Compact" FontSize="11" Style="{StaticResource DashNumberBoxStyle}"/>
+                                <NumberBox x:Name="CtlKd" ValueChanged="CtlKd_ValueChanged" Grid.Column="5" Value="10" Minimum="0" SmallChange="1" SpinButtonPlacementMode="Compact" FontSize="11" Style="{StaticResource DashNumberBoxStyle}"/>
                             </Grid>
                         </StackPanel>
                     </Border>
@@ -365,7 +365,8 @@
                                                 <ColumnDefinition Width="*"/>
                                                 <ColumnDefinition Width="Auto"/>
                                              </Grid.ColumnDefinitions>
-                                             <NumberBox Value="10" Minimum="0" SmallChange="1"
+                                             <NumberBox x:Name="CtlSetpoint" ValueChanged="CtlSetpoint_ValueChanged"
+                                                        Value="10" Minimum="0" SmallChange="1"
                                                         SpinButtonPlacementMode="Compact"
                                                         FontSize="11"
                                                         Style="{StaticResource DashNumberBoxStyle}"/>
@@ -375,6 +376,15 @@
                                                        Style="{StaticResource DashTinyLabelStyle}"
                                                        VerticalAlignment="Center"/>
                                         </Grid>
+
+                                        <!-- Pump output (%) — sent to LabVIEW as "Pump=..." -->
+                                        <TextBlock Text="{x:Bind Lang.Ctl_Pump, Mode=OneWay}"
+                                                   Style="{StaticResource DashCardTitleStyle}"/>
+                                        <NumberBox x:Name="CtlPump" ValueChanged="CtlPump_ValueChanged"
+                                                   Value="0" Minimum="0" Maximum="100" SmallChange="1"
+                                                   SpinButtonPlacementMode="Compact"
+                                                   FontSize="11"
+                                                   Style="{StaticResource DashNumberBoxStyle}"/>
                                     </StackPanel>
                                 </Border>
 
@@ -383,13 +393,16 @@
                                         <TextBlock Text="{x:Bind Lang.Ctl_Mode, Mode=OneWay}"
                                                    Style="{StaticResource DashCardTitleStyle}"
                                                    Margin="0,0,0,2"/>
-                                        <RadioButton Content="{x:Bind Lang.Ctl_Manual, Mode=OneWay}"
+                                        <RadioButton x:Name="CtlModeManual" Checked="CtlMode_Checked"
+                                                     Content="{x:Bind Lang.Ctl_Manual, Mode=OneWay}"
                                                      GroupName="DashboardMode"
                                                      Style="{StaticResource CompactRadioButtonStyle}"/>
-                                        <RadioButton Content="{x:Bind Lang.Ctl_Auto, Mode=OneWay}"
+                                        <RadioButton x:Name="CtlModeAuto" Checked="CtlMode_Checked"
+                                                     Content="{x:Bind Lang.Ctl_Auto, Mode=OneWay}"
                                                      GroupName="DashboardMode" IsChecked="True"
                                                      Style="{StaticResource CompactRadioButtonStyle}"/>
-                                        <RadioButton Content="{x:Bind Lang.Ctl_Cascade, Mode=OneWay}"
+                                        <RadioButton x:Name="CtlModeCascade" Checked="CtlMode_Checked"
+                                                     Content="{x:Bind Lang.Ctl_Cascade, Mode=OneWay}"
                                                      GroupName="DashboardMode"
                                                      Style="{StaticResource CompactRadioButtonStyle}"/>
                                     </StackPanel>
@@ -397,7 +410,7 @@
 
                                 <StackPanel Grid.Column="2" Width="106" Spacing="5" VerticalAlignment="Center">
                                     <!-- RUN — green, inline Button.Resources overrides native visual states -->
-                                    <Button HorizontalAlignment="Stretch" FontSize="11">
+                                    <Button x:Name="CtlRunButton" Click="CtlRun_Click" HorizontalAlignment="Stretch" FontSize="11">
                                         <Button.Resources>
                                             <SolidColorBrush x:Key="ButtonBackground"             Color="{ThemeResource SystemFillColorSuccess}"/>
                                             <SolidColorBrush x:Key="ButtonBackgroundPointerOver"  Color="{ThemeResource SystemFillColorSuccess}"/>
@@ -415,7 +428,7 @@
                                         </StackPanel>
                                     </Button>
                                     <!-- STOP — red -->
-                                    <Button HorizontalAlignment="Stretch" FontSize="11">
+                                    <Button x:Name="CtlStopButton" Click="CtlStop_Click" HorizontalAlignment="Stretch" FontSize="11">
                                         <Button.Resources>
                                             <SolidColorBrush x:Key="ButtonBackground"             Color="{ThemeResource SystemFillColorCritical}"/>
                                             <SolidColorBrush x:Key="ButtonBackgroundPointerOver"  Color="{ThemeResource SystemFillColorCritical}"/>
@@ -433,7 +446,7 @@
                                         </StackPanel>
                                     </Button>
                                     <!-- RESET — standard WinUI 3 button -->
-                                    <Button HorizontalAlignment="Stretch" FontSize="11">
+                                    <Button x:Name="CtlResetButton" Click="CtlReset_Click" HorizontalAlignment="Stretch" FontSize="11">
                                         <Button.Resources>
                                             <SolidColorBrush x:Key="ButtonBackground"             Color="{ThemeResource SystemFillColorSolidNeutral}"/>
                                             <SolidColorBrush x:Key="ButtonBackgroundPointerOver"  Color="{ThemeResource SystemFillColorSolidNeutral}"/>
@@ -451,7 +464,7 @@
                                         </StackPanel>
                                     </Button>
                                     <!-- E-STOP — danger outline -->
-                                    <Button HorizontalAlignment="Stretch" FontSize="11">
+                                    <Button x:Name="CtlEStopButton" Click="CtlEStop_Click" HorizontalAlignment="Stretch" FontSize="11">
                                         <Button.Resources>
                                             <SolidColorBrush x:Key="ButtonBackground"             Color="Transparent"/>
                                             <SolidColorBrush x:Key="ButtonBackgroundPointerOver"  Color="{ThemeResource SystemFillColorCriticalBackground}"/>
