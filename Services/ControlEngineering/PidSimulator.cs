@@ -218,6 +218,37 @@ public class PidSimulator
         return (rise, overshootPct, settling, steadyErrPct);
     }
 
+    /// <summary>
+    /// Classic error-performance indices for a step response, integrated (trapezoidal) over the
+    /// supplied window with the tracking error e(t) = <paramref name="reference"/> − y(t):
+    /// <list type="bullet">
+    /// <item><b>IAE</b> = ∫|e| dt — total absolute error.</item>
+    /// <item><b>ISE</b> = ∫e² dt — squares the error, so it weighs large (usually early) deviations hardest.</item>
+    /// <item><b>ITAE</b> = ∫t·|e| dt — time-weights the error, so it penalises deviations that linger late.</item>
+    /// </list>
+    /// Lower is better for all three. Read off the same curve as <see cref="ComputeStepMetrics"/>,
+    /// so they never disagree with the plotted response. Units follow the signal: IAE in y·s,
+    /// ISE in y²·s, ITAE in y·s².
+    /// </summary>
+    public static (double iae, double ise, double itae) ComputePerformanceIndices(
+        double[] time, double[] amplitude, double reference = 1.0)
+    {
+        double iae = 0, ise = 0, itae = 0;
+        int n = Math.Min(time.Length, amplitude.Length);
+        for (int i = 1; i < n; i++)
+        {
+            double dt = time[i] - time[i - 1];
+            if (dt <= 0) continue;
+            double e0 = reference - amplitude[i - 1];
+            double e1 = reference - amplitude[i];
+            // trapezoidal step for each integrand
+            iae  += 0.5 * (Math.Abs(e0)               + Math.Abs(e1))               * dt;
+            ise  += 0.5 * (e0 * e0                    + e1 * e1)                    * dt;
+            itae += 0.5 * (time[i - 1] * Math.Abs(e0) + time[i] * Math.Abs(e1))     * dt;
+        }
+        return (iae, ise, itae);
+    }
+
     /// True if the simulated response stayed bounded (didn't blow up under the given
     /// gains) — a practical stand-in for the training data's Is_Stable flag. The
     /// bound scales with the reference so a large setpoint isn't misread as unstable.

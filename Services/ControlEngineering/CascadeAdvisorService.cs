@@ -93,8 +93,10 @@ public class CascadeAdvisorService
             plantRule +
             "Write a brief (3-5 sentence) educational review: comment on whether the inner loop is fast " +
             "enough relative to the outer, whether the outer PID's overshoot/settling are acceptable, " +
-            "and how much better the cascade rejects the flow disturbance, in terms of the physical " +
-            "meaning of each gain. When a recommended tuning is given, explain why it behaves better; do " +
+            "how much better the cascade rejects the flow disturbance, and what the error indices " +
+            "(IAE/ISE/ITAE — lower is better; ISE weighs large early error, ITAE weighs late-lingering " +
+            "error) say about the response, in terms of the physical meaning of each gain. When a " +
+            "recommended tuning is given, explain why it behaves better; do " +
             "NOT propose gains of your own — the recommended gains are what the student will be offered, " +
             "and any numbers you invent would contradict them. When earlier attempts are shown, take " +
             "them into account and note what did or did not help. " +
@@ -138,6 +140,8 @@ public class CascadeAdvisorService
             $"Temperature response: Overshoot = {metrics.Overshoot:F1}%, Rise Time = {metrics.RiseTime:F2}s, " +
             $"Settling Time = {metrics.SettlingTime:F1}s, Steady-State Error = {metrics.SteadyStateError:F3}" +
             (metrics.Stable ? "" : " (the temperature never settled at the setpoint — the loop is oscillating or far too slow)") + ".\n" +
+            $"Error performance indices over the step (integrals of the tracking error, lower is better): " +
+            $"IAE = {metrics.IAE:F0}, ISE = {metrics.ISE:F0}, ITAE = {metrics.ITAE:F0}.\n" +
             (metrics.DisturbanceImprovement >= 1f
                 ? $"After a flow disturbance, peak temperature deviation was {metrics.CascadeMaxDeviation:F2} °C with " +
                   $"cascade vs {metrics.SingleLoopMaxDeviation:F2} °C with a single loop " +

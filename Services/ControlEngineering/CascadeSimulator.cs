@@ -294,6 +294,7 @@ public class CascadeSimulator
         double[] tPre = r.Time[..cut];
         double[] yPre = r.Temperature[..cut];
         var (rise, over, settle, sse) = PidSimulator.ComputeStepMetrics(tPre, yPre, sp);
+        var (iae, ise, itae) = PidSimulator.ComputePerformanceIndices(tPre, yPre, sp);
 
         // Stable ⇔ the temperature step actually settled at the setpoint within the run
         // budget. The valve/flow limits keep every response bounded, so a "did it blow up?"
@@ -319,6 +320,9 @@ public class CascadeSimulator
             Overshoot = (float)over,
             SettlingTime = (float)settle,
             SteadyStateError = (float)(sse / 100.0),
+            IAE = (float)iae,
+            ISE = (float)ise,
+            ITAE = (float)itae,
             FlowPeak = (float)flowPeak,
             FlowSettled = (float)flowSettled,
             CascadeMaxDeviation = cascadeDev,

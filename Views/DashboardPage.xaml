@@ -374,6 +374,33 @@
                         </Border>
                     </Grid>
 
+                    <!-- Error performance indices — integrals of the tracking error e = SP − T
+                         (IAE=∫|e|, ISE=∫e², ITAE=∫t|e|). Lower is better. -->
+                    <Border Style="{StaticResource DashCardStyle}" Padding="10,8">
+                        <StackPanel Spacing="7">
+                            <TextBlock Text="Indeks Performa Error (IAE · ISE · ITAE)" Style="{StaticResource DashCardTitleStyle}"/>
+                            <Grid ColumnSpacing="8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" Spacing="3">
+                                    <TextBlock Text="IAE" Style="{StaticResource DashTinyLabelStyle}" HorizontalAlignment="Center"/>
+                                    <Border Style="{StaticResource DashInputBoxStyle}"><TextBlock x:Name="IaeValue" Text="--" FontSize="11" HorizontalAlignment="Center"/></Border>
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Spacing="3">
+                                    <TextBlock Text="ISE" Style="{StaticResource DashTinyLabelStyle}" HorizontalAlignment="Center"/>
+                                    <Border Style="{StaticResource DashInputBoxStyle}"><TextBlock x:Name="IseValue" Text="--" FontSize="11" HorizontalAlignment="Center"/></Border>
+                                </StackPanel>
+                                <StackPanel Grid.Column="2" Spacing="3">
+                                    <TextBlock Text="ITAE" Style="{StaticResource DashTinyLabelStyle}" HorizontalAlignment="Center"/>
+                                    <Border Style="{StaticResource DashInputBoxStyle}"><TextBlock x:Name="ItaeValue" Text="--" FontSize="11" HorizontalAlignment="Center"/></Border>
+                                </StackPanel>
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+
                     <!-- AI Diagnosis — multiclass classification of the current gains'
                          actual response (SISTEM_SUDAH_IDEAL / TURUNKAN_KP_DAN_KI / dst.) -->
                     <Border Style="{StaticResource DashCardStyle}" Padding="10,8">

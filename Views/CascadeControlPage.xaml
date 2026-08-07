@@ -78,62 +78,15 @@
                     <TextBlock Grid.Row="0"
                                Text="{x:Bind Lang.Cas_BlockDiagram, Mode=OneWay}"
                                Style="{StaticResource CasCaptionStyle}"/>
-                    <Border Grid.Row="1" CornerRadius="6"
-                            Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}"
-                            Padding="10,12">
-                        <Grid ColumnSpacing="4" VerticalAlignment="Center">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="1.4*"/>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="1.3*"/>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="1*"/>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="1.2*"/>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="1*"/>
-                            </Grid.ColumnDefinitions>
-
-                            <Border Grid.Column="0" Style="{StaticResource CasBlockStyle}">
-                                <TextBlock Text="Temp SP" FontSize="10" Opacity="0.75"
-                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                            </Border>
-                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="0">
-                                <TextBlock Text="&#x2192;" Opacity="0.55" HorizontalAlignment="Center"/>
-                            </StackPanel>
-                            <Border Grid.Column="2" Style="{StaticResource CasBlockStyle}"
-                                    Background="{ThemeResource AccentFillColorDefaultBrush}">
-                                <TextBlock Text="PID · Temperatur" FontSize="10" FontWeight="SemiBold"
-                                           Foreground="{ThemeResource TextOnAccentFillColorPrimaryBrush}"
-                                           HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center"/>
-                            </Border>
-                            <StackPanel Grid.Column="3" VerticalAlignment="Center">
-                                <TextBlock Text="Flow SP" FontSize="8" Opacity="0.5" HorizontalAlignment="Center"/>
-                                <TextBlock Text="&#x2192;" Opacity="0.55" HorizontalAlignment="Center"/>
-                            </StackPanel>
-                            <Border Grid.Column="4" Style="{StaticResource CasBlockStyle}"
-                                    Background="{ThemeResource SystemFillColorCautionBackgroundBrush}">
-                                <TextBlock Text="PI · Flow" FontSize="10" FontWeight="SemiBold" Opacity="0.85"
-                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                            </Border>
-                            <TextBlock Grid.Column="5" Text="&#x2192;" Opacity="0.55" VerticalAlignment="Center"/>
-                            <Border Grid.Column="6" Style="{StaticResource CasBlockStyle}">
-                                <TextBlock Text="Valve" FontSize="10" Opacity="0.75"
-                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                            </Border>
-                            <TextBlock Grid.Column="7" Text="&#x2192;" Opacity="0.55" VerticalAlignment="Center"/>
-                            <Border Grid.Column="8" Style="{StaticResource CasBlockStyle}">
-                                <TextBlock Text="Plant Flow" FontSize="10" Opacity="0.75"
-                                           HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center"/>
-                            </Border>
-                            <TextBlock Grid.Column="9" Text="&#x2192;" Opacity="0.55" VerticalAlignment="Center"/>
-                            <Border Grid.Column="10" Style="{StaticResource CasBlockStyle}">
-                                <TextBlock Text="Plant Suhu" FontSize="10" Opacity="0.75"
-                                           HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center"/>
-                            </Border>
-                        </Grid>
+                    <!-- Full cascade control block diagram (two loops with summing junctions,
+                         transmitters in the feedback paths, and transfer-function labels).
+                         Rendered as an image on a white "figure" card. -->
+                    <Border Grid.Row="1" CornerRadius="6" Background="White" Padding="8">
+                        <!-- Source set in code-behind by absolute path: relative XAML image URIs
+                             don't resolve in this unpackaged WinUI app (see MainWindow.UpdateLogo). -->
+                        <Image x:Name="BlockDiagramImage"
+                               Stretch="Uniform" MaxHeight="360"
+                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
                     </Border>
                     <TextBlock Grid.Row="2"
                                FontFamily="Consolas" FontSize="11" Opacity="0.7"
@@ -283,6 +236,7 @@
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
                         <TextBlock Grid.Row="0" Text="{x:Bind Lang.Cas_PrimaryMetrics, Mode=OneWay}"
                                    Style="{StaticResource CasCaptionStyle}"/>
@@ -320,6 +274,28 @@
                                     <TextBlock x:Name="SteadyErrValue" Text="--" FontSize="19" FontWeight="SemiBold"/>
                                     <TextBlock Text="" FontSize="11" Opacity="0.5" VerticalAlignment="Bottom" Margin="0,0,0,3"/>
                                 </StackPanel>
+                            </StackPanel>
+                        </Grid>
+                        <!-- Error performance indices: integrals of the tracking error e = SP − T
+                             (IAE=∫|e|, ISE=∫e², ITAE=∫t|e|). Lower is better. -->
+                        <Grid Grid.Row="2" ColumnSpacing="10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" Spacing="2">
+                                <TextBlock Text="IAE" Style="{StaticResource CasCaptionStyle}"/>
+                                <TextBlock x:Name="IaeValue" Text="--" FontSize="19" FontWeight="SemiBold"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Spacing="2">
+                                <TextBlock Text="ISE" Style="{StaticResource CasCaptionStyle}"/>
+                                <TextBlock x:Name="IseValue" Text="--" FontSize="19" FontWeight="SemiBold"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="2" Spacing="2">
+                                <TextBlock Text="ITAE" Style="{StaticResource CasCaptionStyle}"/>
+                                <TextBlock x:Name="ItaeValue" Text="--" FontSize="19" FontWeight="SemiBold"/>
                             </StackPanel>
                         </Grid>
                     </Grid>

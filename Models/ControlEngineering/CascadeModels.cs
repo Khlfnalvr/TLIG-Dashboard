@@ -98,6 +98,12 @@ public class CascadeMetrics
     public float SettlingTime     { get; set; }
     public float SteadyStateError { get; set; }   // fraction (0..1)
 
+    // Error-performance indices over the temperature step response — integrals of the tracking
+    // error e = setpoint − T (see PidSimulator.ComputePerformanceIndices). Lower is better.
+    public float IAE  { get; set; }   // ∫|e| dt    (°C·s)
+    public float ISE  { get; set; }   // ∫e² dt     (°C²·s)
+    public float ITAE { get; set; }   // ∫t·|e| dt  (°C·s²)
+
     // Secondary (flow) loop.
     public float FlowPeak         { get; set; }   // L/min, transient peak
     public float FlowSettled      { get; set; }   // L/min, value just before the disturbance

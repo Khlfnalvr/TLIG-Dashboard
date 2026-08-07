@@ -265,6 +265,10 @@ public sealed partial class DashboardPage : Page
         SettlingValue.Text  = m.SettlingTime.ToString("0.00");
         SteadyErrValue.Text = m.SteadyStateError.ToString("0.000");
 
+        IaeValue.Text  = FormatIndex(m.IAE);
+        IseValue.Text  = FormatIndex(m.ISE);
+        ItaeValue.Text = FormatIndex(m.ITAE);
+
         // result.Diagnosis is a code, not display text — localize it here so a Client shows its
         // own language. The outer loop is the identical Gp1 plant PidDiagnosisCalculator is
         // anchored to (see CascadeDesignService).
@@ -284,6 +288,16 @@ public sealed partial class DashboardPage : Page
         {
             PidAdvisorPanel.Visibility = Visibility.Collapsed;
         }
+    }
+
+    // Compact form for the (often large) error-index integrals, e.g. 7399 -> "7.4k", 1.8e6 -> "1.80M".
+    private static string FormatIndex(double v)
+    {
+        if (double.IsNaN(v) || double.IsInfinity(v)) return "--";
+        double a = System.Math.Abs(v);
+        if (a >= 1e6) return (v / 1e6).ToString("0.00") + "M";
+        if (a >= 1e3) return (v / 1e3).ToString("0.0") + "k";
+        return v.ToString("0.0");
     }
 
     // Every stride-th sample, always keeping the last point so the curve reaches the end.
