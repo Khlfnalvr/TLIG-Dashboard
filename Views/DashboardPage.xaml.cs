@@ -117,32 +117,29 @@ public sealed partial class DashboardPage : Page
     private void ApplySimulationType(Services.SimulationType type)
     {
         var svc = App.SimType;
-        // Block diagram labels
-        if (BlkSetpointLabel != null) BlkSetpointLabel.Text = svc.SetpointLabel;
-        if (BlkPlantLabel    != null) BlkPlantLabel.Text    = svc.PlantLabel;
-        // Control panel label + unit
+        // The block diagram + transfer function now depict the fixed cascade lab plant (two
+        // loops, Gp1/Gp2) and are decoupled from the System Model selector — as the transfer-
+        // function card already was. Only the Control panel's setpoint label/unit follow it.
         if (CtlSetpointLabel != null) CtlSetpointLabel.Text = svc.SetpointLabel;
         if (CtlSetpointUnit  != null) CtlSetpointUnit.Text  = svc.ProcessVariableUnit;
-        // NOTE: TransferFunctionText is intentionally NOT updated here — that card now
-        // shows the Smart PID Designer's fixed plant (see PidSimulator.cs), not the
-        // selected System Model's own transfer function.
     }
 
     // ── Smart PID Designer (AI-assisted tuning + RK4 step-response chart) ──
     //
-    // Gains, setpoint and the last run live in App.PidSession, not in this page: the
-    // Parameter page is this panel's extended screen and must show the same state.
-    // This page keeps one extra job of its own — folding the advisor's review into the
-    // AI chat on the right, which only runs started from here do.
+    // The Control panel edits the cascade's OUTER temperature PID (Kp/Ki/Kd) + setpoint;
+    // the inner flow PI stays at its SIMC values and is edited on the Cascade page, which is
+    // this panel's extended screen. Gains, setpoint and the last run live in App.CascadeSession
+    // (shared with that page), not in this page. This page keeps one extra job of its own —
+    // folding the advisor's review into the AI chat on the right, which only runs started here do.
 
     // Guards the echo when PullPidInputs() writes the boxes.
     private bool _syncingPidInputs;
 
-    // Subscribed only while this page is navigated to — the Parameter page owns the
+    // Subscribed only while this page is navigated to — the Cascade page owns the
     // rendering while it is up. `-=` first keeps each single if navigation unbalances.
     private void SubscribePidSession()
     {
-        var s = App.PidSession;
+        var s = App.CascadeSession;
         s.ResultChanged         -= OnPidResultChanged;
         s.ResultChanged         += OnPidResultChanged;
         s.RunningChanged        -= OnPidRunningChanged;
@@ -155,7 +152,7 @@ public sealed partial class DashboardPage : Page
 
     private void UnsubscribePidSession()
     {
-        var s = App.PidSession;
+        var s = App.CascadeSession;
         s.ResultChanged         -= OnPidResultChanged;
         s.RunningChanged        -= OnPidRunningChanged;
         s.RunFailed             -= OnPidRunFailed;
@@ -194,52 +191,45 @@ public sealed partial class DashboardPage : Page
 
     private void PushPidInputs()
     {
-        var s = App.PidSession;
-        s.Kp       = KpBox.Value;
-        s.Ki       = KiBox.Value;
-        s.Kd       = KdBox.Value;
+        // The Control panel edits the cascade's OUTER temperature PID + setpoint; the inner
+        // flow PI keeps its session values (edited on the Cascade page).
+        var s = App.CascadeSession;
+        s.OuterKp  = KpBox.Value;
+        s.OuterKi  = KiBox.Value;
+        s.OuterKd  = KdBox.Value;
         s.Setpoint = CtlSetpointBox.Value;
     }
 
     private void PullPidInputs()
     {
-        var s = App.PidSession;
+        var s = App.CascadeSession;
         _syncingPidInputs = true;
-        KpBox.Value          = s.Kp;
-        KiBox.Value          = s.Ki;
-        KdBox.Value          = s.Kd;
+        KpBox.Value          = s.OuterKp;
+        KiBox.Value          = s.OuterKi;
+        KdBox.Value          = s.OuterKd;
         CtlSetpointBox.Value = s.Setpoint;
         _syncingPidInputs = false;
     }
 
-    // RUN in the Control card is the PID Designer's "Simulate": it runs the RK4
-    // step-response preview for the Kp/Ki/Kd values currently in the boxes above,
-    // asks PidDiagnosisAgent for a corrective-action label, asks PidMetricsRegressor
-    // for an instant ML estimate of the response metrics, and asks the AI Advisor
-    // (LLM) to review that estimate and propose new gains.
+    // RUN in the Control card is the designer's "Simulate": it runs the RK4 step-response
+    // preview for the cascade's current gains, diagnoses the temperature loop by calculation
+    // (PidDiagnosisCalculator), searches the simulator for better gains (CascadeRecommender),
+    // and asks the AI Advisor (LLM) to review and explain them.
     private async void CtlRun_Click(object sender, RoutedEventArgs e) => await RunPidAsync();
 
     private async Task RunPidAsync()
     {
         PushPidInputs();
 
-        // RUN drives both designers at once: the single-loop PID here and the Cascade
-        // session behind the dedicated Cascade page. Kicking the cascade off in parallel
-        // means the Cascade page always reflects the same click — it renders live if it's
-        // up, or catches up from LastResult on navigation. It keeps its own gains, so no
-        // inputs need pushing; RunAsync no-ops if a cascade run is already in flight.
-        var cascadeTask = App.CascadeSession.RunAsync();
-
-        // Fires ResultChanged (-> RenderPidResult) / RunFailed on the way through.
-        var result = await App.PidSession.RunAsync();
+        // One RUN drives the cascade session that both this panel and the Cascade page show.
+        // Fires ResultChanged (-> RenderCascadeResult) / RunFailed on the way through.
+        var result = await App.CascadeSession.RunAsync();
         PullPidInputs();  // pick up the normalized setpoint
         if (result is not null) FoldAdvisorIntoChat(result);
-
-        await cascadeTask;
     }
 
-    private void OnPidResultChanged(object? sender, PidDesignResult result)
-        => DispatcherQueue.TryEnqueue(() => RenderPidResult(result));
+    private void OnPidResultChanged(object? sender, CascadeDesignResult result)
+        => DispatcherQueue.TryEnqueue(() => RenderCascadeResult(result));
 
     private void OnPidRunningChanged(object? sender, bool running)
         => DispatcherQueue.TryEnqueue(() => CtlRunBtn.IsEnabled = !running);
@@ -256,37 +246,54 @@ public sealed partial class DashboardPage : Page
 
     /// <summary>
     /// Draws a run into the panel. Safe to call repeatedly for the same result — it is
-    /// also how the page catches up on a run started from the Parameter page.
+    /// also how the page catches up on a run started from the Cascade page.
     /// </summary>
-    private void RenderPidResult(PidDesignResult result)
+    private void RenderCascadeResult(CascadeDesignResult result)
     {
-        RespChart.Update(result.Simulation.Time, result.Simulation.Amplitude, result.Setpoint);
+        var sim = result.Simulation;
+        // Cascade runs adaptively (~thousands of samples); thin for the chart, metrics use the
+        // full arrays. The panel plots the temperature response vs the setpoint, same as the
+        // single-loop chart did — the full two-loop view lives on the Cascade page.
+        int stride = System.Math.Max(1, sim.Time.Length / 1500);
+        RespChart.Update(Sample(sim.Time, stride), Sample(sim.Temperature, stride), result.Input.Setpoint);
 
-        // result.Metrics is read off the exact RK4 curve above — always consistent
-        // with what's plotted (result.MlEstimate exists but isn't shown here; see
-        // the comment on PidDesignResult for why).
-        RiseTimeValue.Text  = result.Metrics.RiseTime.ToString("0.00");
-        OvershootValue.Text = result.Metrics.Overshoot.ToString("0.0");
-        SettlingValue.Text  = result.Metrics.SettlingTime.ToString("0.00");
-        SteadyErrValue.Text = result.Metrics.SteadyStateError.ToString("0.000");
+        // result.Metrics is read off the exact RK4 curve above — always consistent with what's
+        // plotted (the temperature step metrics of the outer loop).
+        var m = result.Metrics;
+        RiseTimeValue.Text  = m.RiseTime.ToString("0.00");
+        OvershootValue.Text = m.Overshoot.ToString("0.0");
+        SettlingValue.Text  = m.SettlingTime.ToString("0.00");
+        SteadyErrValue.Text = m.SteadyStateError.ToString("0.000");
 
-        // result.Diagnosis is a code, not display text — localize it here so a Client
-        // shows its own language rather than whatever the Server is set to.
+        // result.Diagnosis is a code, not display text — localize it here so a Client shows its
+        // own language. The outer loop is the identical Gp1 plant PidDiagnosisCalculator is
+        // anchored to (see CascadeDesignService).
         DiagnosisValue.Text = string.IsNullOrEmpty(result.Diagnosis)
-            ? "--" : PidDiagnosisCalculator.Describe(result.Diagnosis, result.Metrics);
+            ? "--" : PidDiagnosisCalculator.Describe(result.Diagnosis, m.PrimaryStepMetrics());
 
-        // Read the pending gains from the session, not from result: a decline made on
-        // the Parameter page must stay declined here too.
-        if (App.PidSession.PendingRecommendation is { } rec)
+        // Read the pending gains from the session, not from result: a decline made on the
+        // Cascade page must stay declined here too. The panel shows the outer gains it edits;
+        // accepting also resets the inner PI to SIMC (see CascadeRecommender).
+        if (App.CascadeSession.PendingRecommendation is { } rec)
         {
             PidAdvisorText.Text = Lang.Pid_AdvisorPrompt;
-            PidAdvisorRecommendationText.Text = $"Kp={rec.Kp:F3}  Ki={rec.Ki:F3}  Kd={rec.Kd:F3}";
+            PidAdvisorRecommendationText.Text = $"Kp={rec.OuterKp:F3}  Ki={rec.OuterKi:F3}  Kd={rec.OuterKd:F3}";
             PidAdvisorPanel.Visibility = Visibility.Visible;
         }
         else
         {
             PidAdvisorPanel.Visibility = Visibility.Collapsed;
         }
+    }
+
+    // Every stride-th sample, always keeping the last point so the curve reaches the end.
+    private static double[] Sample(double[] a, int stride)
+    {
+        if (a.Length == 0 || stride <= 1) return a;
+        var list = new System.Collections.Generic.List<double>(a.Length / stride + 2);
+        for (int i = 0; i < a.Length; i += stride) list.Add(a[i]);
+        if ((a.Length - 1) % stride != 0) list.Add(a[a.Length - 1]);
+        return list.ToArray();
     }
 
     /// <summary>
@@ -296,7 +303,7 @@ public sealed partial class DashboardPage : Page
     /// answering blind. Only ever called for a run started from this page — replaying it
     /// on navigation would re-post bubbles for a run the student already saw.
     /// </summary>
-    private void FoldAdvisorIntoChat(PidDesignResult result)
+    private void FoldAdvisorIntoChat(CascadeDesignResult result)
     {
         if (string.IsNullOrWhiteSpace(result.AdvisorExplanation)) return;
 
@@ -306,12 +313,15 @@ public sealed partial class DashboardPage : Page
         // The synthetic "user" turn is never rendered as its own bubble — bump
         // _renderedCount past it so SyncBubblesWithHistory() doesn't re-render it
         // as a message the student never actually typed.
+        var g = result.Input;
+        var m = result.Metrics;
         App.Ai.AddHistoryEntry("user",
-            $"[Ringkasan simulasi RUN] Setpoint={result.Setpoint:F2}, " +
-            $"Kp={result.Prediction.Kp:F3}, Ki={result.Prediction.Ki:F3}, Kd={result.Prediction.Kd:F3} " +
-            $"-> hasil simulasi RK4: Overshoot={result.Metrics.Overshoot:F2}%, Rise Time={result.Metrics.RiseTime:F3}s, " +
-            $"Settling Time={result.Metrics.SettlingTime:F2}s, Steady-State Error={result.Metrics.SteadyStateError:F3}. " +
-            $"Diagnosis: {PidDiagnosisCalculator.Describe(result.Diagnosis, result.Metrics)}");
+            $"[Ringkasan simulasi RUN cascade] Setpoint={g.Setpoint:F1}°C, " +
+            $"OUTER Kp={g.OuterKp:F3}, Ki={g.OuterKi:F3}, Kd={g.OuterKd:F3}; " +
+            $"INNER Kp={g.InnerKp:F3}, Ki={g.InnerKi:F3} " +
+            $"-> hasil simulasi RK4: Overshoot={m.Overshoot:F2}%, Rise Time={m.RiseTime:F3}s, " +
+            $"Settling Time={m.SettlingTime:F2}s, Steady-State Error={m.SteadyStateError:F3}. " +
+            $"Diagnosis: {PidDiagnosisCalculator.Describe(result.Diagnosis, m.PrimaryStepMetrics())}");
         App.Ai.AddHistoryEntry("assistant", result.AdvisorExplanation);
         _renderedCount = App.Ai.History.Count;
     }
@@ -321,14 +331,14 @@ public sealed partial class DashboardPage : Page
     // apply-and-rerun a web frontend would do, just via native C# instead of DOM.
     private async void PidAdvisorAccept_Click(object sender, RoutedEventArgs e)
     {
-        var result = await App.PidSession.AcceptRecommendationAsync();
+        var result = await App.CascadeSession.AcceptRecommendationAsync();
         PullPidInputs();
         if (result is not null) FoldAdvisorIntoChat(result);
     }
 
-    // "Tidak" — leaves Kp/Ki/Kd untouched so the student can keep tuning manually.
+    // "Tidak" — leaves the gains untouched so the student can keep tuning manually.
     private void PidAdvisorDecline_Click(object sender, RoutedEventArgs e)
-        => App.PidSession.ClearRecommendation();
+        => App.CascadeSession.ClearRecommendation();
 
     private void OnActualThemeChanged(FrameworkElement sender, object args)
     {
@@ -352,12 +362,12 @@ public sealed partial class DashboardPage : Page
         ApplySimulationType(App.SimType.CurrentType);
 
         SubscribePidSession();
-        // Catch up on anything run from the Parameter page while this page was away.
+        // Catch up on anything run from the Cascade page while this page was away.
         // The button state has to be re-synced by hand: a run in flight while we were
         // unsubscribed would otherwise leave RUN disabled for good.
-        CtlRunBtn.IsEnabled = !App.PidSession.IsRunning;
+        CtlRunBtn.IsEnabled = !App.CascadeSession.IsRunning;
         PullPidInputs();
-        if (App.PidSession.LastResult is { } last) RenderPidResult(last);
+        if (App.CascadeSession.LastResult is { } last) RenderCascadeResult(last);
 
         // If theme changed while this page was not in the visual tree, force full re-render.
         if (_renderedCount > 0 && _renderedTheme != ActualTheme)
@@ -1056,7 +1066,7 @@ public sealed partial class DashboardPage : Page
 
     // ── Fullscreen buttons ───────────────────────────────────────────────
     private void LeftFullscreen_Click(object sender, RoutedEventArgs e)
-        => App.CurrentWindow?.NavigateToPage("Parameter");
+        => App.CurrentWindow?.NavigateToPage("Cascade");
 
     private void CenterFullscreen_Click(object sender, RoutedEventArgs e)
         => App.CurrentWindow?.NavigateToPage("LiveView");

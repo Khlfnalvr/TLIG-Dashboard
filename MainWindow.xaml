@@ -72,7 +72,7 @@
                         </TextBlock.RenderTransform>
                     </TextBlock>
                 </NavigationViewItem>
-                <NavigationViewItem x:Name="NavParameter"  Tag="Parameter"  MinWidth="0" MinHeight="32" Height="32" Padding="0,0,0,2" VerticalContentAlignment="Center">
+                <NavigationViewItem x:Name="NavParameter"  Tag="Parameter"  Visibility="Collapsed"  MinWidth="0" MinHeight="32" Height="32" Padding="0,0,0,2" VerticalContentAlignment="Center">
                     <TextBlock Text="{x:Bind Lang.Nav_Parameter, Mode=OneWay}" FontSize="12" VerticalAlignment="Center">
                         <TextBlock.RenderTransform>
                             <TranslateTransform Y="-3"/>
@@ -162,6 +162,7 @@
                                               Click="ViewNavToggle_Click"/>
                         <ToggleMenuFlyoutItem x:Name="ViewNavParameter"
                                               FontSize="12"
+                                              Visibility="Collapsed"
                                               Text="{x:Bind Lang.Nav_Parameter, Mode=OneWay}"
                                               Tag="Parameter"
                                               IsChecked="True"

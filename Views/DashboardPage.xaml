@@ -196,24 +196,44 @@
                                     Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}"
                                     CornerRadius="5"
                                     Padding="10">
-                                <Grid ColumnSpacing="6" VerticalAlignment="Center">
+                                <!-- Cascade structure (mirrors the Cascade page, which is this panel's
+                                     extended screen): Tsp -> PID(suhu) -> PI(aliran) -> valve -> Gp2(aliran) -> Gp1(suhu). -->
+                                <Grid ColumnSpacing="4" VerticalAlignment="Center">
                                     <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="1.35*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="1.15*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="0.85*"/>
+                                        <ColumnDefinition Width="Auto"/>
                                         <ColumnDefinition Width="1.1*"/>
                                         <ColumnDefinition Width="Auto"/>
-                                        <ColumnDefinition Width="1*"/>
-                                        <ColumnDefinition Width="Auto"/>
-                                        <ColumnDefinition Width="1.1*"/>
+                                        <ColumnDefinition Width="1.05*"/>
                                     </Grid.ColumnDefinitions>
-                                    <Border Grid.Column="0" Style="{StaticResource DashInputBoxStyle}" MinHeight="34" HorizontalAlignment="Stretch">
-                                        <TextBlock x:Name="BlkSetpointLabel" Text="{x:Bind Lang.Blk_Setpoint, Mode=OneWay}" Style="{StaticResource DashTinyLabelStyle}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    <Border Grid.Column="0" Style="{StaticResource DashInputBoxStyle}" MinHeight="32" HorizontalAlignment="Stretch">
+                                        <TextBlock Text="Temp SP" Style="{StaticResource DashTinyLabelStyle}" TextAlignment="Center" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                     </Border>
                                     <TextBlock Grid.Column="1" Text=">" Opacity="0.55" VerticalAlignment="Center"/>
-                                    <Border Grid.Column="2" Style="{StaticResource DashInputBoxStyle}" MinHeight="34" HorizontalAlignment="Stretch">
-                                        <TextBlock Text="{x:Bind Lang.Blk_Pid, Mode=OneWay}" Style="{StaticResource DashTinyLabelStyle}" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    <Border Grid.Column="2" Style="{StaticResource DashInputBoxStyle}" MinHeight="32" HorizontalAlignment="Stretch">
+                                        <TextBlock Text="PID · Suhu" Style="{StaticResource DashTinyLabelStyle}" FontWeight="SemiBold" TextAlignment="Center" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                     </Border>
                                     <TextBlock Grid.Column="3" Text=">" Opacity="0.55" VerticalAlignment="Center"/>
-                                    <Border Grid.Column="4" Style="{StaticResource DashInputBoxStyle}" MinHeight="34" HorizontalAlignment="Stretch">
-                                        <TextBlock x:Name="BlkPlantLabel" Text="{x:Bind Lang.Blk_Plant, Mode=OneWay}" Style="{StaticResource DashTinyLabelStyle}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    <Border Grid.Column="4" Style="{StaticResource DashInputBoxStyle}" MinHeight="32" HorizontalAlignment="Stretch">
+                                        <TextBlock Text="PI · Aliran" Style="{StaticResource DashTinyLabelStyle}" FontWeight="SemiBold" TextAlignment="Center" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    </Border>
+                                    <TextBlock Grid.Column="5" Text=">" Opacity="0.55" VerticalAlignment="Center"/>
+                                    <Border Grid.Column="6" Style="{StaticResource DashInputBoxStyle}" MinHeight="32" HorizontalAlignment="Stretch">
+                                        <TextBlock Text="Valve" Style="{StaticResource DashTinyLabelStyle}" TextAlignment="Center" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    </Border>
+                                    <TextBlock Grid.Column="7" Text=">" Opacity="0.55" VerticalAlignment="Center"/>
+                                    <Border Grid.Column="8" Style="{StaticResource DashInputBoxStyle}" MinHeight="32" HorizontalAlignment="Stretch">
+                                        <TextBlock Text="Plant Aliran" Style="{StaticResource DashTinyLabelStyle}" TextAlignment="Center" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    </Border>
+                                    <TextBlock Grid.Column="9" Text=">" Opacity="0.55" VerticalAlignment="Center"/>
+                                    <Border Grid.Column="10" Style="{StaticResource DashInputBoxStyle}" MinHeight="32" HorizontalAlignment="Stretch">
+                                        <TextBlock Text="Plant Suhu" Style="{StaticResource DashTinyLabelStyle}" TextAlignment="Center" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                     </Border>
                                 </Grid>
                             </Border>
@@ -376,13 +396,16 @@
                                        Text="{x:Bind Lang.Panel_TransferFunction, Mode=OneWay}"
                                        Style="{StaticResource DashCardTitleStyle}"/>
                             <Border Grid.Row="1" Style="{StaticResource DashInputBoxStyle}" Padding="10">
-                                <!-- Fixed plant the Smart PID Designer's local RK4 simulator models
-                                     (see PidSimulator.cs) — not tied to the System Model selector above. -->
+                                <!-- The two fixed lab-identified cascade plants the RK4 simulator models
+                                     (see CascadeSimulator.cs): Gp1 outer temperature loop, Gp2 inner flow
+                                     loop — decoupled from the System Model selector above. -->
                                 <TextBlock x:Name="TransferFunctionText"
-                                           Text="G(s) = 0.6361 / (101.53s + 1) · e^(−52.09s)"
+                                           Text="Gp1 (suhu) = 0,6361 / (101,53s + 1) · e^(−52,09s)&#x0A;Gp2 (flow) = 1,624 / (0,3645s + 1) · e^(−3,089s)"
                                            FontFamily="Consolas"
-                                           FontSize="12"
+                                           FontSize="11"
                                            Opacity="0.72"
+                                           TextWrapping="Wrap"
+                                           TextAlignment="Center"
                                            HorizontalAlignment="Center"
                                            VerticalAlignment="Center"/>
                             </Border>

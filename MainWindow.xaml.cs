@@ -521,7 +521,10 @@ public sealed partial class MainWindow : Window
     {
         var s = AppSettingsService.Load();
         ApplyNavVisibility(NavDashboard, ViewNavDashboard, s.ShowNav_Dashboard);
-        ApplyNavVisibility(NavParameter, ViewNavParameter, s.ShowNav_Parameter);
+        // Single-loop Parameter page is retired: the Dashboard control panel is now the cascade
+        // designer and its extended screen is the Cascade page. Keep it force-hidden (the machinery
+        // and page stay in place, dormant) rather than honoring the saved ShowNav_Parameter pref.
+        ApplyNavVisibility(NavParameter, ViewNavParameter, false);
         ApplyNavVisibility(NavLiveView,  ViewNavLiveView,  s.ShowNav_LiveView);
         ApplyNavVisibility(NavLearningAnalytic, ViewNavLearningAnalytic, s.ShowNav_LearningAnalytic);
         ApplyNavVisibility(NavAI,        ViewNavAI,        s.ShowNav_AI);
@@ -580,26 +583,37 @@ public sealed partial class MainWindow : Window
 
     public void NavigateToPage(string tag)
     {
-        foreach (var (nav, _) in NavToggles())
+        // Search ALL nav items, not just the toggleable subset, so pages like Cascade —
+        // reached from the Dashboard System Model's "expand" button — also move the top-nav
+        // selection strip, not only the content frame.
+        var nav = FindNavItem(tag);
+        if (nav != null)
         {
-            if (nav.Tag is string navTag && navTag == tag)
+            // If this nav item is already selected (e.g. returning from the task detail page,
+            // which left the selection on Learning Analytic), setting SelectedItem again won't
+            // raise SelectionChanged — navigate directly.
+            if (ReferenceEquals(NavView.SelectedItem, nav))
             {
-                // If this nav item is already selected (e.g. returning from the task
-                // detail page, which left the selection on Learning Analytic), setting
-                // SelectedItem again won't raise SelectionChanged — navigate directly.
-                if (ReferenceEquals(NavView.SelectedItem, nav))
-                {
-                    if (_pages.TryGetValue(tag, out var pt)) ContentFrame.Navigate(pt);
-                }
-                else
-                {
-                    NavView.SelectedItem = nav;
-                }
-                return;
+                if (_pages.TryGetValue(tag, out var pt)) ContentFrame.Navigate(pt);
             }
+            else
+            {
+                NavView.SelectedItem = nav;
+            }
+            return;
         }
         if (_pages.TryGetValue(tag, out var pageType))
             ContentFrame.Navigate(pageType);
+    }
+
+    /// <summary>Finds a top/footer nav item by its Tag, or null if there is none.</summary>
+    private NavigationViewItem? FindNavItem(string tag)
+    {
+        foreach (var mi in NavView.MenuItems)
+            if (mi is NavigationViewItem nvi && nvi.Tag is string t && t == tag) return nvi;
+        foreach (var mi in NavView.FooterMenuItems)
+            if (mi is NavigationViewItem nvi && nvi.Tag is string t && t == tag) return nvi;
+        return null;
     }
 
     /// <summary>
@@ -1963,20 +1977,9 @@ public sealed partial class MainWindow : Window
 
     private void SelectControlPanelForTour()
     {
-        foreach (var (nav, toggle) in NavToggles())
-        {
-            if (nav.Tag is not string tag || tag != "Parameter")
-                continue;
-
-            if (nav.Visibility != Visibility.Visible)
-            {
-                ApplyNavVisibility(nav, toggle, true);
-                SaveNavVisibility();
-            }
-
-            NavView.SelectedItem = nav;
-            return;
-        }
+        // The Dashboard control panel's extended screen is the Cascade page; highlight it for
+        // the tour. NavCascade is always visible (not part of the toggleable nav set).
+        NavView.SelectedItem = NavCascade;
     }
 
     private static readonly Dictionary<string, string> TourTranslations = new()
