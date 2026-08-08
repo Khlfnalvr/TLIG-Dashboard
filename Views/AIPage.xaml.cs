@@ -170,6 +170,23 @@ public sealed partial class AIPage : Page
         StopBtn.Visibility    = Visibility.Visible;
 
         AddUserBubble(text);
+
+        // A request that names a performance target ("gain untuk overshoot < 5%") is answered from
+        // the verified simulator search, not the LLM (which can't compute this plant's overshoot).
+        var routed = Services.ControlEngineering.TuningChat.TryAnswerTargetRequest(text, (float)App.CascadeSession.Setpoint);
+        if (routed is not null)
+        {
+            var (rBorder, rBlock) = AddAiBubble(routed);
+            rBorder.Child = MarkdownRenderer.Render(routed, 13, ActualTheme == ElementTheme.Dark);
+            App.Ai.AddHistoryEntry("user", text);
+            App.Ai.AddHistoryEntry("assistant", routed);
+            _renderedCount        = App.Ai.History.Count;
+            ChatSendBtn.IsEnabled = true;
+            StopBtn.Visibility    = Visibility.Collapsed;
+            ScrollToBottom();
+            return;
+        }
+
         var (aiBubbleBorder, aiBubble) = AddAiBubble(Lang.Ai_Thinking);
         _streamingBlock = aiBubble;
 
@@ -219,8 +236,13 @@ public sealed partial class AIPage : Page
             aiBubble.Text = "⚠ Server tidak mengembalikan konten. " +
                             "Periksa nama model dan saldo API.";
         else
-            aiBubbleBorder.Child = MarkdownRenderer.Render(
-                aiBubble.Text, 13, ActualTheme == ElementTheme.Dark);
+        {
+            // Safety net: if the LLM proposed Kp/Ki/Kd, simulate them and append the real result so a
+            // guessed tuning can't pass unchecked.
+            var note = Services.ControlEngineering.TuningChat.VerifyGainsNote(aiBubble.Text, (float)App.CascadeSession.Setpoint);
+            string finalText = note is null ? aiBubble.Text : aiBubble.Text + note;
+            aiBubbleBorder.Child = MarkdownRenderer.Render(finalText, 13, ActualTheme == ElementTheme.Dark);
+        }
 
         _cts?.Dispose();
         _cts                  = null;

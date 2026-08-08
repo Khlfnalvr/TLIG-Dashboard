@@ -978,6 +978,22 @@ public sealed partial class DashboardPage : Page
         ChatSendBtn.IsEnabled = false;
 
         AddChatBubble("user", text);
+
+        // A request that names a performance target ("gain untuk overshoot < 5%") is answered from
+        // the verified simulator search, not the LLM (which can't compute this plant's overshoot).
+        var routed = Services.ControlEngineering.TuningChat.TryAnswerTargetRequest(text, (float)App.CascadeSession.Setpoint);
+        if (routed is not null)
+        {
+            var (rBorder, _) = AddChatBubble("ai", routed);
+            rBorder.Child = MarkdownRenderer.Render(routed, 12, ActualTheme == ElementTheme.Dark);
+            App.Ai.AddHistoryEntry("user", text);
+            App.Ai.AddHistoryEntry("assistant", routed);
+            _renderedCount        = App.Ai.History.Count;
+            ChatSendBtn.IsEnabled = true;
+            ScrollChat();
+            return;
+        }
+
         var (aiBubbleBorder, aiBubble) = AddChatBubble("ai", Lang.Ai_Thinking);
 
         _chatCts = new CancellationTokenSource();
@@ -1007,8 +1023,12 @@ public sealed partial class DashboardPage : Page
         else if (!hasContent)
             aiBubble.Text = "⚠ Tidak ada konten — periksa model & API key.";
         else
-            aiBubbleBorder.Child = MarkdownRenderer.Render(
-                aiBubble.Text, 12, ActualTheme == ElementTheme.Dark);
+        {
+            // Safety net: simulate any Kp/Ki/Kd the LLM proposed and append the real result.
+            var note = Services.ControlEngineering.TuningChat.VerifyGainsNote(aiBubble.Text, (float)App.CascadeSession.Setpoint);
+            string finalText = note is null ? aiBubble.Text : aiBubble.Text + note;
+            aiBubbleBorder.Child = MarkdownRenderer.Render(finalText, 12, ActualTheme == ElementTheme.Dark);
+        }
 
         _chatCts?.Dispose();
         _chatCts = null;
