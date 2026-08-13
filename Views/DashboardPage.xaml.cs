@@ -91,6 +91,15 @@ public sealed partial class DashboardPage : Page
 
         ApplyLearningPanelContent();
         App.Session.Changed += OnSessionChanged;
+
+        // Mirror the outer-loop Kp/Ki/Kd to the LabVIEW HMI (PLC) over TCP whenever
+        // they change here, and re-send on (re)connect so LabVIEW's KC/KI/KD track
+        // the dashboard.
+        KpBox.ValueChanged += OnPidGainChanged;
+        KiBox.ValueChanged += OnPidGainChanged;
+        KdBox.ValueChanged += OnPidGainChanged;
+        if (App.ViewModel is { } vm)
+            vm.Plc.Connected += OnPlcConnected;
     }
 
     // Progress tracking in the bottom "Learning Analytic" panel is
@@ -353,6 +362,50 @@ public sealed partial class DashboardPage : Page
     // "Tidak" — leaves the gains untouched so the student can keep tuning manually.
     private void PidAdvisorDecline_Click(object sender, RoutedEventArgs e)
         => App.CascadeSession.ClearRecommendation();
+
+    // ── PID → PLC (LabVIEW HMI over TCP) ──────────────────────────────────────
+    // Any change to the outer-loop Kp/Ki/Kd here — typed, spun, or applied by the
+    // AI Advisor — is forwarded to LabVIEW so its KC/KI/KD track the dashboard.
+
+    // Debounce for pushing Kp/Ki/Kd to the PLC — a burst of programmatic box
+    // updates (e.g. the Advisor filling all three) coalesces into one send.
+    private Microsoft.UI.Dispatching.DispatcherQueueTimer? _pidPushTimer;
+
+    private void OnPidGainChanged(NumberBox sender, NumberBoxValueChangedEventArgs args)
+        => SchedulePidPush();
+
+    // Fired off the socket thread when LabVIEW (re)connects — resend the current
+    // gains so a freshly-connected HMI immediately mirrors the dashboard.
+    private void OnPlcConnected() => DispatcherQueue.TryEnqueue(PushPidToPlc);
+
+    // Coalesce rapid changes into one push so LabVIEW never briefly sees a
+    // half-updated Kp/Ki/Kd triple.
+    private void SchedulePidPush()
+    {
+        _pidPushTimer ??= CreatePidPushTimer();
+        _pidPushTimer.Stop();
+        _pidPushTimer.Start();
+    }
+
+    private Microsoft.UI.Dispatching.DispatcherQueueTimer CreatePidPushTimer()
+    {
+        var timer = DispatcherQueue.CreateTimer();
+        timer.Interval = TimeSpan.FromMilliseconds(200);
+        timer.IsRepeating = false;
+        timer.Tick += (_, _) => { timer.Stop(); PushPidToPlc(); };
+        return timer;
+    }
+
+    private void PushPidToPlc()
+    {
+        var plc = App.ViewModel?.Plc;
+        if (plc is null || !plc.IsConnected) return;   // no LabVIEW peer → nothing to send
+
+        double kp = double.IsNaN(KpBox.Value) ? 0 : KpBox.Value;
+        double ki = double.IsNaN(KiBox.Value) ? 0 : KiBox.Value;
+        double kd = double.IsNaN(KdBox.Value) ? 0 : KdBox.Value;
+        plc.WritePid(kp, ki, kd);
+    }
 
     private void OnActualThemeChanged(FrameworkElement sender, object args)
     {
