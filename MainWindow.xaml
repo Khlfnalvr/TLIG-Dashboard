@@ -79,6 +79,13 @@
                         </TextBlock.RenderTransform>
                     </TextBlock>
                 </NavigationViewItem>
+                <NavigationViewItem x:Name="NavCascade"    Tag="Cascade"    MinWidth="0" MinHeight="32" Height="32" Padding="0,0,0,2" VerticalContentAlignment="Center">
+                    <TextBlock Text="{x:Bind Lang.Nav_Cascade, Mode=OneWay}" FontSize="12" VerticalAlignment="Center">
+                        <TextBlock.RenderTransform>
+                            <TranslateTransform Y="-3"/>
+                        </TextBlock.RenderTransform>
+                    </TextBlock>
+                </NavigationViewItem>
                 <NavigationViewItem x:Name="NavLiveView"   Tag="LiveView"   MinWidth="0" MinHeight="32" Height="32" Padding="0,0,0,2" VerticalContentAlignment="Center">
                     <TextBlock Text="{x:Bind Lang.Nav_LiveView, Mode=OneWay}" FontSize="12" VerticalAlignment="Center">
                         <TextBlock.RenderTransform>
@@ -217,19 +224,19 @@
                         <MenuFlyoutItem FontSize="12"
                                         IsHitTestVisible="False"
                                         Foreground="{ThemeResource TextFillColorPrimaryBrush}"
-                                        Text="{x:Bind AboutProductText, Mode=OneWay}"/>
+                                        Text="{x:Bind AboutProductLine(Lang.Ui_About_Product), Mode=OneWay}"/>
                         <MenuFlyoutItem FontSize="12"
                                         IsHitTestVisible="False"
                                         Foreground="{ThemeResource TextFillColorPrimaryBrush}"
-                                        Text="{x:Bind AboutVersionText, Mode=OneWay}"/>
+                                        Text="{x:Bind AboutVersionLine(Lang.Ui_About_Version), Mode=OneWay}"/>
                         <MenuFlyoutItem FontSize="12"
                                         IsHitTestVisible="False"
                                         Foreground="{ThemeResource TextFillColorPrimaryBrush}"
-                                        Text="{x:Bind AboutLicenseText, Mode=OneWay}"/>
+                                        Text="{x:Bind AboutLicenseLine(Lang.Ui_About_License), Mode=OneWay}"/>
                         <MenuFlyoutItem FontSize="12"
                                         IsHitTestVisible="False"
                                         Foreground="{ThemeResource TextFillColorPrimaryBrush}"
-                                        Text="{x:Bind AboutCopyrightText, Mode=OneWay}"/>
+                                        Text="{x:Bind AboutCopyrightLine(Lang.Ui_About_Copyright), Mode=OneWay}"/>
                     </MenuFlyoutSubItem>
                     <MenuFlyoutSubItem x:Name="MenuDeveloper"
                                        FontSize="12"
@@ -415,90 +422,31 @@
                                                      FontSize="12" Padding="12,4,12,4"/>
                                 </SelectorBar>
 
-                                <!-- ══ OPC PANEL ══════════════════════════════ -->
+                                <!-- ══ PLC PANEL (TCP → LabVIEW HMI → PLC) ═════ -->
                                 <StackPanel x:Name="PanelOpcUa" Spacing="10">
 
-                                    <!-- Protocol selector -->
+                                    <TextBlock Text="{x:Bind Lang.Ui_PlcTcpHint, Mode=OneWay}"
+                                               FontSize="11" Opacity="0.65"
+                                               TextWrapping="Wrap"/>
+
+                                    <!-- Host -->
                                     <StackPanel Spacing="3">
-                                        <TextBlock Text="{x:Bind Lang.Ui_OpcProtocol, Mode=OneWay}"
+                                        <TextBlock Text="{x:Bind Lang.Ui_PlcTcpHost, Mode=OneWay}"
                                                    FontSize="11" Opacity="0.65"/>
-                                        <ComboBox x:Name="OpcProtocolCombo"
-                                                  FontSize="12"
-                                                  HorizontalAlignment="Stretch"
-                                                  SelectionChanged="OpcProtocolCombo_SelectionChanged">
-                                            <ComboBoxItem x:Name="OpcProtoUa" Tag="UA"  Content="OPC UA"/>
-                                            <ComboBoxItem x:Name="OpcProtoDa" Tag="DA"  Content="OPC DA (Classic)"/>
-                                        </ComboBox>
+                                        <TextBox x:Name="PlcHostBox"
+                                                 FontSize="12"
+                                                 PlaceholderText="192.168.1.10"/>
                                     </StackPanel>
 
-                                    <!-- ── OPC UA fields ── -->
-                                    <StackPanel x:Name="OpcUaFields" Spacing="10">
-
-                                        <!-- Endpoint URL -->
-                                        <StackPanel Spacing="3">
-                                            <TextBlock Text="{x:Bind Lang.Ui_OpcUaEndpoint, Mode=OneWay}"
-                                                       FontSize="11" Opacity="0.65"/>
-                                            <TextBox x:Name="OpcEndpointBox"
-                                                     FontSize="12"
-                                                     PlaceholderText="opc.tcp://host:4840"/>
-                                        </StackPanel>
-
-                                        <!-- Security Mode -->
-                                        <StackPanel Spacing="3">
-                                            <TextBlock Text="{x:Bind Lang.Ui_OpcUaSecurity, Mode=OneWay}"
-                                                       FontSize="11" Opacity="0.65"/>
-                                            <ComboBox x:Name="OpcSecurityCombo"
-                                                      FontSize="12"
-                                                      HorizontalAlignment="Stretch"
-                                                      SelectionChanged="OpcSecurityCombo_SelectionChanged">
-                                                <ComboBoxItem x:Name="OpcSecNone"    Tag="None"/>
-                                                <ComboBoxItem x:Name="OpcSecSign"    Tag="Sign"/>
-                                                <ComboBoxItem x:Name="OpcSecSignEnc" Tag="SignAndEncrypt"/>
-                                            </ComboBox>
-                                        </StackPanel>
-
-                                        <!-- Authentication -->
-                                        <StackPanel Spacing="3">
-                                            <TextBlock Text="{x:Bind Lang.Ui_OpcUaAuth, Mode=OneWay}"
-                                                       FontSize="11" Opacity="0.65"/>
-                                            <ComboBox x:Name="OpcAuthCombo"
-                                                      FontSize="12"
-                                                      HorizontalAlignment="Stretch"
-                                                      SelectionChanged="OpcAuthCombo_SelectionChanged">
-                                                <ComboBoxItem x:Name="OpcAuthAnon" Tag="Anonymous"/>
-                                                <ComboBoxItem x:Name="OpcAuthUser" Tag="Username"/>
-                                            </ComboBox>
-                                        </StackPanel>
-
-                                        <!-- Username / Password -->
-                                        <StackPanel x:Name="OpcCredPanel"
-                                                    Spacing="6"
-                                                    Visibility="Collapsed">
-                                            <TextBox x:Name="OpcUsernameBox"
-                                                     FontSize="12"
-                                                     PlaceholderText="{x:Bind Lang.Ui_OpcUaUsername, Mode=OneWay}"/>
-                                            <PasswordBox x:Name="OpcPasswordBox"
-                                                         FontSize="12"
-                                                         PlaceholderText="{x:Bind Lang.Ui_OpcUaPassword, Mode=OneWay}"/>
-                                        </StackPanel>
-
-                                        <!-- Open certificate folder -->
-                                        <HyperlinkButton x:Name="OpcCertFolderBtn"
-                                                         FontSize="11" Padding="0,2,0,2"
-                                                         Content="{x:Bind Lang.Ui_OpcUaOpenCertFolder, Mode=OneWay}"
-                                                         Click="OpcCertFolderBtn_Click"/>
-
-                                    </StackPanel>
-
-                                    <!-- ── OPC DA fields ── -->
-                                    <StackPanel x:Name="OpcDaFields" Spacing="10" Visibility="Collapsed">
-                                        <StackPanel Spacing="3">
-                                            <TextBlock Text="{x:Bind Lang.Ui_OpcDaProgId, Mode=OneWay}"
-                                                       FontSize="11" Opacity="0.65"/>
-                                            <TextBox x:Name="OpcDaProgIdBox"
-                                                     FontSize="12"
-                                                     PlaceholderText="National Instruments.NIOPCServers.V5"/>
-                                        </StackPanel>
+                                    <!-- Port -->
+                                    <StackPanel Spacing="3">
+                                        <TextBlock Text="{x:Bind Lang.Ui_PlcTcpPort, Mode=OneWay}"
+                                                   FontSize="11" Opacity="0.65"/>
+                                        <NumberBox x:Name="PlcPortBox"
+                                                   FontSize="12"
+                                                   Minimum="1" Maximum="65535"
+                                                   SpinButtonPlacementMode="Compact"
+                                                   HorizontalAlignment="Stretch"/>
                                     </StackPanel>
 
                                     <!-- Connect / Disconnect -->
@@ -522,7 +470,7 @@
                                             Spacing="10"
                                             Visibility="Collapsed">
 
-                                    <!-- Multi-provider config (DeepSeek / OpenAI / Anthropic) -->
+                                    <!-- Multi-provider config (DeepSeek / OpenAI / Anthropic / Gemini) -->
                                     <TextBlock Text="{x:Bind Lang.Ai_ProvidersHint, Mode=OneWay}"
                                                FontSize="11" Opacity="0.65"
                                                TextWrapping="Wrap"/>

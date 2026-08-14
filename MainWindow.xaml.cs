@@ -34,16 +34,19 @@ public sealed partial class MainWindow : Window
         ?? typeof(App).Assembly.GetName().Version?.ToString(3)
         ?? "1.6.0";
 
-    private string AboutProductText => $"{Lang.Ui_About_Product}: {AppProductName}";
-    private string AboutVersionText => $"{Lang.Ui_About_Version}: {AppVersion}";
-    private string AboutLicenseText => $"{Lang.Ui_About_License}: ICO Laboratory proprietary license";
-    private string AboutCopyrightText => $"{Lang.Ui_About_Copyright}: (C) 2026 ICO Laboratory";
+    // x:Bind functions — the Lang.* argument is the binding path, so the About
+    // lines re-evaluate on language change without WMC1506 warnings.
+    internal string AboutProductLine(string label)   => $"{label}: {AppProductName}";
+    internal string AboutVersionLine(string label)   => $"{label}: {AppVersion}";
+    internal string AboutLicenseLine(string label)   => $"{label}: ICO Laboratory proprietary license";
+    internal string AboutCopyrightLine(string label) => $"{label}: (C) 2026 ICO Laboratory";
 
 
     private readonly Dictionary<string, Type> _pages = new()
     {
         { "Dashboard", typeof(DashboardPage) },
         { "Parameter", typeof(ParameterPage) },
+        { "Cascade",   typeof(CascadeControlPage) },
         { "LiveView",  typeof(LiveViewPage) },
         { "LearningAnalytic", typeof(LearningAnalyticPage) },
         { "AI",        typeof(AIPage) },
@@ -130,6 +133,9 @@ public sealed partial class MainWindow : Window
 
         Closed += (_, _) =>
         {
+            // Don't leave the external Python client (PIDtest.py) running after the HMI closes.
+            try { App.PythonBridge.Dispose(); } catch { }
+
             if (_hwnd != IntPtr.Zero && _oldWndProc != IntPtr.Zero)
                 SetWindowLongPtr(_hwnd, GWLP_WNDPROC, _oldWndProc);
         };
@@ -2043,32 +2049,12 @@ public sealed partial class MainWindow : Window
             ? Color.FromArgb(0xFF, 0x45, 0x45, 0x45)
             : Color.FromArgb(0xFF, 0xDD, 0xDD, 0xDD));
 
-    // ── Caption-bar OPC UA picker ─────────────────────────────────────────
+    // ── Caption-bar PLC (TCP → LabVIEW HMI) picker ────────────────────────
     private void InitOpcUaFlyout()
     {
         var saved = AppSettingsService.Load();
-        OpcEndpointBox.Text = saved.OpcUaEndpointUrl;
-        OpcProtocolCombo.SelectedIndex = saved.OpcProtocol == "DA" ? 1 : 0;
-        OpcDaProgIdBox.Text = saved.OpcDaProgId;
-        ApplyOpcProtocolPanel();
-
-        // Security combo
-        OpcSecNone.Content    = Lang.Ui_OpcUaSecNone;
-        OpcSecSign.Content    = Lang.Ui_OpcUaSecSign;
-        OpcSecSignEnc.Content = Lang.Ui_OpcUaSecSignEnc;
-        OpcSecurityCombo.SelectedIndex = saved.OpcUaSecurityMode switch
-        {
-            "Sign"           => 1,
-            "SignAndEncrypt" => 2,
-            _                => 0
-        };
-
-        // Auth combo
-        OpcAuthAnon.Content = Lang.Ui_OpcUaAnonymous;
-        OpcAuthUser.Content = Lang.Ui_OpcUaUsernameAuth;
-        OpcAuthCombo.SelectedIndex = saved.OpcUaUseAnonymous ? 0 : 1;
-        OpcCredPanel.Visibility    = saved.OpcUaUseAnonymous
-            ? Visibility.Collapsed : Visibility.Visible;
+        PlcHostBox.Text  = saved.PlcTcpHost;
+        PlcPortBox.Value = saved.PlcTcpPort;
 
         UpdateOpcStatusDot();
         SyncOpcConnectButton();
@@ -2082,23 +2068,14 @@ public sealed partial class MainWindow : Window
         // Init sharing panel (broadcast on server, connect on client)
         InitSharePanel();
 
-        // Default tab = OPC UA
+        // Default tab = PLC
         ConnAiTabs.SelectedItem = TabOpcUa;
 
-        ViewModel.OpcUa.StatusChanged += _ => DispatcherQueue.TryEnqueue(() =>
+        ViewModel.Plc.StatusChanged += _ => DispatcherQueue.TryEnqueue(() =>
         {
             SyncOpcConnectButton();
             UpdateOpcStatusDot();
-            bool connected = ViewModel.OpcUa.IsConnected;
-            App.Status.PlcConnected    = connected;
-            App.Status.SensorConnected = connected;
-        });
-
-        ViewModel.OpcDa.StatusChanged += _ => DispatcherQueue.TryEnqueue(() =>
-        {
-            SyncOpcConnectButton();
-            UpdateOpcStatusDot();
-            bool connected = ViewModel.OpcDa.IsConnected;
+            bool connected = ViewModel.Plc.IsConnected;
             App.Status.PlcConnected    = connected;
             App.Status.SensorConnected = connected;
         });
@@ -2112,167 +2089,62 @@ public sealed partial class MainWindow : Window
             InitAiPanel();
     }
 
-    private void OpcAuthCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
-    {
-        if (OpcCredPanel == null) return;
-        OpcCredPanel.Visibility = OpcAuthCombo.SelectedIndex == 1
-            ? Visibility.Visible : Visibility.Collapsed;
-    }
-
-    private void OpcSecurityCombo_SelectionChanged(object sender, SelectionChangedEventArgs e) { }
-
-    private void OpcProtocolCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
-    {
-        ApplyOpcProtocolPanel();
-        SyncOpcConnectButton();
-    }
-
-    private void ApplyOpcProtocolPanel()
-    {
-        bool isDa = OpcProtocolCombo?.SelectedIndex == 1;
-        if (OpcUaFields != null)
-            OpcUaFields.Visibility = isDa ? Visibility.Collapsed : Visibility.Visible;
-        if (OpcDaFields != null)
-            OpcDaFields.Visibility = isDa ? Visibility.Visible : Visibility.Collapsed;
-    }
-
     private void SyncOpcConnectButton()
     {
-        bool isDa      = OpcProtocolCombo?.SelectedIndex == 1;
-        bool connected = isDa ? ViewModel.OpcDa.IsConnected : ViewModel.OpcUa.IsConnected;
+        bool connected = ViewModel.Plc.IsConnected;
 
         OpcConnectBtn.Content = connected ? Lang.Ctrl_Disconnect : Lang.Ctrl_Connect;
-        if (OpcProtocolCombo != null)
-            OpcProtocolCombo.IsEnabled = !connected;
-
-        if (isDa)
-        {
-            if (OpcDaProgIdBox != null)
-                OpcDaProgIdBox.IsEnabled = !connected;
-            OpcStatusText.Text = connected
-                ? LocalizationManager.Instance.Format("OpcUa_StatusConnected", ViewModel.OpcDa.ProgId)
-                : LocalizationManager.Instance.Get("Ctrl_NotConnected");
-        }
-        else
-        {
-            OpcEndpointBox.IsEnabled       = !connected;
-            OpcSecurityCombo.IsEnabled     = !connected;
-            OpcAuthCombo.IsEnabled         = !connected;
-            OpcCredPanel.IsHitTestVisible  = !connected;
-            OpcStatusText.Text = connected
-                ? LocalizationManager.Instance.Format("OpcUa_StatusConnected", ViewModel.OpcUa.EndpointUrl)
-                : LocalizationManager.Instance.Get("Ctrl_NotConnected");
-        }
+        PlcHostBox.IsEnabled  = !connected;
+        PlcPortBox.IsEnabled  = !connected;
+        OpcStatusText.Text = connected
+            ? LocalizationManager.Instance.Format("OpcUa_StatusConnected", ViewModel.Plc.EndpointLabel)
+            : LocalizationManager.Instance.Get("Ctrl_NotConnected");
     }
 
     private async void OpcConnectBtn_Click(object sender, RoutedEventArgs e)
     {
-        if (OpcProtocolCombo?.SelectedIndex == 1)
+        if (ViewModel.Plc.IsConnected)
         {
-            await ConnectOpcDaAsync();
-            return;
-        }
-
-        if (ViewModel.OpcUa.IsConnected)
-        {
-            ViewModel.OpcUa.Disconnect();
+            ViewModel.Plc.Disconnect();
             SyncOpcConnectButton();
             UpdateOpcStatusDot();
             return;
         }
 
-        var endpointUrl = OpcEndpointBox.Text.Trim();
-        if (string.IsNullOrEmpty(endpointUrl)) return;
-
-        var secMode = (OpcSecurityCombo.SelectedItem as ComboBoxItem)?.Tag?.ToString() switch
-        {
-            "Sign"           => OpcUaSecurityMode.Sign,
-            "SignAndEncrypt" => OpcUaSecurityMode.SignAndEncrypt,
-            _                => OpcUaSecurityMode.None
-        };
-        var authMode = OpcAuthCombo.SelectedIndex == 1
-            ? OpcUaAuthMode.UsernamePassword
-            : OpcUaAuthMode.Anonymous;
-
-        OpcConnectBtn.IsEnabled = false;
-        OpcStatusText.Text      = LocalizationManager.Instance.Get("OpcUa_StatusConnecting");
-
-        bool ok = await ViewModel.OpcUa.ConnectAsync(
-            endpointUrl, authMode,
-            OpcUsernameBox.Text,
-            OpcPasswordBox.Password,
-            secMode);
-
-        if (ok)
-        {
-            var s = AppSettingsService.Load();
-            s.OpcUaEndpointUrl  = endpointUrl;
-            s.OpcUaSecurityMode = secMode.ToString();
-            s.OpcUaUseAnonymous = authMode == OpcUaAuthMode.Anonymous;
-            s.OpcUaUsername     = OpcUsernameBox.Text;
-            s.OpcProtocol       = "UA";
-            AppSettingsService.Save(s);
-        }
-
-        OpcConnectBtn.IsEnabled = true;
-        SyncOpcConnectButton();
-        UpdateOpcStatusDot();
-    }
-
-    private async Task ConnectOpcDaAsync()
-    {
-        if (ViewModel.OpcDa.IsConnected)
-        {
-            ViewModel.OpcDa.Disconnect();
-            SyncOpcConnectButton();
-            UpdateOpcStatusDot();
-            return;
-        }
-
-        var progId = OpcDaProgIdBox?.Text.Trim() ?? "";
-        if (string.IsNullOrEmpty(progId)) return;
+        var host = PlcHostBox.Text.Trim();
+        int port = double.IsNaN(PlcPortBox.Value) ? 0 : (int)PlcPortBox.Value;
+        if (string.IsNullOrEmpty(host) || port is <= 0 or > 65535) return;
 
         OpcConnectBtn.IsEnabled = false;
         OpcStatusText.Text      = LocalizationManager.Instance.Get("OpcUa_StatusConnecting");
 
         string? capturedError = null;
         void OnError(string msg) => capturedError = msg;
-        ViewModel.OpcDa.ErrorOccurred += OnError;
-        bool ok = await ViewModel.OpcDa.ConnectAsync(progId);
-        ViewModel.OpcDa.ErrorOccurred -= OnError;
+        ViewModel.Plc.ErrorOccurred += OnError;
+        bool ok = await ViewModel.Plc.ConnectAsync(host, port);
+        ViewModel.Plc.ErrorOccurred -= OnError;
 
         if (ok)
         {
             var s = AppSettingsService.Load();
-            s.OpcProtocol = "DA";
-            s.OpcDaProgId = progId;
+            s.PlcTcpHost = host;
+            s.PlcTcpPort = port;
             AppSettingsService.Save(s);
-        }
-        else if (capturedError is not null)
-        {
-            OpcStatusText.Text = capturedError;
         }
 
         OpcConnectBtn.IsEnabled = true;
-        if (ok) SyncOpcConnectButton();
+        SyncOpcConnectButton();
+        if (!ok && capturedError is not null)
+            OpcStatusText.Text = capturedError;
         UpdateOpcStatusDot();
     }
 
     private void UpdateOpcStatusDot()
     {
-        bool connected = ViewModel.OpcUa.IsConnected || ViewModel.OpcDa.IsConnected;
+        bool connected = ViewModel.Plc.IsConnected;
         OpcStatusDot.Fill = connected
             ? new SolidColorBrush(Color.FromArgb(0xFF, 0x25, 0xC6, 0x85))
             : new SolidColorBrush(Color.FromArgb(0x00, 0x00, 0x00, 0x00));
-    }
-
-    private void OpcCertFolderBtn_Click(object sender, RoutedEventArgs e)
-    {
-        var certPath = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "TLIGDashboard", "pki", "own");
-        Directory.CreateDirectory(certPath);
-        Process.Start(new ProcessStartInfo("explorer.exe", certPath) { UseShellExecute = true });
     }
 
     // ── Tab switching (OPC UA ↔ AI API) ──────────────────────────────────────

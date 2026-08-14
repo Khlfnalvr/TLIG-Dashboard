@@ -1,0 +1,419 @@
+<Page
+    x:Class="TLIGDashboard.Views.CascadeControlPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:TLIGDashboard.Controls"
+    Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+
+    <Page.Resources>
+        <Style x:Key="CasCardStyle" TargetType="Border">
+            <Setter Property="Background"      Value="{ThemeResource CardBackgroundFillColorDefaultBrush}"/>
+            <Setter Property="BorderBrush"     Value="{ThemeResource CardStrokeColorDefaultBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius"    Value="8"/>
+            <Setter Property="Padding"         Value="14,10,14,14"/>
+        </Style>
+
+        <Style x:Key="CasCaptionStyle" TargetType="TextBlock">
+            <Setter Property="FontSize"        Value="10"/>
+            <Setter Property="FontWeight"      Value="SemiBold"/>
+            <Setter Property="CharacterSpacing" Value="60"/>
+            <Setter Property="Opacity"         Value="0.55"/>
+            <Setter Property="TextTrimming"    Value="CharacterEllipsis"/>
+        </Style>
+
+        <Style x:Key="CasNumberBoxStyle" TargetType="NumberBox">
+            <Setter Property="MinWidth" Value="0"/>
+            <Setter Property="MinHeight" Value="34"/>
+            <Setter Property="Height" Value="34"/>
+            <Setter Property="HorizontalAlignment" Value="Stretch"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="CornerRadius" Value="4"/>
+            <Setter Property="Padding" Value="10,7,6,4"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="SpinButtonPlacementMode" Value="Compact"/>
+        </Style>
+
+        <!-- Block-diagram node -->
+        <Style x:Key="CasBlockStyle" TargetType="Border">
+            <Setter Property="Background"      Value="{ThemeResource CardBackgroundFillColorDefaultBrush}"/>
+            <Setter Property="BorderBrush"     Value="{ThemeResource CardStrokeColorDefaultBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius"    Value="4"/>
+            <Setter Property="MinHeight"       Value="34"/>
+            <Setter Property="Padding"         Value="6,0"/>
+        </Style>
+    </Page.Resources>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto"
+                  HorizontalScrollBarVisibility="Disabled"
+                  Padding="20,16,20,16">
+        <Grid RowSpacing="12">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>  <!-- title -->
+                <RowDefinition Height="Auto"/>  <!-- block diagram -->
+                <RowDefinition Height="Auto"/>  <!-- response chart -->
+                <RowDefinition Height="Auto"/>  <!-- gains -->
+                <RowDefinition Height="Auto"/>  <!-- metrics -->
+                <RowDefinition Height="Auto"/>  <!-- infobar -->
+                <RowDefinition Height="Auto"/>  <!-- diagnosis + advisor -->
+            </Grid.RowDefinitions>
+
+            <!-- ── Title ── -->
+            <StackPanel Grid.Row="0" Spacing="2" Margin="2,0,0,0">
+                <TextBlock Text="{x:Bind Lang.Cas_Title, Mode=OneWay}"
+                           FontSize="18" FontWeight="SemiBold"/>
+                <TextBlock Text="{x:Bind Lang.Cas_Subtitle, Mode=OneWay}"
+                           FontSize="12" Opacity="0.6"/>
+            </StackPanel>
+
+            <!-- ── Cascade block diagram ── -->
+            <Border Grid.Row="1" Style="{StaticResource CasCardStyle}">
+                <Grid RowSpacing="8">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <TextBlock Grid.Row="0"
+                               Text="{x:Bind Lang.Cas_BlockDiagram, Mode=OneWay}"
+                               Style="{StaticResource CasCaptionStyle}"/>
+                    <Border Grid.Row="1" CornerRadius="6"
+                            Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}"
+                            Padding="10,12">
+                        <Grid ColumnSpacing="4" VerticalAlignment="Center">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="1.4*"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="1.3*"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="1*"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="1.2*"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="1*"/>
+                            </Grid.ColumnDefinitions>
+
+                            <Border Grid.Column="0" Style="{StaticResource CasBlockStyle}">
+                                <TextBlock Text="Temp SP" FontSize="10" Opacity="0.75"
+                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Border>
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="0">
+                                <TextBlock Text="&#x2192;" Opacity="0.55" HorizontalAlignment="Center"/>
+                            </StackPanel>
+                            <Border Grid.Column="2" Style="{StaticResource CasBlockStyle}"
+                                    Background="{ThemeResource AccentFillColorDefaultBrush}">
+                                <TextBlock Text="PID · Temperatur" FontSize="10" FontWeight="SemiBold"
+                                           Foreground="{ThemeResource TextOnAccentFillColorPrimaryBrush}"
+                                           HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center"/>
+                            </Border>
+                            <StackPanel Grid.Column="3" VerticalAlignment="Center">
+                                <TextBlock Text="Flow SP" FontSize="8" Opacity="0.5" HorizontalAlignment="Center"/>
+                                <TextBlock Text="&#x2192;" Opacity="0.55" HorizontalAlignment="Center"/>
+                            </StackPanel>
+                            <Border Grid.Column="4" Style="{StaticResource CasBlockStyle}"
+                                    Background="{ThemeResource SystemFillColorCautionBackgroundBrush}">
+                                <TextBlock Text="PI · Flow" FontSize="10" FontWeight="SemiBold" Opacity="0.85"
+                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Border>
+                            <TextBlock Grid.Column="5" Text="&#x2192;" Opacity="0.55" VerticalAlignment="Center"/>
+                            <Border Grid.Column="6" Style="{StaticResource CasBlockStyle}">
+                                <TextBlock Text="Valve" FontSize="10" Opacity="0.75"
+                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Border>
+                            <TextBlock Grid.Column="7" Text="&#x2192;" Opacity="0.55" VerticalAlignment="Center"/>
+                            <Border Grid.Column="8" Style="{StaticResource CasBlockStyle}">
+                                <TextBlock Text="Plant Flow" FontSize="10" Opacity="0.75"
+                                           HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center"/>
+                            </Border>
+                            <TextBlock Grid.Column="9" Text="&#x2192;" Opacity="0.55" VerticalAlignment="Center"/>
+                            <Border Grid.Column="10" Style="{StaticResource CasBlockStyle}">
+                                <TextBlock Text="Plant Suhu" FontSize="10" Opacity="0.75"
+                                           HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center"/>
+                            </Border>
+                        </Grid>
+                    </Border>
+                    <TextBlock Grid.Row="2"
+                               FontFamily="Consolas" FontSize="11" Opacity="0.7"
+                               TextWrapping="Wrap" TextAlignment="Center"
+                               Text="Gp1 (suhu) = 0,6361 / (101,53s + 1) · e^(−52,09s)&#x00A0;&#x00A0;&#x00A0;·&#x00A0;&#x00A0;&#x00A0;Gp2 (flow) = 1,624 / (0,3645s + 1) · e^(−3,089s)"/>
+                </Grid>
+            </Border>
+
+            <!-- ── System response chart ── -->
+            <Border Grid.Row="2" Style="{StaticResource CasCardStyle}">
+                <Grid RowSpacing="8">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    <TextBlock Grid.Row="0"
+                               Text="{x:Bind Lang.Cas_Response, Mode=OneWay}"
+                               Style="{StaticResource CasCaptionStyle}"/>
+                    <Border Grid.Row="1"
+                            MaxWidth="1200" Height="460"
+                            HorizontalAlignment="Stretch"
+                            CornerRadius="6" Padding="2"
+                            Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}">
+                        <controls:CascadeResponseChart x:Name="RespChart"/>
+                    </Border>
+                </Grid>
+            </Border>
+
+            <!-- ── Gains ── -->
+            <Border Grid.Row="3" Style="{StaticResource CasCardStyle}">
+                <Grid RowSpacing="12">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <!-- Outer + Inner gains side by side -->
+                    <Grid Grid.Row="0" ColumnSpacing="18">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="3*"/>
+                            <ColumnDefinition Width="2*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <!-- Outer loop — Temperature PID -->
+                        <StackPanel Grid.Column="0" Spacing="8">
+                            <TextBlock Text="{x:Bind Lang.Cas_OuterGains, Mode=OneWay}"
+                                       Style="{StaticResource CasCaptionStyle}"/>
+                            <Grid ColumnSpacing="12" VerticalAlignment="Center">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="Kp" FontSize="13" FontWeight="SemiBold" Opacity="0.65" VerticalAlignment="Center"/>
+                                <NumberBox x:Name="OuterKpBox" Grid.Column="1" Value="1.5"   Minimum="0" SmallChange="0.1"   Style="{StaticResource CasNumberBoxStyle}"/>
+                                <TextBlock Grid.Column="2" Text="Ki" FontSize="13" FontWeight="SemiBold" Opacity="0.65" VerticalAlignment="Center"/>
+                                <NumberBox x:Name="OuterKiBox" Grid.Column="3" Value="0.015" Minimum="0" SmallChange="0.005" Style="{StaticResource CasNumberBoxStyle}"/>
+                                <TextBlock Grid.Column="4" Text="Kd" FontSize="13" FontWeight="SemiBold" Opacity="0.65" VerticalAlignment="Center"/>
+                                <NumberBox x:Name="OuterKdBox" Grid.Column="5" Value="8"     Minimum="0" SmallChange="0.5"   Style="{StaticResource CasNumberBoxStyle}"/>
+                            </Grid>
+                        </StackPanel>
+
+                        <!-- Inner loop — Flow PI -->
+                        <StackPanel Grid.Column="1" Spacing="8">
+                            <TextBlock Text="{x:Bind Lang.Cas_InnerGains, Mode=OneWay}"
+                                       Style="{StaticResource CasCaptionStyle}"/>
+                            <Grid ColumnSpacing="12" VerticalAlignment="Center">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="Kp" FontSize="13" FontWeight="SemiBold" Opacity="0.65" VerticalAlignment="Center"/>
+                                <NumberBox x:Name="InnerKpBox" Grid.Column="1" Value="0.04" Minimum="0" SmallChange="0.01" Style="{StaticResource CasNumberBoxStyle}"/>
+                                <TextBlock Grid.Column="2" Text="Ki" FontSize="13" FontWeight="SemiBold" Opacity="0.65" VerticalAlignment="Center"/>
+                                <NumberBox x:Name="InnerKiBox" Grid.Column="3" Value="0.1" Minimum="0" SmallChange="0.05" Style="{StaticResource CasNumberBoxStyle}"/>
+                            </Grid>
+                        </StackPanel>
+                    </Grid>
+
+                    <!-- Setpoint + disturbance + run -->
+                    <Grid Grid.Row="1" ColumnSpacing="18" VerticalAlignment="Center">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="1.4*"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="1.4*"/>
+                            <ColumnDefinition Width="2*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+
+                        <TextBlock Grid.Column="0" Text="{x:Bind Lang.Cas_Setpoint, Mode=OneWay}"
+                                   FontSize="12" FontWeight="SemiBold" Opacity="0.65" VerticalAlignment="Center"/>
+                        <Grid Grid.Column="1" ColumnSpacing="6">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <NumberBox x:Name="SetpointBox" Value="60" Minimum="0" SmallChange="1" Style="{StaticResource CasNumberBoxStyle}"/>
+                            <TextBlock Grid.Column="1" Text="&#176;C" FontSize="13" Opacity="0.6" VerticalAlignment="Center"/>
+                        </Grid>
+
+                        <TextBlock Grid.Column="2" Text="{x:Bind Lang.Cas_Disturbance, Mode=OneWay}"
+                                   FontSize="12" FontWeight="SemiBold" Opacity="0.65" VerticalAlignment="Center"/>
+                        <Grid Grid.Column="3" ColumnSpacing="6">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <NumberBox x:Name="DisturbanceBox" Value="-40" SmallChange="5" Style="{StaticResource CasNumberBoxStyle}"/>
+                            <TextBlock Grid.Column="1" Text="L/min" FontSize="12" Opacity="0.6" VerticalAlignment="Center"/>
+                        </Grid>
+
+                        <Button x:Name="RunBtn" Grid.Column="5"
+                                Height="34" Padding="16,0"
+                                Click="RunBtn_Click"
+                                Style="{ThemeResource AccentButtonStyle}"
+                                VerticalAlignment="Center">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <FontIcon FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" Glyph="&#xE768;" FontSize="11"/>
+                                <TextBlock Text="{x:Bind Lang.Cas_Run, Mode=OneWay}"/>
+                            </StackPanel>
+                        </Button>
+                    </Grid>
+
+                    <TextBlock Grid.Row="2"
+                               Text="{x:Bind Lang.Cas_RunHint, Mode=OneWay}"
+                               FontSize="11" Opacity="0.55" TextWrapping="Wrap"/>
+                </Grid>
+            </Border>
+
+            <!-- ── Metrics ── -->
+            <Grid Grid.Row="4" ColumnSpacing="12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="3*"/>
+                    <ColumnDefinition Width="2*"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- Primary (temperature) step metrics -->
+                <Border Grid.Column="0" Style="{StaticResource CasCardStyle}">
+                    <Grid RowSpacing="8">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        <TextBlock Grid.Row="0" Text="{x:Bind Lang.Cas_PrimaryMetrics, Mode=OneWay}"
+                                   Style="{StaticResource CasCaptionStyle}"/>
+                        <Grid Grid.Row="1" ColumnSpacing="10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" Spacing="2">
+                                <TextBlock Text="{x:Bind Lang.Panel_RiseTime, Mode=OneWay}" Style="{StaticResource CasCaptionStyle}"/>
+                                <StackPanel Orientation="Horizontal" Spacing="3">
+                                    <TextBlock x:Name="RiseTimeValue" Text="--" FontSize="19" FontWeight="SemiBold"/>
+                                    <TextBlock Text="s" FontSize="11" Opacity="0.5" VerticalAlignment="Bottom" Margin="0,0,0,3"/>
+                                </StackPanel>
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Spacing="2">
+                                <TextBlock Text="{x:Bind Lang.Panel_Overshoot, Mode=OneWay}" Style="{StaticResource CasCaptionStyle}"/>
+                                <StackPanel Orientation="Horizontal" Spacing="3">
+                                    <TextBlock x:Name="OvershootValue" Text="--" FontSize="19" FontWeight="SemiBold"/>
+                                    <TextBlock Text="%" FontSize="11" Opacity="0.5" VerticalAlignment="Bottom" Margin="0,0,0,3"/>
+                                </StackPanel>
+                            </StackPanel>
+                            <StackPanel Grid.Column="2" Spacing="2">
+                                <TextBlock Text="{x:Bind Lang.Panel_Settling, Mode=OneWay}" Style="{StaticResource CasCaptionStyle}"/>
+                                <StackPanel Orientation="Horizontal" Spacing="3">
+                                    <TextBlock x:Name="SettlingValue" Text="--" FontSize="19" FontWeight="SemiBold"/>
+                                    <TextBlock Text="s" FontSize="11" Opacity="0.5" VerticalAlignment="Bottom" Margin="0,0,0,3"/>
+                                </StackPanel>
+                            </StackPanel>
+                            <StackPanel Grid.Column="3" Spacing="2">
+                                <TextBlock Text="{x:Bind Lang.Panel_SteadyErr, Mode=OneWay}" Style="{StaticResource CasCaptionStyle}"/>
+                                <StackPanel Orientation="Horizontal" Spacing="3">
+                                    <TextBlock x:Name="SteadyErrValue" Text="--" FontSize="19" FontWeight="SemiBold"/>
+                                    <TextBlock Text="" FontSize="11" Opacity="0.5" VerticalAlignment="Bottom" Margin="0,0,0,3"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Grid>
+                    </Grid>
+                </Border>
+
+                <!-- Disturbance rejection: cascade vs single-loop -->
+                <Border Grid.Column="1" Style="{StaticResource CasCardStyle}"
+                        Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}">
+                    <Grid RowSpacing="8">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        <TextBlock Grid.Row="0" Text="{x:Bind Lang.Cas_DisturbanceRejection, Mode=OneWay}"
+                                   Style="{StaticResource CasCaptionStyle}"/>
+                        <Grid Grid.Row="1" ColumnSpacing="10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" Spacing="2">
+                                <TextBlock Text="{x:Bind Lang.Cas_Cascade, Mode=OneWay}" Style="{StaticResource CasCaptionStyle}"/>
+                                <StackPanel Orientation="Horizontal" Spacing="3">
+                                    <TextBlock x:Name="CascadeDevValue" Text="--" FontSize="19" FontWeight="SemiBold"
+                                               Foreground="{ThemeResource SystemFillColorSuccessBrush}"/>
+                                    <TextBlock Text="&#176;C" FontSize="11" Opacity="0.5" VerticalAlignment="Bottom" Margin="0,0,0,3"/>
+                                </StackPanel>
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Spacing="2">
+                                <TextBlock Text="{x:Bind Lang.Cas_SingleLoop, Mode=OneWay}" Style="{StaticResource CasCaptionStyle}"/>
+                                <StackPanel Orientation="Horizontal" Spacing="3">
+                                    <TextBlock x:Name="SingleDevValue" Text="--" FontSize="19" FontWeight="SemiBold"
+                                               Foreground="{ThemeResource SystemFillColorCriticalBrush}"/>
+                                    <TextBlock Text="&#176;C" FontSize="11" Opacity="0.5" VerticalAlignment="Bottom" Margin="0,0,0,3"/>
+                                </StackPanel>
+                            </StackPanel>
+                            <StackPanel Grid.Column="2" Spacing="2">
+                                <TextBlock Text="{x:Bind Lang.Cas_Improvement, Mode=OneWay}" Style="{StaticResource CasCaptionStyle}"/>
+                                <StackPanel Orientation="Horizontal" Spacing="3">
+                                    <TextBlock x:Name="ImprovementValue" Text="--" FontSize="19" FontWeight="SemiBold"/>
+                                    <TextBlock Text="&#215;" FontSize="11" Opacity="0.5" VerticalAlignment="Bottom" Margin="0,0,0,3"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Grid>
+                    </Grid>
+                </Border>
+            </Grid>
+
+            <!-- ── InfoBar ── -->
+            <InfoBar x:Name="CascadeErrorInfoBar" Grid.Row="5"
+                     IsOpen="False" IsClosable="True"
+                     Severity="Warning"
+                     Title="Cascade Control"/>
+
+            <!-- ── AI Diagnosis + Advisor ── -->
+            <Grid Grid.Row="6" ColumnSpacing="12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="1*"/>
+                    <ColumnDefinition Width="2*"/>
+                </Grid.ColumnDefinitions>
+
+                <Border Grid.Column="0" Style="{StaticResource CasCardStyle}" MinHeight="66">
+                    <StackPanel Spacing="6" VerticalAlignment="Center">
+                        <TextBlock Text="{x:Bind Lang.Pid_DiagnosisTitle, Mode=OneWay}"
+                                   Style="{StaticResource CasCaptionStyle}"/>
+                        <TextBlock x:Name="DiagnosisValue" Text="--" FontSize="14" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                    </StackPanel>
+                </Border>
+
+                <Border x:Name="AdvisorPanel" Grid.Column="1"
+                        Style="{StaticResource CasCardStyle}" Visibility="Collapsed">
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="{x:Bind Lang.Pid_AdvisorTitle, Mode=OneWay}"
+                                   Style="{StaticResource CasCaptionStyle}"/>
+                        <Border x:Name="AdvisorExplanationHost"/>
+                        <StackPanel x:Name="AdvisorActions" Spacing="8" Visibility="Collapsed">
+                            <TextBlock x:Name="AdvisorText" FontSize="12" TextWrapping="Wrap"
+                                       Text="{x:Bind Lang.Pid_AdvisorPrompt, Mode=OneWay}"/>
+                            <TextBlock x:Name="AdvisorRecommendationText"
+                                       FontSize="12" FontFamily="Consolas" Opacity="0.75" TextWrapping="Wrap"/>
+                            <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+                                <Button Height="32" Padding="14,0"
+                                        Content="{x:Bind Lang.Pid_AdvisorDecline, Mode=OneWay}"
+                                        Click="AdvisorDecline_Click"/>
+                                <Button Height="32" Padding="14,0"
+                                        Style="{ThemeResource AccentButtonStyle}"
+                                        Content="{x:Bind Lang.Pid_AdvisorAccept, Mode=OneWay}"
+                                        Click="AdvisorAccept_Click"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+            </Grid>
+        </Grid>
+    </ScrollViewer>
+</Page>

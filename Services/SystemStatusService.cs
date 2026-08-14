@@ -10,7 +10,7 @@ namespace TLIGDashboard.Services;
 ///
 /// Every flag defaults to <c>false</c> (disconnected → red) and only turns green
 /// when the corresponding subsystem reports a real connection:
-///   • PLC / Sensor — driven by the OPC UA session (<see cref="OpcUaService.IsConnected"/>).
+///   • PLC / Sensor — driven by the PLC TCP link (<see cref="PlcTcpService.IsConnected"/>).
 ///   • AI Assistant — driven by whether an API key is configured.
 ///   • Camera       — no integration yet, so it stays offline until one is wired in.
 ///

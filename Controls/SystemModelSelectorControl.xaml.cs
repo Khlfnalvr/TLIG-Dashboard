@@ -3,7 +3,6 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using TLIGDashboard.Services;
-using Windows.UI;
 
 namespace TLIGDashboard.Controls;
 
@@ -14,13 +13,8 @@ namespace TLIGDashboard.Controls;
 /// </summary>
 public sealed partial class SystemModelSelectorControl : UserControl
 {
-    // Accent purple
-    private static readonly SolidColorBrush AccentBrush =
-        new(Color.FromArgb(255, 124, 58, 237));    // #7c3aed
-    private static readonly SolidColorBrush HoverBrush =
-        new(Color.FromArgb(30, 124, 58, 237));     // purple tint hover
-    private static readonly SolidColorBrush DefaultCardBorder =
-        new(Color.FromArgb(255, 45, 45, 62));      // #2D2D3E
+    // Theme-aware WinUI brushes (follow light/dark theme + system accent)
+    private static Brush Res(string key) => (Brush)Application.Current.Resources[key];
 
     // Per-system collapsed-view glyphs (Segoe Fluent / MDL2)
     private static readonly Dictionary<SimulationType, (string Glyph, string Name, string Unit)> _meta = new()
@@ -69,11 +63,11 @@ public sealed partial class SystemModelSelectorControl : UserControl
     // ── Hover highlight ───────────────────────────────────────────────────────
     private void Card_PointerEntered(object sender, PointerRoutedEventArgs e)
     {
-        if (sender is Border b) b.Background = HoverBrush;
+        if (sender is Border b) b.Background = Res("SubtleFillColorSecondaryBrush");
     }
     private void Card_PointerExited(object sender, PointerRoutedEventArgs e)
     {
-        if (sender is Border b) b.Background = new SolidColorBrush(Color.FromArgb(255, 30, 30, 46)); // #1E1E2E
+        if (sender is Border b) b.Background = Res("CardBackgroundFillColorDefaultBrush");
     }
 
     // ── UI update helpers ─────────────────────────────────────────────────────
@@ -91,8 +85,10 @@ public sealed partial class SystemModelSelectorControl : UserControl
         CheckTemp.Visibility  = t == SimulationType.Temperature ? Visibility.Visible : Visibility.Collapsed;
 
         // Highlight active card border
-        CardFlow.BorderBrush  = t == SimulationType.Flow        ? AccentBrush : DefaultCardBorder;
-        CardLevel.BorderBrush = t == SimulationType.Level       ? AccentBrush : DefaultCardBorder;
-        CardTemp.BorderBrush  = t == SimulationType.Temperature ? AccentBrush : DefaultCardBorder;
+        var accent  = Res("AccentFillColorDefaultBrush");
+        var neutral = Res("CardStrokeColorDefaultBrush");
+        CardFlow.BorderBrush  = t == SimulationType.Flow        ? accent : neutral;
+        CardLevel.BorderBrush = t == SimulationType.Level       ? accent : neutral;
+        CardTemp.BorderBrush  = t == SimulationType.Temperature ? accent : neutral;
     }
 }

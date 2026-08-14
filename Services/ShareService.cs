@@ -43,6 +43,10 @@ public static class ShareProtocol
     public const string TasksCompletePath      = "/tasks/complete";      // POST {id, completed}
     public const string ActivityPath           = "/activity";            // POST ActivityLog (client→server sync)
     public const string ChallengeSubmitPath    = "/challenge/submit";    // POST ChallengeSubmission (client→server)
+    public const string PidSimPath             = "/sim/pid";             // POST {Kp, Ki, Kd, Setpoint}
+    public const string ChallengeSubmissionsPath = "/challenge/submissions"; // GET all submissions (staff only)
+    public const string ChallengeGradePath     = "/challenge/grade";     // POST dosen grade (staff only)
+    public const string StudentsPath           = "/students";            // GET student roster (staff only)
     public const string GuidWs            = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 
     /// <summary>Generates an opaque, high-entropy session token (URL-safe base64).</summary>
@@ -90,6 +94,11 @@ public sealed class ShareServer
     // validated by the WebSocket + AI proxy, revoked by /auth/logout and on Stop.
     private readonly ConcurrentDictionary<string, Session> _sessions = new();
     private sealed record Session(string Username, string DisplayName, string Role, DateTime IssuedUtc);
+
+    // Control Engineering Services
+    private readonly TLIGDashboard.Services.ControlEngineering.PidSimulator _pidSim = new();
+    private readonly TLIGDashboard.Services.ControlEngineering.PidDiagnosisAgent _pidDiagnosis = new();
+    private readonly TLIGDashboard.Services.ControlEngineering.PidMetricsRegressor _pidMlMetrics = new();
 
     private string IssueSession(UserAccount user)
     {
@@ -241,6 +250,22 @@ public sealed class ShareServer
             {
                 await HandleChallengeSubmitSyncAsync(stream, headers, ct);
             }
+            else if (method == "POST" && path == ShareProtocol.PidSimPath)
+            {
+                await HandlePidSimulationAsync(stream, headers, ct);
+            }
+            else if (method == "GET" && path == ShareProtocol.ChallengeSubmissionsPath)
+            {
+                await HandleChallengeSubmissionsGetAsync(stream, headers, ct);
+            }
+            else if (method == "POST" && path == ShareProtocol.ChallengeGradePath)
+            {
+                await HandleChallengeGradeAsync(stream, headers, ct);
+            }
+            else if (method == "GET" && path == ShareProtocol.StudentsPath)
+            {
+                await HandleStudentsGetAsync(stream, headers, ct);
+            }
             else if (method == "GET" && path == "/info")
             {
                 await WriteJsonAsync(stream, "{\"app\":\"TLIG Dashboard Server\"}", ct);
@@ -386,9 +411,9 @@ public sealed class ShareServer
 
     // ── AI proxy: resolve the chosen provider, inject its key, stream back ──────
     // The client always POSTs an OpenAI-shaped body. For OpenAI-protocol providers
-    // we forward it (overriding the model); for Anthropic we translate the request
-    // and translate the Anthropic SSE reply back into OpenAI SSE so the client's
-    // parser is unchanged.
+    // we forward it (overriding the model); for Anthropic/Gemini we translate the
+    // request and translate the upstream SSE reply back into OpenAI SSE so the
+    // client's parser is unchanged.
 
     private async Task HandleAiProxyAsync(
         NetworkStream stream, Dictionary<string, string> headers, CancellationToken ct)
@@ -418,12 +443,20 @@ public sealed class ShareServer
 
         string model       = ResolveModel(body, config, settings, info);
         bool   isAnthropic = info.Protocol == AiProtocols.Anthropic;
-        string providerUrl = isAnthropic
-            ? $"{info.BaseUrl.TrimEnd('/')}/v1/messages"
-            : $"{info.BaseUrl.TrimEnd('/')}/chat/completions";
-        string forwardBody = isAnthropic
-            ? OpenAiToAnthropicBody(body, model)
-            : OverrideModel(body, model);
+        bool   isGemini    = info.Protocol == AiProtocols.Gemini;
+        string providerUrl = info.Protocol switch
+        {
+            AiProtocols.Anthropic => $"{info.BaseUrl.TrimEnd('/')}/v1/messages",
+            // Gemini takes the model in the URL path, not the request body.
+            AiProtocols.Gemini    => $"{info.BaseUrl.TrimEnd('/')}/v1beta/models/{model}:streamGenerateContent?alt=sse",
+            _                     => $"{info.BaseUrl.TrimEnd('/')}/chat/completions",
+        };
+        string forwardBody = info.Protocol switch
+        {
+            AiProtocols.Anthropic => OpenAiToAnthropicBody(body, model),
+            AiProtocols.Gemini    => OpenAiToGeminiBody(body),
+            _                     => OverrideModel(body, model),
+        };
 
         using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(120) };
         using var req  = new HttpRequestMessage(HttpMethod.Post, providerUrl)
@@ -435,6 +468,10 @@ public sealed class ShareServer
         {
             req.Headers.TryAddWithoutValidation("x-api-key", config.ApiKey);
             req.Headers.TryAddWithoutValidation("anthropic-version", "2023-06-01");
+        }
+        else if (isGemini)
+        {
+            req.Headers.TryAddWithoutValidation("x-goog-api-key", config.ApiKey);
         }
         else
         {
@@ -475,6 +512,8 @@ public sealed class ShareServer
             await using var upstream = await resp.Content.ReadAsStreamAsync(ct);
             if (isAnthropic)
                 await RelayAnthropicAsOpenAiAsync(upstream, stream, ct);
+            else if (isGemini)
+                await RelayGeminiAsOpenAiAsync(upstream, stream, ct);
             else
                 await RelayRawChunkedAsync(upstream, stream, ct);
 
@@ -519,6 +558,40 @@ public sealed class ShareServer
                 var node = JsonNode.Parse(data);
                 if ((string?)node?["type"] == "content_block_delta")
                     text = (string?)node?["delta"]?["text"];
+            }
+            catch { }
+
+            if (string.IsNullOrEmpty(text)) continue;
+
+            var choices = new JsonArray();
+            choices.Add((JsonNode)new JsonObject { ["index"] = 0, ["delta"] = new JsonObject { ["content"] = text } });
+            var chunk = new JsonObject { ["choices"] = choices }.ToJsonString();
+
+            await WriteSseChunkAsync(stream, $"data: {chunk}\n\n", ct);
+        }
+        await WriteSseChunkAsync(stream, "data: [DONE]\n\n", ct);
+    }
+
+    /// <summary>
+    /// Translates a Gemini <c>streamGenerateContent</c> SSE stream into OpenAI
+    /// chat-completion SSE (<c>choices[].delta.content</c> + a terminal <c>[DONE]</c>)
+    /// so the client's OpenAI parser handles it without knowing the provider.
+    /// </summary>
+    private static async Task RelayGeminiAsOpenAiAsync(Stream upstream, NetworkStream stream, CancellationToken ct)
+    {
+        using var reader = new StreamReader(upstream);
+        string? line;
+        while ((line = await reader.ReadLineAsync(ct)) != null)
+        {
+            if (!line.StartsWith("data: ")) continue;
+            var data = line[6..].Trim();
+            if (data.Length == 0) continue;
+
+            string? text = null;
+            try
+            {
+                var node = JsonNode.Parse(data);
+                text = (string?)node?["candidates"]?[0]?["content"]?["parts"]?[0]?["text"];
             }
             catch { }
 
@@ -596,7 +669,7 @@ public sealed class ShareServer
                     }
                     else if (role is "user" or "assistant")
                     {
-                        outMsgs.Add(new JsonObject { ["role"] = role, ["content"] = content });
+                        outMsgs.Add((JsonNode)new JsonObject { ["role"] = role, ["content"] = content });
                     }
                 }
             }
@@ -611,6 +684,55 @@ public sealed class ShareServer
             ["messages"]   = outMsgs,
         };
         if (system.Length > 0) body["system"] = system.ToString();
+        return body.ToJsonString();
+    }
+
+    // Gemini: no "model" field (it's in the URL), no system-role message — the
+    // system prompt becomes a top-level systemInstruction, roles are "user"/"model".
+    private static string OpenAiToGeminiBody(string openAiBody)
+    {
+        var system    = new StringBuilder();
+        var contents  = new JsonArray();
+        int maxTokens = 4096;
+
+        try
+        {
+            var node = JsonNode.Parse(openAiBody)?.AsObject();
+            if ((int?)node?["max_tokens"] is int mi && mi > 0) maxTokens = mi;
+            if (node?["messages"] is JsonArray msgs)
+            {
+                foreach (var m in msgs)
+                {
+                    var role    = (string?)m?["role"]    ?? "";
+                    var content = (string?)m?["content"] ?? "";
+                    if (role == "system")
+                    {
+                        if (system.Length > 0) system.Append("\n\n");
+                        system.Append(content);
+                    }
+                    else if (role is "user" or "assistant")
+                    {
+                        contents.Add(new JsonObject
+                        {
+                            ["role"]  = role == "assistant" ? "model" : "user",
+                            ["parts"] = new JsonArray { new JsonObject { ["text"] = content } }
+                        });
+                    }
+                }
+            }
+        }
+        catch { }
+
+        var body = new JsonObject
+        {
+            ["contents"]         = contents,
+            ["generationConfig"] = new JsonObject { ["maxOutputTokens"] = maxTokens }
+        };
+        if (system.Length > 0)
+            body["systemInstruction"] = new JsonObject
+            {
+                ["parts"] = new JsonArray { new JsonObject { ["text"] = system.ToString() } }
+            };
         return body.ToJsonString();
     }
 
@@ -633,11 +755,11 @@ public sealed class ShareServer
             var cfg = settings.AiProviderConfigs.FirstOrDefault(c => c.Id == info.Id);
 
             var models = new JsonArray();
-            foreach (var m in cfg?.Models ?? new List<string>()) models.Add(m);
+            foreach (var m in cfg?.Models ?? new List<string>()) models.Add((JsonNode)m);
             var allModels = new JsonArray();
-            foreach (var m in info.Models) allModels.Add(m);
+            foreach (var m in info.Models) allModels.Add((JsonNode)m);
 
-            arr.Add(new JsonObject
+            arr.Add((JsonNode)new JsonObject
             {
                 ["id"]        = info.Id,
                 ["name"]      = info.Name,
@@ -774,7 +896,7 @@ public sealed class ShareServer
         var completed = TaskStore.Instance.GetCompletedIds(session.Username);
 
         var arr = new JsonArray();
-        foreach (var t in tasks) arr.Add(TaskToJson(t, completed.Contains(t.Id)));
+        foreach (var t in tasks) arr.Add((JsonNode)TaskToJson(t, completed.Contains(t.Id)));
 
         var json = new JsonObject
         {
@@ -922,7 +1044,7 @@ public sealed class ShareServer
             await WriteSimpleAsync(stream, "401 Unauthorized", "text/plain", "Invalid or expired session", ct);
             return;
         }
-
+        
         var body = await ReadBodyAsync(stream, headers, ct);
         try
         {
@@ -954,11 +1076,266 @@ public sealed class ShareServer
             }
         }
         catch { }
+        
+        await WriteJsonAsync(stream, "{\"ok\":true}", ct);
+    }
+
+    private static JsonObject BuildSimulationJson(
+        TLIGDashboard.Models.ControlEngineering.SimulationResult sim) => new()
+    {
+        ["time"]      = new JsonArray(sim.Time.Select(t => (JsonNode)t).ToArray()),
+        ["amplitude"] = new JsonArray(sim.Amplitude.Select(a => (JsonNode)a).ToArray()),
+    };
+
+    private async Task HandlePidSimulationAsync(NetworkStream stream, Dictionary<string, string> headers, CancellationToken ct)
+    {
+        var session = GetSession(BearerToken(headers));
+        if (session is null)
+        {
+            await WriteSimpleAsync(stream, "401 Unauthorized", "text/plain", "Invalid or expired session", ct);
+            return;
+        }
+
+        var body = await ReadBodyAsync(stream, headers, ct);
+        try
+        {
+            var input = System.Text.Json.JsonSerializer.Deserialize<TLIGDashboard.Models.ControlEngineering.PidInput>(body);
+            if (input == null) throw new Exception("Invalid input");
+
+            // Requests from older clients carry no Setpoint (model default 1); a
+            // zero/NaN one would flatline the response — fall back to a unit step.
+            if (float.IsNaN(input.Setpoint) || input.Setpoint <= 0) input.Setpoint = 1f;
+
+            var finalPid = new TLIGDashboard.Models.ControlEngineering.PidPrediction
+            {
+                Kp = input.Kp,
+                Ki = input.Ki,
+                Kd = input.Kd
+            };
+
+            // CPU-bound: Simulation
+            var simResult = await Task.Run(() => _pidSim.SimulateStepResponse(finalPid, reference: input.Setpoint), ct);
+
+            // Exact metrics off the real RK4 curve — the single source of truth for
+            // the diagnosis classifier, the metric cards, and the LLM advisor.
+            var (rise, overshootPct, settling, steadyErrPct) =
+                TLIGDashboard.Services.ControlEngineering.PidSimulator.ComputeStepMetrics(simResult.Time, simResult.Amplitude, input.Setpoint);
+            bool stable = TLIGDashboard.Services.ControlEngineering.PidSimulator.IsResponseStable(simResult.Amplitude, input.Setpoint);
+            var metrics = new TLIGDashboard.Models.ControlEngineering.PidMetricsPrediction
+            {
+                Overshoot        = (float)overshootPct,
+                RiseTime         = (float)rise,
+                SettlingTime     = (float)settling,
+                SteadyStateError = (float)(steadyErrPct / 100.0),
+            };
+
+            // Diagnosis is arithmetic on the metrics above — exact and instant
+            // (see PidDiagnosisCalculator). Sent as a code; the client localizes it.
+            var diagnosis = TLIGDashboard.Services.ControlEngineering.PidDiagnosisCalculator
+                .Evaluate(metrics, stable).ToString();
+
+            // Classifier still runs for comparison, but no longer drives what is shown.
+            var mlDiagnosis = await Task.Run(() => _pidDiagnosis.Predict(new TLIGDashboard.Models.ControlEngineering.PidDiagnosisInput
+            {
+                Kp_Saat_Ini        = finalPid.Kp,
+                Ki_Saat_Ini        = finalPid.Ki,
+                Kd_Saat_Ini        = finalPid.Kd,
+                Overshoot_Riil     = metrics.Overshoot,
+                RiseTime_Riil      = metrics.RiseTime,
+                SettlingTime_Riil  = metrics.SettlingTime,
+                SteadyStateError   = metrics.SteadyStateError,
+                Is_Stable          = stable ? 1f : 0f,
+            }).Rekomendasi_Aksi, ct);
+
+            // Multi-output ML.NET estimate straight from Kp/Ki/Kd — kept computed and
+            // returned to the client (see PidDesignResult.MlEstimate) but no longer
+            // what drives the Advisor prompt or the metric cards; it was found to
+            // diverge sharply from the RK4 ground truth for gain combinations sparse
+            // in the training data (e.g. low Kp), producing Advisor text that
+            // contradicted the plotted chart.
+            var mlEstimate = await Task.Run(
+                () => _pidMlMetrics.Predict(finalPid.Kp, finalPid.Ki, finalPid.Kd), ct);
+
+            // Gains to offer come from searching the simulator (verified against the same
+            // criteria as the diagnosis), not the LLM, so the card can't contradict the
+            // diagnosis. Null when the current tuning is already ideal.
+            var recommendation = await Task.Run(
+                () => TLIGDashboard.Services.ControlEngineering.PidRecommender.Recommend(metrics, stable), ct);
+
+            // input.Language is the *student's* UI language — replying in this server's
+            // language would hand them a review they may not read. The LLM now only explains
+            // the recommended gains; it no longer picks numbers.
+            var advisor = await new TLIGDashboard.Services.ControlEngineering.PidAdvisorService(input.Language)
+                .ReviewAsync(finalPid, metrics, input.Setpoint, input.History,
+                    recommendation?.gains, recommendation?.metrics, ct);
+
+            var response = new JsonObject
+            {
+                ["prediction"] = new JsonObject
+                {
+                    ["Kp"] = finalPid.Kp,
+                    ["Ki"] = finalPid.Ki,
+                    ["Kd"] = finalPid.Kd
+                },
+                // Metrics above come off the full settled run; only the transient is sent
+                // over the wire — the flat tail is neither plotted nor worth the payload.
+                ["simulation"] = BuildSimulationJson(
+                    TLIGDashboard.Services.ControlEngineering.PidSimulator.BuildDisplayCurve(simResult, settling)),
+                ["diagnosis"] = diagnosis,
+                ["mlDiagnosis"] = mlDiagnosis,
+                ["metrics"] = new JsonObject
+                {
+                    ["overshoot"]        = metrics.Overshoot,
+                    ["riseTime"]         = metrics.RiseTime,
+                    ["settlingTime"]     = metrics.SettlingTime,
+                    ["steadyStateError"] = metrics.SteadyStateError,
+                },
+                ["mlEstimate"] = new JsonObject
+                {
+                    ["overshoot"]        = mlEstimate.Overshoot,
+                    ["riseTime"]         = mlEstimate.RiseTime,
+                    ["settlingTime"]     = mlEstimate.SettlingTime,
+                    ["steadyStateError"] = mlEstimate.SteadyStateError,
+                },
+                ["advisorExplanation"] = advisor.Explanation,
+                ["advisorRecommendation"] = advisor.Recommendation is null ? null : new JsonObject
+                {
+                    ["Kp"] = advisor.Recommendation.Kp,
+                    ["Ki"] = advisor.Recommendation.Ki,
+                    ["Kd"] = advisor.Recommendation.Kd,
+                },
+            };
+
+            await WriteJsonAsync(stream, response.ToJsonString(), ct);
+        }
+        catch (Exception ex)
+        {
+            await WriteSimpleAsync(stream, "400 Bad Request", "application/json",
+                new JsonObject { ["error"] = ex.Message }.ToJsonString(), ct);
+        }
+    }
+
+    // ── Challenge grading over HTTP (staff on CLIENT flavor) ─────────────────
+
+    /// <summary>GET /challenge/submissions — every submission across all challenges (staff only).</summary>
+    private async Task HandleChallengeSubmissionsGetAsync(
+        NetworkStream stream, Dictionary<string, string> headers, CancellationToken ct)
+    {
+        var session = GetSession(BearerToken(headers));
+        if (session is null)
+        {
+            await WriteSimpleAsync(stream, "401 Unauthorized", "text/plain", "Invalid or expired session", ct);
+            return;
+        }
+        if (!UserRoles.IsStaff(session.Role))
+        {
+            await WriteSimpleAsync(stream, "403 Forbidden", "text/plain", "Staff only", ct);
+            return;
+        }
+
+        var all = new List<Models.ChallengeSubmission>();
+        foreach (var ch in ChallengeService.Instance.GetAllChallenges())
+            all.AddRange(ch.Submissions);
+
+        var json = System.Text.Json.JsonSerializer.Serialize(
+            all, AppJsonContext.Default.ListChallengeSubmission);
+        await WriteJsonAsync(stream, json, ct);
+    }
+
+    /// <summary>POST /challenge/grade — persist a dosen grade sent from a staff CLIENT.</summary>
+    private async Task HandleChallengeGradeAsync(
+        NetworkStream stream, Dictionary<string, string> headers, CancellationToken ct)
+    {
+        var session = GetSession(BearerToken(headers));
+        if (session is null)
+        {
+            await WriteSimpleAsync(stream, "401 Unauthorized", "text/plain", "Invalid or expired session", ct);
+            return;
+        }
+        if (!UserRoles.IsStaff(session.Role))
+        {
+            await WriteSimpleAsync(stream, "403 Forbidden", "text/plain", "Staff only", ct);
+            return;
+        }
+
+        var body = await ReadBodyAsync(stream, headers, ct);
+        try
+        {
+            var node = JsonNode.Parse(body);
+            if (node != null
+                && Guid.TryParse((string?)node["challengeId"], out var challengeId)
+                && (string?)node["studentId"] is { Length: > 0 } studentId)
+            {
+                var challenge = ChallengeService.Instance.GetById(challengeId);
+                if (challenge != null)
+                {
+                    var sub = challenge.Submissions.FirstOrDefault(s =>
+                        string.Equals(s.StudentId, studentId, StringComparison.OrdinalIgnoreCase));
+                    if (sub == null)
+                    {
+                        sub = new Models.ChallengeSubmission
+                        {
+                            ChallengeId = challengeId,
+                            StudentId   = studentId,
+                            StudentName = (string?)node["studentName"] ?? studentId,
+                            Status      = Models.SubmissionStatus.NotSubmitted,
+                        };
+                        challenge.Submissions.Add(sub);
+                    }
+                    sub.DosenGrade = new Models.GradeEntry
+                    {
+                        GraderName = (string?)node["graderName"] is { Length: > 0 } g ? g : session.DisplayName,
+                        Score      = Math.Clamp((double?)node["score"] ?? 0, 0, 100),
+                        Feedback   = (string?)node["feedback"] ?? "",
+                        GradedAt   = DateTime.Now,
+                        IsAI       = false,
+                    };
+                    sub.Status = Models.SubmissionStatus.Graded;
+                    ChallengeService.Instance.UpdateChallenge(challenge);
+                    _uiQueue?.TryEnqueue(() => Views.ChallengeLearningPage.NotifySubmissionReceived());
+                }
+            }
+        }
+        catch { }
 
         await WriteJsonAsync(stream, "{\"ok\":true}", ct);
     }
 
+    // ── Student roster (staff only) ───────────────────────────────────────────
+
+    private async Task HandleStudentsGetAsync(
+        NetworkStream stream, Dictionary<string, string> headers, CancellationToken ct)
+    {
+        var session = GetSession(BearerToken(headers));
+        if (session is null)
+        {
+            await WriteSimpleAsync(stream, "401 Unauthorized", "text/plain", "Invalid or expired session", ct);
+            return;
+        }
+        if (!UserRoles.IsStaff(session.Role))
+        {
+            await WriteSimpleAsync(stream, "403 Forbidden", "text/plain", "Staff only", ct);
+            return;
+        }
+
+        var arr = new JsonArray();
+        foreach (var u in UserStore.Instance.GetUsers()
+                     .Where(u => u.Enabled && !UserRoles.IsStaff(u.Role)))
+        {
+            arr.Add((JsonNode)new JsonObject
+            {
+                ["id"]    = u.Username,
+                ["name"]  = string.IsNullOrWhiteSpace(u.DisplayName) ? u.Username : u.DisplayName,
+                ["nrp"]   = u.Nrp,
+                ["kelas"] = u.Kelas,
+            });
+        }
+
+        await WriteJsonAsync(stream, new JsonObject { ["students"] = arr }.ToJsonString(), ct);
+    }
+
     // ── HTTP parsing helpers ──────────────────────────────────────────────────
+
 
     private static string? GetTokenQuery(string rawPath)
     {
@@ -1447,6 +1824,64 @@ public sealed class SyncClient
         if (!_active) return;
         _ = PostAsync(ShareProtocol.ChallengeSubmitPath,
             System.Text.Json.JsonSerializer.Serialize(sub, AppJsonContext.Default.ChallengeSubmission));
+    }
+
+    /// <summary>
+    /// CLIENT staff: pushes a dosen grade to the server so it lands in the
+    /// server's challenge database (fire-and-forget, like the other sync calls).
+    /// </summary>
+    public void SendGrade(Guid challengeId, string studentId, string studentName,
+                          double score, string feedback, string graderName)
+    {
+        if (!_active) return;
+        var body = new System.Text.Json.Nodes.JsonObject
+        {
+            ["challengeId"] = challengeId.ToString(),
+            ["studentId"]   = studentId,
+            ["studentName"] = studentName,
+            ["score"]       = score,
+            ["feedback"]    = feedback,
+            ["graderName"]  = graderName,
+        };
+        _ = PostAsync(ShareProtocol.ChallengeGradePath, body.ToJsonString());
+    }
+
+    /// <summary>
+    /// CLIENT staff: pulls every submission from the server and merges them into
+    /// the local <see cref="ChallengeService"/> so grading views show live data.
+    /// </summary>
+    public async System.Threading.Tasks.Task<bool> PullSubmissionsAsync()
+    {
+        if (!_active) return false;
+        try
+        {
+            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+            using var req  = new HttpRequestMessage(HttpMethod.Get,
+                $"{AuthClient.BaseUrl(_host)}{ShareProtocol.ChallengeSubmissionsPath}");
+            req.Headers.TryAddWithoutValidation("Authorization", $"Bearer {_token}");
+            using var resp = await http.SendAsync(req);
+            if (!resp.IsSuccessStatusCode) return false;
+
+            var subs = System.Text.Json.JsonSerializer.Deserialize(
+                await resp.Content.ReadAsStringAsync(),
+                AppJsonContext.Default.ListChallengeSubmission);
+            if (subs is null) return false;
+
+            foreach (var group in subs.GroupBy(s => s.ChallengeId))
+            {
+                var ch = ChallengeService.Instance.GetById(group.Key);
+                if (ch is null) continue;
+                foreach (var sub in group)
+                {
+                    ch.Submissions.RemoveAll(s =>
+                        string.Equals(s.StudentId, sub.StudentId, StringComparison.OrdinalIgnoreCase));
+                    ch.Submissions.Add(sub);
+                }
+                ChallengeService.Instance.UpdateChallenge(ch);
+            }
+            return true;
+        }
+        catch { return false; }
     }
 
     private async System.Threading.Tasks.Task PostAsync(string path, string json)

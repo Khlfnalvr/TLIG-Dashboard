@@ -33,22 +33,21 @@ public sealed partial class ChallengeLearningPage : Page
 
     public static void NotifySubmissionReceived() => SubmissionReceived?.Invoke();
 
-    // Colour constants
-    private static readonly SolidColorBrush Purple = Brush("#7c3aed");
-    private static readonly SolidColorBrush Orange = Brush("#f59e0b");
-    private static readonly SolidColorBrush Green  = Brush("#10b981");
-    private static readonly SolidColorBrush Red    = Brush("#ef4444");
-    private static readonly SolidColorBrush Muted  = Brush("#8080a0");
-    private static readonly SolidColorBrush Surface = Brush("#1e1e2e");
+    // ── Theme brushes (WinUI 3 Fluent resources — adapt to light/dark) ────────
+    private static Brush Res(string key) => (Brush)Application.Current.Resources[key];
 
-    private static SolidColorBrush Brush(string hex)
-    {
-        hex = hex.TrimStart('#');
-        return new SolidColorBrush(Color.FromArgb(255,
-            Convert.ToByte(hex[0..2], 16),
-            Convert.ToByte(hex[2..4], 16),
-            Convert.ToByte(hex[4..6], 16)));
-    }
+    private static Brush TextPrimary   => Res("TextFillColorPrimaryBrush");
+    private static Brush TextSecondary => Res("TextFillColorSecondaryBrush");
+    private static Brush AccentText    => Res("AccentTextFillColorPrimaryBrush");
+    private static Brush Success       => Res("SystemFillColorSuccessBrush");
+    private static Brush SuccessBg     => Res("SystemFillColorSuccessBackgroundBrush");
+    private static Brush Caution       => Res("SystemFillColorCautionBrush");
+    private static Brush CautionBg     => Res("SystemFillColorCautionBackgroundBrush");
+    private static Brush Critical      => Res("SystemFillColorCriticalBrush");
+    private static Brush CriticalBg    => Res("SystemFillColorCriticalBackgroundBrush");
+    private static Brush SubtleBg      => Res("SubtleFillColorSecondaryBrush");
+    private static Brush CardBg        => Res("CardBackgroundFillColorDefaultBrush");
+    private static Brush CardStroke    => Res("CardStrokeColorDefaultBrush");
 
     // ── Init ─────────────────────────────────────────────────────────────────
     public ChallengeLearningPage()
@@ -83,11 +82,11 @@ public sealed partial class ChallengeLearningPage : Page
 
     private void ApplySession()
     {
-#if CLIENT
-        _isAdmin = false;
-#else
-        _isAdmin = App.Session.IsStaff || !App.Session.IsSignedIn;
-#endif
+        // Dosen/Asisten get the admin (grading) view on BOTH flavors; students
+        // get the submission view. On the Server flavor an unauthenticated
+        // console still defaults to admin (students cannot sign in there).
+        _isAdmin = App.Session.IsStaff || (BuildInfo.IsServer && !App.Session.IsSignedIn);
+
         _studentId   = App.Session.Username.Length > 0 ? App.Session.Username : "DEMO_S";
         _studentName = App.Session.DisplayName.Length > 0 ? App.Session.DisplayName : "Demo Student";
 
@@ -141,10 +140,10 @@ public sealed partial class ChallengeLearningPage : Page
     {
         (b.Background, t.Foreground, t.Text) = s switch
         {
-            ChallengeStatus.Active => (Brush("#0d2e1e"), Green,  "Aktif"),
-            ChallengeStatus.Draft  => (Brush("#2e2a0d"), Orange, "Draft"),
-            ChallengeStatus.Closed => (Brush("#2e0d0d"), Red,    "Ditutup"),
-            _                      => (Brush("#1e1e2e"), Muted,  "—"),
+            ChallengeStatus.Active => (SuccessBg,  Success,       "Aktif"),
+            ChallengeStatus.Draft  => (CautionBg,  Caution,       "Draft"),
+            ChallengeStatus.Closed => (CriticalBg, Critical,      "Ditutup"),
+            _                      => (SubtleBg,   TextSecondary, "—"),
         };
     }
 
@@ -197,8 +196,8 @@ public sealed partial class ChallengeLearningPage : Page
         {
             var row = new Border
             {
-                Background = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["CardBackgroundFillColorDefaultBrush"],
-                BorderBrush = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
+                Background = CardBg,
+                BorderBrush = CardStroke,
                 BorderThickness = new Thickness(1),
                 CornerRadius = new CornerRadius(6),
                 Padding = new Thickness(10, 6, 10, 6)
@@ -208,34 +207,32 @@ public sealed partial class ChallengeLearningPage : Page
             g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
             var left = new StackPanel { Spacing = 2 };
-            left.Children.Add(new TextBlock { Text = t.Name, FontSize = 12, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, Foreground = Brush("#e0e0f0") });
+            left.Children.Add(new TextBlock { Text = t.Name, FontSize = 12, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, Foreground = TextPrimary });
             if (!string.IsNullOrEmpty(t.Description))
-                left.Children.Add(new TextBlock { Text = t.Description, FontSize = 11, Foreground = Muted });
+                left.Children.Add(new TextBlock { Text = t.Description, FontSize = 11, Foreground = TextSecondary });
             Grid.SetColumn(left, 0);
 
             if (t.HasMetricTarget)
             {
                 var badge = new Border
                 {
-                    Background = Brush("#2a1a0e"), CornerRadius = new CornerRadius(4),
+                    Background = CautionBg, CornerRadius = new CornerRadius(4),
                     Padding = new Thickness(8, 3, 8, 3), VerticalAlignment = VerticalAlignment.Center
                 };
-                badge.Child = new TextBlock { Text = t.FormatTarget(), FontSize = 10, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, Foreground = Orange };
+                badge.Child = new TextBlock { Text = t.FormatTarget(), FontSize = 10, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, Foreground = Caution };
                 Grid.SetColumn(badge, 1);
                 g.Children.Add(badge);
             }
             g.Children.Add(left);
 
-            // Wrap card in a StackPanel so we can append activity log below task header
             var taskStack = new StackPanel { Spacing = 6 };
             taskStack.Children.Add(g);
-
 
             row.Child = taskStack;
             AdminTaskSummary.Children.Add(row);
         }
         if (ch.Tasks.Count == 0)
-            AdminTaskSummary.Children.Add(new TextBlock { Text = "Tidak ada task.", FontSize = 11, Foreground = Muted });
+            AdminTaskSummary.Children.Add(new TextBlock { Text = "Tidak ada task.", FontSize = 11, Foreground = TextSecondary });
 
         // Student list
         StudentDetailCard.Visibility = Visibility.Collapsed;
@@ -245,23 +242,45 @@ public sealed partial class ChallengeLearningPage : Page
 
     private async System.Threading.Tasks.Task RebuildStudentListAsync(Challenge ch)
     {
+        // Staff on the CLIENT flavor first pull the latest submissions from the
+        // server so the grading list reflects what students actually sent in.
+        if (BuildInfo.IsClient)
+            await SyncClient.Instance.PullSubmissionsAsync();
+
+        // Roster = real student accounts (server: UserStore; client: GET /students)
+        var roster = await StudentDirectory.GetStudentsAsync();
+
         StudentListRows.Children.Clear();
 
         var subs = ch.Submissions
             .Where(s => s.Status != SubmissionStatus.NotSubmitted)
             .ToList();
 
-        NoStudentText.Visibility = subs.Count == 0
+        // One row per registered student; submissions from accounts no longer in
+        // the roster are appended so no existing grade is ever hidden.
+        var rows = new List<(string Id, string Name, string Meta, ChallengeSubmission? Sub)>();
+        foreach (var st in roster)
+        {
+            var sub  = subs.FirstOrDefault(s => string.Equals(s.StudentId, st.Id, StringComparison.OrdinalIgnoreCase));
+            var meta = string.Join(" · ", new[] { st.Nrp, st.Kelas }.Where(x => !string.IsNullOrWhiteSpace(x)));
+            rows.Add((st.Id, st.Name, meta, sub));
+        }
+        foreach (var s in subs)
+            if (!roster.Any(st => string.Equals(st.Id, s.StudentId, StringComparison.OrdinalIgnoreCase)))
+                rows.Add((s.StudentId, s.StudentName.Length > 0 ? s.StudentName : s.StudentId, "", s));
+
+        NoStudentText.Visibility = rows.Count == 0
             ? Visibility.Visible : Visibility.Collapsed;
 
-        foreach (var sub in subs)
+        foreach (var (id, name, meta, sub) in rows)
         {
-            bool graded = sub.DosenGrade != null;
+            bool submitted = sub != null;
+            bool graded    = sub?.DosenGrade != null;
 
             var card = new Border
             {
-                Background      = Brush("#1a1a2a"),
-                BorderBrush     = graded ? Brush("#1a3a2a") : Brush("#2d2d3e"),
+                Background      = CardBg,
+                BorderBrush     = graded ? Success : CardStroke,
                 BorderThickness = new Thickness(1),
                 CornerRadius    = new CornerRadius(8),
                 Padding         = new Thickness(12, 10, 12, 10)
@@ -275,35 +294,47 @@ public sealed partial class ChallengeLearningPage : Page
             var nameStack = new StackPanel { Spacing = 2 };
             nameStack.Children.Add(new TextBlock
             {
-                Text = sub.StudentName.Length > 0 ? sub.StudentName : sub.StudentId,
+                Text = name,
                 FontSize = 12, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-                Foreground = Brush("#e0e0f0")
+                Foreground = TextPrimary
             });
+            string subLine = submitted
+                ? $"Submit: {sub!.SubmittedAt:dd MMM yyyy, HH:mm}"
+                : "Belum submit";
             nameStack.Children.Add(new TextBlock
             {
-                Text = $"Submit: {sub.SubmittedAt:dd MMM yyyy, HH:mm}",
-                FontSize = 10, Foreground = Muted
+                Text = meta.Length > 0 ? $"{meta} · {subLine}" : subLine,
+                FontSize = 10, Foreground = TextSecondary
             });
             Grid.SetColumn(nameStack, 0);
 
-            if (graded)
-            {
-                var gradedBadge = MakeBadge($"Dinilai: {sub.DosenGrade!.Score:F0}", "#0d2e1e", Green);
-                gradedBadge.VerticalAlignment = VerticalAlignment.Center;
-                Grid.SetColumn(gradedBadge, 1);
-                g.Children.Add(gradedBadge);
-            }
+            Border statusBadge = graded
+                ? MakeBadge($"Dinilai: {sub!.DosenGrade!.Score:F0}", SuccessBg, Success)
+                : submitted
+                    ? MakeBadge("Menunggu nilai", CautionBg, Caution)
+                    : MakeBadge("Belum submit", SubtleBg, TextSecondary);
+            statusBadge.VerticalAlignment = VerticalAlignment.Center;
+            Grid.SetColumn(statusBadge, 1);
+            g.Children.Add(statusBadge);
 
             var viewBtn = new Button
             {
                 Content = "Lihat →", FontSize = 10,
+                Style = (Style)Application.Current.Resources["AccentButtonStyle"],
                 CornerRadius = new CornerRadius(5), Padding = new Thickness(8, 4, 8, 4),
-                Background = Purple, Foreground = Brush("#ffffff"),
                 VerticalAlignment = VerticalAlignment.Center
             };
             Grid.SetColumn(viewBtn, 2);
 
-            var capturedSub = sub;
+            // No submission yet → open the grading panel on a stub so the
+            // lecturer can still review activity and enter a grade.
+            var capturedSub = sub ?? new ChallengeSubmission
+            {
+                ChallengeId = ch.Id,
+                StudentId   = id,
+                StudentName = name,
+                Status      = SubmissionStatus.NotSubmitted,
+            };
             viewBtn.Click += (_, _) => ShowStudentGradingDetail(capturedSub);
 
             g.Children.Add(nameStack);
@@ -311,8 +342,6 @@ public sealed partial class ChallengeLearningPage : Page
             card.Child = g;
             StudentListRows.Children.Add(card);
         }
-
-        await System.Threading.Tasks.Task.CompletedTask;
     }
 
     private void ShowStudentGradingDetail(ChallengeSubmission sub)
@@ -321,9 +350,11 @@ public sealed partial class ChallengeLearningPage : Page
         StudentDetailCard.Visibility = Visibility.Visible;
 
         SelectedStudentName.Text = sub.StudentName.Length > 0 ? sub.StudentName : sub.StudentId;
-        SelectedStudentMeta.Text = !string.IsNullOrEmpty(sub.TextAnswer)
-            ? $"Submit: {sub.SubmittedAt:dd MMM yyyy, HH:mm} · Status: {sub.Status}"
-            : "Belum ada jawaban tertulis.";
+        SelectedStudentMeta.Text = sub.Status == SubmissionStatus.NotSubmitted
+            ? "Belum submit jawaban."
+            : !string.IsNullOrEmpty(sub.TextAnswer)
+                ? $"Submit: {sub.SubmittedAt:dd MMM yyyy, HH:mm} · Status: {sub.Status}"
+                : "Belum ada jawaban tertulis.";
 
         // Aktivitas mahasiswa — hanya sebelum/sampai waktu submit
         SelectedStudentActivity.Children.Clear();
@@ -355,9 +386,9 @@ public sealed partial class ChallengeLearningPage : Page
             int aiCount    = logs.Count(a => a.Category == ActivityCategory.AIInteraction);
             int subCount   = logs.Count(a => a.Category == ActivityCategory.TaskSubmission);
             var badgeRow   = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Margin = new Thickness(0, 0, 0, 4) };
-            if (paramCount > 0) badgeRow.Children.Add(MakeBadge($"Parameter ×{paramCount}", "#1a2e1a", Green));
-            if (aiCount    > 0) badgeRow.Children.Add(MakeBadge($"AI Prompt ×{aiCount}",   "#1a1a2e", Purple));
-            if (subCount   > 0) badgeRow.Children.Add(MakeBadge($"Submit ×{subCount}",      "#2e2a0d", Orange));
+            if (paramCount > 0) badgeRow.Children.Add(MakeBadge($"Parameter ×{paramCount}", SuccessBg, Success));
+            if (aiCount    > 0) badgeRow.Children.Add(MakeBadge($"AI Prompt ×{aiCount}",   SubtleBg, AccentText));
+            if (subCount   > 0) badgeRow.Children.Add(MakeBadge($"Submit ×{subCount}",      CautionBg, Caution));
             SelectedStudentActivity.Children.Add(badgeRow);
         }
 
@@ -370,7 +401,7 @@ public sealed partial class ChallengeLearningPage : Page
         GradeSaveStatus.Text   = sub.DosenGrade != null
             ? $"✓ Sudah dinilai pada {sub.DosenGrade.GradedAt:dd MMM yyyy}"
             : "";
-        GradeSaveStatus.Foreground = Green;
+        GradeSaveStatus.Foreground = Success;
     }
 
     private void BackToStudentListBtn_Click(object sender, RoutedEventArgs e)
@@ -406,8 +437,15 @@ public sealed partial class ChallengeLearningPage : Page
         _selectedSubmission.Status = SubmissionStatus.Graded;
         _service.UpdateChallenge(_selected);
 
+        // Staff grading from the CLIENT flavor also pushes the grade to the
+        // server so it lands in the server's challenge database.
+        if (BuildInfo.IsClient)
+            SyncClient.Instance.SendGrade(
+                _selected.Id, _selectedSubmission.StudentId, _selectedSubmission.StudentName,
+                score, GradeFeedbackBox.Text.Trim(), lecName);
+
         GradeSaveStatus.Text       = $"✓ Nilai {score:F0} berhasil disimpan!";
-        GradeSaveStatus.Foreground = Green;
+        GradeSaveStatus.Foreground = Success;
 
         // Refresh student list untuk update badge
         _ = RebuildStudentListAsync(_selected);
@@ -416,11 +454,11 @@ public sealed partial class ChallengeLearningPage : Page
         GradeSaved?.Invoke();
     }
 
-    private Border MakeBadge(string text, string bg, Brush fg)
+    private Border MakeBadge(string text, Brush bg, Brush fg)
     {
         var b = new Border
         {
-            Background    = Brush(bg),
+            Background    = bg,
             CornerRadius  = new CornerRadius(4),
             Padding       = new Thickness(6, 2, 6, 2)
         };
@@ -475,12 +513,11 @@ public sealed partial class ChallengeLearningPage : Page
 
             var card = new Border
             {
-                Background = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["CardBackgroundFillColorDefaultBrush"],
+                Background = CardBg,
                 CornerRadius = new CornerRadius(8),
                 Padding = new Thickness(12, 10, 12, 10),
                 BorderThickness = new Thickness(1),
-                BorderBrush = ok == true ? Green : ok == false ? Red :
-                    (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"]
+                BorderBrush = ok == true ? Success : ok == false ? Critical : CardStroke
             };
 
             var vstack = new StackPanel { Spacing = 6 };
@@ -491,19 +528,19 @@ public sealed partial class ChallengeLearningPage : Page
             {
                 Text = t.Name, FontSize = 12,
                 FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-                Foreground = Brush("#e0e0f0"), VerticalAlignment = VerticalAlignment.Center
+                Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center
             });
             if (ok == true)
                 titleRow.Children.Add(new FontIcon
                 {
-                    Glyph = "", FontSize = 12, Foreground = Green,
+                    Glyph = "", FontSize = 12, Foreground = Success,
                     FontFamily = new FontFamily("Segoe Fluent Icons,Segoe MDL2 Assets"),
                     VerticalAlignment = VerticalAlignment.Center
                 });
             vstack.Children.Add(titleRow);
 
             if (!string.IsNullOrEmpty(t.Description))
-                vstack.Children.Add(new TextBlock { Text = t.Description, FontSize = 11, Foreground = Muted, TextWrapping = TextWrapping.Wrap });
+                vstack.Children.Add(new TextBlock { Text = t.Description, FontSize = 11, Foreground = TextSecondary, TextWrapping = TextWrapping.Wrap });
 
             // Metric target + live value
             if (t.HasMetricTarget)
@@ -515,12 +552,12 @@ public sealed partial class ChallengeLearningPage : Page
                 // Target
                 var targetBorder = new Border
                 {
-                    Background = Brush("#2a1a0e"), CornerRadius = new CornerRadius(6),
+                    Background = CautionBg, CornerRadius = new CornerRadius(6),
                     Padding = new Thickness(10, 6, 10, 6)
                 };
                 var ts = new StackPanel { Spacing = 2 };
-                ts.Children.Add(new TextBlock { Text = "TARGET", FontSize = 9, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, Foreground = Orange });
-                ts.Children.Add(new TextBlock { Text = t.FormatTarget(), FontSize = 12, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, Foreground = Orange });
+                ts.Children.Add(new TextBlock { Text = "TARGET", FontSize = 9, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, Foreground = Caution });
+                ts.Children.Add(new TextBlock { Text = t.FormatTarget(), FontSize = 12, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, Foreground = Caution });
                 targetBorder.Child = ts;
                 Grid.SetColumn(targetBorder, 0);
 
@@ -530,14 +567,14 @@ public sealed partial class ChallengeLearningPage : Page
                     : "Jalankan simulasi";
                 var liveBorder = new Border
                 {
-                    Background = ok == true ? Brush("#0d2e1e") : ok == false ? Brush("#2e0d0d") : Brush("#1e1e2e"),
+                    Background = ok == true ? SuccessBg : ok == false ? CriticalBg : SubtleBg,
                     CornerRadius = new CornerRadius(6), Padding = new Thickness(10, 6, 10, 6),
                     BorderThickness = new Thickness(1),
-                    BorderBrush = ok == true ? Green : ok == false ? Red : Brush("#2d2d3e")
+                    BorderBrush = ok == true ? Success : ok == false ? Critical : CardStroke
                 };
                 var ls = new StackPanel { Spacing = 2 };
-                ls.Children.Add(new TextBlock { Text = "NILAI SAAT INI", FontSize = 9, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, Foreground = ok == true ? Green : ok == false ? Red : Muted });
-                ls.Children.Add(new TextBlock { Text = liveStr, FontSize = 12, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, Foreground = ok == true ? Green : ok == false ? Red : Muted });
+                ls.Children.Add(new TextBlock { Text = "NILAI SAAT INI", FontSize = 9, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, Foreground = ok == true ? Success : ok == false ? Critical : TextSecondary });
+                ls.Children.Add(new TextBlock { Text = liveStr, FontSize = 12, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, Foreground = ok == true ? Success : ok == false ? Critical : TextSecondary });
                 liveBorder.Child = ls;
                 Grid.SetColumn(liveBorder, 1);
 
@@ -550,7 +587,6 @@ public sealed partial class ChallengeLearningPage : Page
             // ── Activity log per task (CLIENT) ───────────────────────────────
             var allLogs      = ActivityStore.Instance.GetAll();
             var paramLogs    = allLogs.Where(a => a.Category == ActivityCategory.ControlParameter).ToList();
-            var aiLogs       = allLogs.Where(a => a.Category == ActivityCategory.AIInteraction).ToList();
             var combinedLogs = allLogs
                 .Where(a => a.Category is ActivityCategory.ControlParameter or ActivityCategory.AIInteraction)
                 .OrderByDescending(a => a.TimestampUtc)
@@ -561,7 +597,7 @@ public sealed partial class ChallengeLearningPage : Page
 
             vstack.Children.Add(new Microsoft.UI.Xaml.Shapes.Rectangle
             {
-                Height = 1, Fill = Muted, Margin = new Thickness(0, 8, 0, 4), Opacity = 0.25
+                Height = 1, Fill = CardStroke, Margin = new Thickness(0, 8, 0, 4)
             });
 
             var actHeader = new Grid { ColumnSpacing = 8, Margin = new Thickness(0, 0, 0, 4) };
@@ -572,20 +608,19 @@ public sealed partial class ChallengeLearningPage : Page
             {
                 Text = "LOG AKTIVITAS", FontSize = 9,
                 FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-                Foreground = Muted, VerticalAlignment = VerticalAlignment.Center
+                Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center
             });
 
-            var counterBg = limitReached ? Brush("#2e0d0d") : Brush("#1a1a2e");
-            var counterFg = limitReached ? Red : Muted;
             var counterBorder = new Border
             {
                 CornerRadius = new CornerRadius(4), Padding = new Thickness(6, 2, 6, 2),
-                Background = counterBg, VerticalAlignment = VerticalAlignment.Center
+                Background = limitReached ? CriticalBg : SubtleBg, VerticalAlignment = VerticalAlignment.Center
             };
             counterBorder.Child = new TextBlock
             {
                 Text = $"{Math.Min(paramCount, 3)}/3 perubahan parameter",
-                FontSize = 9, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, Foreground = counterFg
+                FontSize = 9, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                Foreground = limitReached ? Critical : TextSecondary
             };
             Grid.SetColumn(counterBorder, 1);
             actHeader.Children.Add(counterBorder);
@@ -595,7 +630,7 @@ public sealed partial class ChallengeLearningPage : Page
                 vstack.Children.Add(new TextBlock
                 {
                     Text = "Belum ada aktivitas.", FontSize = 10,
-                    Foreground = Muted, Margin = new Thickness(0, 2, 0, 2)
+                    Foreground = TextSecondary, Margin = new Thickness(0, 2, 0, 2)
                 });
             else
                 foreach (var log in combinedLogs)
@@ -607,7 +642,7 @@ public sealed partial class ChallengeLearningPage : Page
         }
 
         if (ch.Tasks.Count == 0)
-            StudentTaskList.Children.Add(new TextBlock { Text = "Challenge ini tidak memiliki task spesifik.", FontSize = 11, Foreground = Muted });
+            StudentTaskList.Children.Add(new TextBlock { Text = "Challenge ini tidak memiliki task spesifik.", FontSize = 11, Foreground = TextSecondary });
     }
 
     private void RefreshMyActivityLog()
@@ -642,13 +677,13 @@ public sealed partial class ChallengeLearningPage : Page
         var timeBlk = new TextBlock
         {
             Text = log.TimestampUtc.ToLocalTime().ToString("HH:mm:ss"),
-            FontSize = 9, Foreground = Muted, VerticalAlignment = VerticalAlignment.Center
+            FontSize = 9, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center
         };
         Grid.SetColumn(timeBlk, 0);
 
         var descBlk = new TextBlock
         {
-            Text = log.Description, FontSize = 10, Foreground = Brush("#c0c0d0"),
+            Text = log.Description, FontSize = 10, Foreground = TextPrimary,
             TextTrimming = TextTrimming.CharacterEllipsis, TextWrapping = TextWrapping.NoWrap,
             VerticalAlignment = VerticalAlignment.Center
         };
@@ -657,14 +692,14 @@ public sealed partial class ChallengeLearningPage : Page
         var catBadge = new Border
         {
             CornerRadius = new CornerRadius(3), Padding = new Thickness(5, 1, 5, 1),
-            Background = log.Category == ActivityCategory.ControlParameter ? Brush("#1a0e2e") : Brush("#0e1a2e"),
+            Background = SubtleBg,
             VerticalAlignment = VerticalAlignment.Center
         };
         catBadge.Child = new TextBlock
         {
             Text = log.Category == ActivityCategory.ControlParameter ? "Param" : "AI",
             FontSize = 9, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-            Foreground = log.Category == ActivityCategory.ControlParameter ? Purple : Brush("#60A5FA")
+            Foreground = AccentText
         };
         Grid.SetColumn(catBadge, 2);
 
@@ -739,11 +774,11 @@ public sealed partial class ChallengeLearningPage : Page
 
             var card = new Border
             {
-                Background = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["CardBackgroundFillColorDefaultBrush"],
+                Background = CardBg,
                 CornerRadius = new CornerRadius(8),
                 Padding = new Thickness(12, 10, 12, 10),
                 BorderThickness = new Thickness(1),
-                BorderBrush = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"]
+                BorderBrush = CardStroke
             };
             var vs = new StackPanel { Spacing = 8 };
 
@@ -818,7 +853,7 @@ public sealed partial class ChallengeLearningPage : Page
         int total = (int)(WeightDosenBox.Value + WeightAiBox.Value + WeightPeerBox.Value);
         bool ok = total == 100;
         WeightTotalText.Text = $"Total: {total}%";
-        WeightTotalText.Foreground = ok ? Green : Red;
+        WeightTotalText.Foreground = ok ? Success : Critical;
     }
 
     // ── Save ─────────────────────────────────────────────────────────────────
@@ -829,14 +864,14 @@ public sealed partial class ChallengeLearningPage : Page
         if (string.IsNullOrEmpty(title))
         {
             FormStatusText.Text = "⚠ Judul tidak boleh kosong.";
-            FormStatusText.Foreground = Orange;
+            FormStatusText.Foreground = Caution;
             return;
         }
         int wd = (int)WeightDosenBox.Value, wa = (int)WeightAiBox.Value, wp = (int)WeightPeerBox.Value;
         if (wd + wa + wp != 100)
         {
             FormStatusText.Text = "⚠ Total bobot harus = 100%.";
-            FormStatusText.Foreground = Red;
+            FormStatusText.Foreground = Critical;
             return;
         }
 
@@ -929,7 +964,7 @@ public sealed partial class ChallengeLearningPage : Page
         if (string.IsNullOrEmpty(text) && _attachPath == null)
         {
             SubmitStatusText.Text = "⚠ Isi jawaban atau lampirkan file terlebih dahulu.";
-            SubmitStatusText.Foreground = Orange;
+            SubmitStatusText.Foreground = Caution;
             return;
         }
 
@@ -964,7 +999,7 @@ public sealed partial class ChallengeLearningPage : Page
         }
 
         SubmitStatusText.Text = "✓ Jawaban berhasil dikirim!";
-        SubmitStatusText.Foreground = Green;
+        SubmitStatusText.Foreground = Success;
         SubmitBtn.Content = "Update Jawaban";
 
         // Sync submission to server
@@ -1015,15 +1050,6 @@ public sealed partial class ChallengeLearningPage : Page
         };
         return await dlg.ShowAsync() == ContentDialogResult.Primary;
     }
-
-    private static string MetricShortLabel(string m) => m switch
-    {
-        TaskMetrics.RiseTime         => "RT",
-        TaskMetrics.Overshoot        => "OS",
-        TaskMetrics.Settling         => "Ts",
-        TaskMetrics.SteadyStateError => "SSE",
-        _                            => m
-    };
 
     private static T? FindChild<T>(DependencyObject parent, string name) where T : FrameworkElement
     {

@@ -1,30 +1,43 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Net.Http;
-using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
-using System.Text.Json.Serialization;
+using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 using TLIGDashboard.Models;
 
 namespace TLIGDashboard.Services
 {
+    /// <summary>On-disk envelope for the challenge database (allows future migrations).</summary>
+    public sealed class ChallengesFile
+    {
+        public int             Version    { get; set; } = 1;
+        public List<Challenge> Challenges { get; set; } = new();
+    }
+
     /// <summary>
-    /// Service untuk pengelolaan Challenge Learning (in-memory demo).
-    /// Ganti penyimpanan dengan database (SQLite/SQL Server) sesuai kebutuhan.
+    /// Service untuk pengelolaan Challenge Learning. Challenge + submission
+    /// dipersist ke <c>%LOCALAPPDATA%\TLIGDashboard\challenges.json</c> sehingga
+    /// data penilaian tidak hilang saat aplikasi ditutup.
     /// </summary>
     public class ChallengeService
     {
         public static ChallengeService Instance { get; } = new();
 
-        private readonly List<Challenge> _challenges = new();
+        private readonly object _lock = new();
+        private readonly string _path = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "TLIGDashboard", "challenges.json");
+
+        private List<Challenge> _challenges = new();
         private readonly HttpClient _httpClient;
 
         // Ganti dengan API key yang valid atau ambil dari konfigurasi/environment
         private const string AnthropicApiKey = "YOUR_ANTHROPIC_API_KEY";
-        private const string AnthropicModel = "claude-sonnet-4-20250514";
+        private const string AnthropicModel = "claude-sonnet-5";
         private const string AnthropicApiUrl = "https://api.anthropic.com/v1/messages";
 
         public ChallengeService()
@@ -32,7 +45,46 @@ namespace TLIGDashboard.Services
             _httpClient = new HttpClient();
             _httpClient.DefaultRequestHeaders.Add("x-api-key", AnthropicApiKey);
             _httpClient.DefaultRequestHeaders.Add("anthropic-version", "2023-06-01");
-            SeedDemoData();
+            Load();
+        }
+
+        // ── Persistence ────────────────────────────────────────────────────
+
+        private void Load()
+        {
+            lock (_lock)
+            {
+                try
+                {
+                    if (File.Exists(_path))
+                    {
+                        var file = JsonSerializer.Deserialize(
+                            File.ReadAllText(_path), AppJsonContext.Default.ChallengesFile);
+                        _challenges = file?.Challenges ?? new();
+                        return;
+                    }
+                }
+                catch { /* corrupt file → reseed below */ }
+
+                // First run: seed sample challenges (no submissions) so the
+                // system is usable out of the box.
+                _challenges = SeedChallenges();
+                SaveLocked();
+            }
+        }
+
+        private void Save() { lock (_lock) SaveLocked(); }
+
+        private void SaveLocked()
+        {
+            try
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
+                File.WriteAllText(_path, JsonSerializer.Serialize(
+                    new ChallengesFile { Challenges = _challenges },
+                    AppJsonContext.Default.ChallengesFile));
+            }
+            catch { /* best-effort */ }
         }
 
         // ── CRUD Challenge ──────────────────────────────────────────────────
@@ -47,6 +99,7 @@ namespace TLIGDashboard.Services
             if (!challenge.IsWeightValid)
                 throw new InvalidOperationException("Total bobot penilaian harus = 100.");
             _challenges.Add(challenge);
+            Save();
         }
 
         public void UpdateChallenge(Challenge updated)
@@ -55,10 +108,14 @@ namespace TLIGDashboard.Services
                 throw new InvalidOperationException("Total bobot penilaian harus = 100.");
             var idx = _challenges.FindIndex(c => c.Id == updated.Id);
             if (idx >= 0) _challenges[idx] = updated;
+            Save();
         }
 
-        public void DeleteChallenge(Guid id) =>
+        public void DeleteChallenge(Guid id)
+        {
             _challenges.RemoveAll(c => c.Id == id);
+            Save();
+        }
 
         // ── Submission ──────────────────────────────────────────────────────
 
@@ -68,6 +125,7 @@ namespace TLIGDashboard.Services
                 ?? throw new KeyNotFoundException("Challenge tidak ditemukan.");
             submission.ChallengeId = challengeId;
             challenge.Submissions.Add(submission);
+            Save();
         }
 
         public List<ChallengeSubmission> GetSubmissions(Guid challengeId) =>
@@ -92,6 +150,7 @@ namespace TLIGDashboard.Services
                 IsAI = false
             };
             UpdateSubmissionStatus(sub);
+            Save();
         }
 
         // ── Peer Review ────────────────────────────────────────────────────
@@ -114,6 +173,7 @@ namespace TLIGDashboard.Services
                 IsAI = false
             });
             UpdateSubmissionStatus(sub);
+            Save();
         }
 
         // ── AI Grading (Anthropic Claude) ──────────────────────────────────
@@ -127,25 +187,34 @@ namespace TLIGDashboard.Services
 
             string prompt = BuildAIGradingPrompt(challenge, sub);
 
-            var requestBody = new
+            // Body dibangun dengan JsonObject (bukan anonymous type) agar
+            // trim-safe: reflection-based JSON dimatikan pada publish Release.
+            var messages = new JsonArray();
+            messages.Add((JsonNode)new JsonObject { ["role"] = "user", ["content"] = prompt });
+            var requestBody = new JsonObject
             {
-                model = AnthropicModel,
-                max_tokens = 1024,
-                messages = new[]
-                {
-                    new { role = "user", content = prompt }
-                }
-            };
+                ["model"]      = AnthropicModel,
+                ["max_tokens"] = 1024,
+                ["messages"]   = messages,
+            }.ToJsonString();
 
-            var response = await _httpClient.PostAsJsonAsync(AnthropicApiUrl, requestBody);
+            using var content  = new StringContent(requestBody, Encoding.UTF8, "application/json");
+            using var response = await _httpClient.PostAsync(AnthropicApiUrl, content);
             response.EnsureSuccessStatusCode();
 
-            var result = await response.Content.ReadFromJsonAsync<AnthropicResponse>();
-            string rawText = result?.Content?.FirstOrDefault()?.Text ?? "";
+            string raw = await response.Content.ReadAsStringAsync();
+            string rawText = "";
+            try
+            {
+                var node = JsonNode.Parse(raw);
+                rawText  = (string?)node?["content"]?[0]?["text"] ?? "";
+            }
+            catch { }
 
             var aiGrade = ParseAIResponse(rawText);
             sub.AIGrade = aiGrade;
             UpdateSubmissionStatus(sub);
+            Save();
 
             return aiGrade;
         }
@@ -216,17 +285,16 @@ namespace TLIGDashboard.Services
             sub.Status = hasAny ? SubmissionStatus.Graded : SubmissionStatus.UnderReview;
         }
 
-        // ── Demo Data ──────────────────────────────────────────────────────
+        // ── Seed (first run only — no dummy submissions) ──────────────────
 
         // Fixed Guids so CLIENT and SERVER always have matching challenge IDs
         private static readonly Guid _c1Id = new("a1b2c3d4-e5f6-7890-abcd-ef1234567890");
         private static readonly Guid _c2Id = new("b2c3d4e5-f6a7-8901-bcde-f12345678901");
         private static readonly Guid _c3Id = new("c3d4e5f6-a7b8-9012-cdef-123456789012");
 
-        private void SeedDemoData()
+        private static List<Challenge> SeedChallenges() => new()
         {
-            // ── Challenge 1: Flow PID Tuning ─────────────────────────────────
-            var c1 = new Challenge
+            new Challenge
             {
                 Id            = _c1Id,
                 Title         = "Tune PID for Fast Rise Time",
@@ -238,7 +306,7 @@ namespace TLIGDashboard.Services
                 WeightDosen   = 50,
                 WeightAI      = 30,
                 WeightPeer    = 20,
-                CreatedByName = "Dr. Budi Santoso",
+                CreatedByName = "System",
                 Tasks = new()
                 {
                     new ChallengeTask
@@ -260,28 +328,8 @@ namespace TLIGDashboard.Services
                         Tolerance   = 2.0
                     }
                 }
-            };
-
-            var sub1 = new ChallengeSubmission
-            {
-                ChallengeId = c1.Id, StudentId = "S001", StudentName = "Andi Pratama",
-                TextAnswer  = "Kp=8, Ki=0.5, Kd=2 menghasilkan rise time 1.8s dan overshoot 8%.",
-                Status      = SubmissionStatus.Submitted,
-                MetricSnapshot = new() { [TaskMetrics.RiseTime] = 1.8, [TaskMetrics.Overshoot] = 8.2 }
-            };
-            var sub2 = new ChallengeSubmission
-            {
-                ChallengeId = c1.Id, StudentId = "S002", StudentName = "Siti Rahma",
-                TextAnswer  = "Dengan Kp=12, Ki=1, Kd=0.5 didapat rise time 1.5s namun overshoot 15%.",
-                Status      = SubmissionStatus.Submitted,
-                MetricSnapshot = new() { [TaskMetrics.RiseTime] = 1.5, [TaskMetrics.Overshoot] = 15.1 }
-            };
-            c1.Submissions.Add(sub1);
-            c1.Submissions.Add(sub2);
-            _challenges.Add(c1);
-
-            // ── Challenge 2: Level Control ───────────────────────────────────
-            var c2 = new Challenge
+            },
+            new Challenge
             {
                 Id            = _c2Id,
                 Title         = "Minimize Settling Time – Level",
@@ -293,7 +341,7 @@ namespace TLIGDashboard.Services
                 WeightDosen   = 40,
                 WeightAI      = 40,
                 WeightPeer    = 20,
-                CreatedByName = "Dr. Budi Santoso",
+                CreatedByName = "System",
                 Tasks = new()
                 {
                     new ChallengeTask
@@ -315,29 +363,8 @@ namespace TLIGDashboard.Services
                         Tolerance   = 0.5
                     }
                 }
-            };
-            var sub3 = new ChallengeSubmission
-            {
-                ChallengeId = c2.Id, StudentId = "S001", StudentName = "Andi Pratama",
-                SubmittedAt = DateTime.Now.AddHours(-3),
-                TextAnswer  = "Kp=5, Ki=0.8, Kd=1.5 memberikan settling time 13s dan steady-state error 1.5%.",
-                Status      = SubmissionStatus.Submitted,
-                MetricSnapshot = new() { [TaskMetrics.Settling] = 13.0, [TaskMetrics.SteadyStateError] = 1.5 }
-            };
-            var sub4 = new ChallengeSubmission
-            {
-                ChallengeId = c2.Id, StudentId = "S002", StudentName = "Siti Rahma",
-                SubmittedAt = DateTime.Now.AddHours(-2),
-                TextAnswer  = "Setelah iterasi panjang, Kp=7, Ki=1.2, Kd=0.8 menghasilkan settling 11.5s dan error 2%.",
-                Status      = SubmissionStatus.Submitted,
-                MetricSnapshot = new() { [TaskMetrics.Settling] = 11.5, [TaskMetrics.SteadyStateError] = 2.0 }
-            };
-            c2.Submissions.Add(sub3);
-            c2.Submissions.Add(sub4);
-            _challenges.Add(c2);
-
-            // ── Challenge 3: Draft ───────────────────────────────────────────
-            _challenges.Add(new Challenge
+            },
+            new Challenge
             {
                 Id            = _c3Id,
                 Title         = "Temperature Control Design",
@@ -347,7 +374,7 @@ namespace TLIGDashboard.Services
                 Deadline      = DateTime.Now.AddDays(21),
                 Status        = ChallengeStatus.Draft,
                 WeightDosen   = 50, WeightAI = 30, WeightPeer = 20,
-                CreatedByName = "Dr. Budi Santoso",
+                CreatedByName = "System",
                 Tasks = new()
                 {
                     new ChallengeTask
@@ -360,21 +387,7 @@ namespace TLIGDashboard.Services
                         Tolerance   = 1.0
                     }
                 }
-            });
-        }
-    }
-
-    // ── DTO untuk parse response Anthropic ────────────────────────────────
-
-    internal class AnthropicResponse
-    {
-        [JsonPropertyName("content")]
-        public List<AnthropicContent>? Content { get; set; }
-    }
-
-    internal class AnthropicContent
-    {
-        [JsonPropertyName("text")]
-        public string? Text { get; set; }
+            }
+        };
     }
 }

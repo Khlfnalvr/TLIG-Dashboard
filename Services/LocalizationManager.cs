@@ -90,6 +90,7 @@ public sealed class LocalizationManager : INotifyPropertyChanged
     public string Nav_Logging      => T(nameof(Nav_Logging));
     public string Nav_Playback     => T(nameof(Nav_Playback));
     public string Nav_Parameter    => T(nameof(Nav_Parameter));
+    public string Nav_Cascade      => T(nameof(Nav_Cascade));
     public string Nav_LiveView     => T(nameof(Nav_LiveView));
     public string Nav_LearningAnalytic => T(nameof(Nav_LearningAnalytic));
     public string Nav_AI           => T(nameof(Nav_AI));
@@ -101,21 +102,11 @@ public sealed class LocalizationManager : INotifyPropertyChanged
     public string Ui_SwitchToDark   => T(nameof(Ui_SwitchToDark));
     public string Ui_ChangeLanguage => T(nameof(Ui_ChangeLanguage));
 
-    // ── Caption-bar OPC UA picker ─────────────────────────────────────────
+    // ── Caption-bar PLC (TCP → LabVIEW HMI) picker ────────────────────────
     public string Ui_OpcUaConnection  => T(nameof(Ui_OpcUaConnection));
-    public string Ui_OpcUaEndpoint    => T(nameof(Ui_OpcUaEndpoint));
-    public string Ui_OpcUaSecurity    => T(nameof(Ui_OpcUaSecurity));
-    public string Ui_OpcUaAuth        => T(nameof(Ui_OpcUaAuth));
-    public string Ui_OpcUaAnonymous   => T(nameof(Ui_OpcUaAnonymous));
-    public string Ui_OpcUaUsernameAuth=> T(nameof(Ui_OpcUaUsernameAuth));
-    public string Ui_OpcUaUsername    => T(nameof(Ui_OpcUaUsername));
-    public string Ui_OpcUaPassword    => T(nameof(Ui_OpcUaPassword));
-    public string Ui_OpcUaSecNone       => T(nameof(Ui_OpcUaSecNone));
-    public string Ui_OpcUaSecSign       => T(nameof(Ui_OpcUaSecSign));
-    public string Ui_OpcUaSecSignEnc    => T(nameof(Ui_OpcUaSecSignEnc));
-    public string Ui_OpcUaOpenCertFolder  => T(nameof(Ui_OpcUaOpenCertFolder));
-    public string Ui_OpcProtocol          => T(nameof(Ui_OpcProtocol));
-    public string Ui_OpcDaProgId          => T(nameof(Ui_OpcDaProgId));
+    public string Ui_PlcTcpHint       => T(nameof(Ui_PlcTcpHint));
+    public string Ui_PlcTcpHost       => T(nameof(Ui_PlcTcpHost));
+    public string Ui_PlcTcpPort       => T(nameof(Ui_PlcTcpPort));
 
     // ── Alert history ─────────────────────────────────────────────────────
     public string Ui_AlertHistory   => T(nameof(Ui_AlertHistory));
@@ -335,6 +326,42 @@ public sealed class LocalizationManager : INotifyPropertyChanged
     public string Panel_SteadyErr        => T(nameof(Panel_SteadyErr));
     public string Panel_TransferFunction => T(nameof(Panel_TransferFunction));
 
+    // ── Smart PID Designer (manual tuning + diagnosis on the Dashboard) ──
+    public string Pid_RunHint        => T(nameof(Pid_RunHint));
+    public string Pid_DiagnosisTitle => T(nameof(Pid_DiagnosisTitle));
+    public string Pid_AdvisorTitle   => T(nameof(Pid_AdvisorTitle));
+    public string Pid_AdvisorPrompt  => T(nameof(Pid_AdvisorPrompt));
+    public string Pid_AdvisorAccept  => T(nameof(Pid_AdvisorAccept));
+    public string Pid_AdvisorDecline => T(nameof(Pid_AdvisorDecline));
+    public string Pid_ErrorUnavailable => T(nameof(Pid_ErrorUnavailable));
+
+    // ── Cascade Control designer (outer temperature PID + inner flow PI) ──
+    public string Cas_Title                 => T(nameof(Cas_Title));
+    public string Cas_Subtitle              => T(nameof(Cas_Subtitle));
+    public string Cas_BlockDiagram          => T(nameof(Cas_BlockDiagram));
+    public string Cas_Response              => T(nameof(Cas_Response));
+    public string Cas_OuterGains            => T(nameof(Cas_OuterGains));
+    public string Cas_InnerGains            => T(nameof(Cas_InnerGains));
+    public string Cas_Setpoint              => T(nameof(Cas_Setpoint));
+    public string Cas_Disturbance           => T(nameof(Cas_Disturbance));
+    public string Cas_Run                   => T(nameof(Cas_Run));
+    public string Cas_RunHint               => T(nameof(Cas_RunHint));
+    public string Cas_PrimaryMetrics        => T(nameof(Cas_PrimaryMetrics));
+    public string Cas_DisturbanceRejection  => T(nameof(Cas_DisturbanceRejection));
+    public string Cas_Cascade               => T(nameof(Cas_Cascade));
+    public string Cas_SingleLoop            => T(nameof(Cas_SingleLoop));
+    public string Cas_Improvement           => T(nameof(Cas_Improvement));
+    public string Cas_ErrorUnavailable      => T(nameof(Cas_ErrorUnavailable));
+
+    // ── Rule-based diagnosis (PidDiagnosisCalculator) ────────────────────
+    // Placeholders carry the measured number and the limit it was judged against,
+    // so the student reads why, not just what.
+    public string Diag_Unstable         => T(nameof(Diag_Unstable));
+    public string Diag_HighOvershoot    => T(nameof(Diag_HighOvershoot));
+    public string Diag_SteadyStateError => T(nameof(Diag_SteadyStateError));
+    public string Diag_SlowResponse     => T(nameof(Diag_SlowResponse));
+    public string Diag_Ideal            => T(nameof(Diag_Ideal));
+
     // ── Live view / HMI ──────────────────────────────────────────────────
     public string Live_Header      => T(nameof(Live_Header));
     public string Live_CamInfo     => T(nameof(Live_CamInfo));
@@ -525,7 +552,7 @@ public sealed class LocalizationManager : INotifyPropertyChanged
     public string Ai_Thinking      => T(nameof(Ai_Thinking));
     public string Ai_StopGen       => T(nameof(Ai_StopGen));
     public string Ai_ModelLabel    => T(nameof(Ai_ModelLabel));
-    // Multi-provider AI (DeepSeek / OpenAI / Anthropic)
+    // Multi-provider AI (DeepSeek / OpenAI / Anthropic / Gemini)
     public string Ai_ConfigTitle        => T(nameof(Ai_ConfigTitle));
     public string Ai_ConfigureProviders => T(nameof(Ai_ConfigureProviders));
     public string Ai_ProvidersHint      => T(nameof(Ai_ProvidersHint));
@@ -748,6 +775,7 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             [nameof(Nav_Logging)]      = "Logging",
             [nameof(Nav_Playback)]     = "Playback",
             [nameof(Nav_Parameter)]    = "Parameter",
+            [nameof(Nav_Cascade)]      = "Cascade",
             [nameof(Nav_LiveView)]     = "Live View",
             [nameof(Nav_LearningAnalytic)] = "Learning Analytic",
             [nameof(Nav_AI)]           = "AI Chat",
@@ -757,20 +785,10 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             [nameof(Ui_SwitchToLight)] = "Switch to Light mode",
             [nameof(Ui_SwitchToDark)]  = "Switch to Dark mode",
             [nameof(Ui_ChangeLanguage)] = "Change language",
-            [nameof(Ui_OpcUaConnection)]  = "OPC UA Connection",
-            [nameof(Ui_OpcUaEndpoint)]    = "Endpoint URL",
-            [nameof(Ui_OpcUaSecurity)]    = "Security Mode",
-            [nameof(Ui_OpcUaAuth)]        = "Authentication",
-            [nameof(Ui_OpcUaAnonymous)]   = "Anonymous",
-            [nameof(Ui_OpcUaUsernameAuth)]= "Username / Password",
-            [nameof(Ui_OpcUaUsername)]    = "Username",
-            [nameof(Ui_OpcUaPassword)]    = "Password",
-            [nameof(Ui_OpcUaSecNone)]        = "None (No Security)",
-            [nameof(Ui_OpcUaSecSign)]        = "Sign",
-            [nameof(Ui_OpcUaSecSignEnc)]     = "Sign & Encrypt",
-            [nameof(Ui_OpcUaOpenCertFolder)] = "Open Certificate Folder",
-            [nameof(Ui_OpcProtocol)]         = "Protocol",
-            [nameof(Ui_OpcDaProgId)]         = "Server ProgID",
+            [nameof(Ui_OpcUaConnection)]  = "PLC Connection (TCP)",
+            [nameof(Ui_PlcTcpHint)]       = "Connects directly to the LabVIEW HMI over TCP; LabVIEW bridges reads/writes to the PLC.",
+            [nameof(Ui_PlcTcpHost)]       = "Host / IP address (LabVIEW HMI)",
+            [nameof(Ui_PlcTcpPort)]       = "TCP Port",
             ["OpcDa_ServerNotRunning"]       = "OPC DA server state: {0} (not running)",
             ["Ui_ServerOpcDaNotConnected"]   = "OPC DA: NOT CONNECTED",
             [nameof(Ui_AlertHistory)]   = "Alert History",
@@ -974,6 +992,37 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             [nameof(Panel_Settling)]         = "SETTLING",
             [nameof(Panel_SteadyErr)]        = "STEADY ERR",
             [nameof(Panel_TransferFunction)] = "TRANSFER FUNCTION",
+
+            [nameof(Pid_RunHint)]        = "Press RUN below to simulate the Kp/Ki/Kd values above.",
+            [nameof(Pid_DiagnosisTitle)] = "AI DIAGNOSIS",
+            [nameof(Pid_AdvisorTitle)]   = "AI ADVISOR",
+            [nameof(Pid_AdvisorPrompt)]  = "The advisor recommends the gains below. Apply and re-run?",
+            [nameof(Pid_AdvisorAccept)]  = "Yes (Apply)",
+            [nameof(Pid_AdvisorDecline)] = "No",
+            [nameof(Pid_ErrorUnavailable)] = "PID design service unavailable — check your server connection.",
+
+            [nameof(Cas_Title)]                = "Cascade Control Designer",
+            [nameof(Cas_Subtitle)]             = "Primary: Temperature (PID)  ·  Secondary: Flow (PI)",
+            [nameof(Cas_BlockDiagram)]         = "CASCADE BLOCK DIAGRAM",
+            [nameof(Cas_Response)]             = "SYSTEM RESPONSE",
+            [nameof(Cas_OuterGains)]           = "OUTER LOOP · TEMPERATURE (PID)",
+            [nameof(Cas_InnerGains)]           = "INNER LOOP · FLOW (PI)",
+            [nameof(Cas_Setpoint)]             = "Temp Setpoint",
+            [nameof(Cas_Disturbance)]          = "Flow Disturbance",
+            [nameof(Cas_Run)]                  = "RUN SIMULATION",
+            [nameof(Cas_RunHint)]              = "The inner (flow) loop is tuned first and must be several times faster than the outer (temperature) loop — that is what lets cascade reject flow disturbances before they move the temperature.",
+            [nameof(Cas_PrimaryMetrics)]       = "PRIMARY LOOP · TEMPERATURE RESPONSE",
+            [nameof(Cas_DisturbanceRejection)] = "FLOW DISTURBANCE REJECTION",
+            [nameof(Cas_Cascade)]              = "Cascade",
+            [nameof(Cas_SingleLoop)]           = "Single-loop",
+            [nameof(Cas_Improvement)]          = "Improvement",
+            [nameof(Cas_ErrorUnavailable)]     = "Cascade designer unavailable — check your AI provider / server connection.",
+
+            [nameof(Diag_Unstable)]         = "System is unstable — lower Kp and Ki.",
+            [nameof(Diag_HighOvershoot)]    = "Overshoot {0}% exceeds the {1}% limit — lower Kp or raise Kd.",
+            [nameof(Diag_SteadyStateError)] = "Steady-state error {0}% exceeds {1}% — raise Ki.",
+            [nameof(Diag_SlowResponse)]     = "Settling time {0} s is slow (limit {1} s) — raise Kp.",
+            [nameof(Diag_Ideal)]            = "Response is good — overshoot {0}%, settling {1} s.",
 
             [nameof(Ai_Title)]         = "AI ASSISTANT",
             [nameof(Ai_UserLabel)]     = "USER",
@@ -1345,6 +1394,7 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             [nameof(Nav_Logging)]      = "Logging",
             [nameof(Nav_Playback)]     = "Putar Ulang",
             [nameof(Nav_Parameter)]    = "Parameter",
+            [nameof(Nav_Cascade)]      = "Cascade",
             [nameof(Nav_LiveView)]     = "Tampilan Live",
             [nameof(Nav_LearningAnalytic)] = "Learning Analytic",
             [nameof(Nav_AI)]           = "AI Chat",
@@ -1354,20 +1404,10 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             [nameof(Ui_SwitchToLight)] = "Beralih ke Mode Terang",
             [nameof(Ui_SwitchToDark)]  = "Beralih ke Mode Gelap",
             [nameof(Ui_ChangeLanguage)] = "Ubah bahasa",
-            [nameof(Ui_OpcUaConnection)]  = "Koneksi OPC UA",
-            [nameof(Ui_OpcUaEndpoint)]    = "URL Endpoint",
-            [nameof(Ui_OpcUaSecurity)]    = "Mode Keamanan",
-            [nameof(Ui_OpcUaAuth)]        = "Autentikasi",
-            [nameof(Ui_OpcUaAnonymous)]   = "Anonim",
-            [nameof(Ui_OpcUaUsernameAuth)]= "Nama Pengguna / Kata Sandi",
-            [nameof(Ui_OpcUaUsername)]    = "Nama Pengguna",
-            [nameof(Ui_OpcUaPassword)]    = "Kata Sandi",
-            [nameof(Ui_OpcUaSecNone)]        = "Tidak Ada (Tanpa Keamanan)",
-            [nameof(Ui_OpcUaSecSign)]        = "Tanda Tangan",
-            [nameof(Ui_OpcUaSecSignEnc)]     = "Tanda Tangan & Enkripsi",
-            [nameof(Ui_OpcUaOpenCertFolder)] = "Buka Folder Sertifikat",
-            [nameof(Ui_OpcProtocol)]         = "Protokol",
-            [nameof(Ui_OpcDaProgId)]         = "ProgID Server",
+            [nameof(Ui_OpcUaConnection)]  = "Koneksi PLC (TCP)",
+            [nameof(Ui_PlcTcpHint)]       = "Terhubung langsung ke HMI LabVIEW melalui TCP; LabVIEW meneruskan baca/tulis ke PLC.",
+            [nameof(Ui_PlcTcpHost)]       = "Host / Alamat IP (HMI LabVIEW)",
+            [nameof(Ui_PlcTcpPort)]       = "Port TCP",
             ["OpcDa_ServerNotRunning"]       = "Status server OPC DA: {0} (tidak berjalan)",
             ["Ui_ServerOpcDaNotConnected"]   = "OPC DA: TIDAK TERHUBUNG",
             [nameof(Ui_AlertHistory)]   = "Riwayat Alert",
@@ -1571,6 +1611,37 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             [nameof(Panel_Settling)]         = "SETTLING",
             [nameof(Panel_SteadyErr)]        = "STEADY ERR",
             [nameof(Panel_TransferFunction)] = "FUNGSI TRANSFER",
+
+            [nameof(Pid_RunHint)]        = "Tekan RUN di bawah untuk mensimulasikan nilai Kp/Ki/Kd di atas.",
+            [nameof(Pid_DiagnosisTitle)] = "DIAGNOSIS AI",
+            [nameof(Pid_AdvisorTitle)]   = "PENASIHAT AI",
+            [nameof(Pid_AdvisorPrompt)]  = "Penasihat merekomendasikan gain di bawah ini. Terapkan dan jalankan ulang?",
+            [nameof(Pid_AdvisorAccept)]  = "Ya (Terapkan)",
+            [nameof(Pid_AdvisorDecline)] = "Tidak",
+            [nameof(Pid_ErrorUnavailable)] = "Layanan desain PID tidak tersedia — periksa koneksi server Anda.",
+
+            [nameof(Cas_Title)]                = "Perancang Kontrol Cascade",
+            [nameof(Cas_Subtitle)]             = "Primer: Temperatur (PID)  ·  Sekunder: Flow (PI)",
+            [nameof(Cas_BlockDiagram)]         = "DIAGRAM BLOK CASCADE",
+            [nameof(Cas_Response)]             = "RESPONS SISTEM",
+            [nameof(Cas_OuterGains)]           = "LOOP LUAR · TEMPERATUR (PID)",
+            [nameof(Cas_InnerGains)]           = "LOOP DALAM · FLOW (PI)",
+            [nameof(Cas_Setpoint)]             = "Setpoint Suhu",
+            [nameof(Cas_Disturbance)]          = "Gangguan Flow",
+            [nameof(Cas_Run)]                  = "JALANKAN SIMULASI",
+            [nameof(Cas_RunHint)]              = "Loop dalam (flow) dituning lebih dulu dan harus beberapa kali lebih cepat dari loop luar (temperatur) — inilah yang membuat cascade mampu menolak gangguan flow sebelum sempat menggeser suhu.",
+            [nameof(Cas_PrimaryMetrics)]       = "LOOP PRIMER · RESPONS TEMPERATUR",
+            [nameof(Cas_DisturbanceRejection)] = "PENOLAKAN GANGGUAN FLOW",
+            [nameof(Cas_Cascade)]              = "Cascade",
+            [nameof(Cas_SingleLoop)]           = "Single-loop",
+            [nameof(Cas_Improvement)]          = "Peningkatan",
+            [nameof(Cas_ErrorUnavailable)]     = "Perancang cascade tidak tersedia — periksa koneksi AI/server Anda.",
+
+            [nameof(Diag_Unstable)]         = "Sistem tidak stabil — turunkan Kp dan Ki.",
+            [nameof(Diag_HighOvershoot)]    = "Overshoot {0}% melebihi batas {1}% — turunkan Kp atau naikkan Kd.",
+            [nameof(Diag_SteadyStateError)] = "Error steady-state {0}% melebihi {1}% — naikkan Ki.",
+            [nameof(Diag_SlowResponse)]     = "Settling time {0} s terlalu lama (batas {1} s) — naikkan Kp.",
+            [nameof(Diag_Ideal)]            = "Respons sudah baik — overshoot {0}%, settling {1} s.",
 
             [nameof(Ai_Title)]         = "ASISTEN AI",
             [nameof(Ai_UserLabel)]     = "PENGGUNA",
@@ -1950,8 +2021,8 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             ["Ui_SourceNotConnected"] = "SOURCE: NOT CONNECTED",
             ["Ui_SourceConnected"] = "SOURCE: {0} @ {1}",
             ["Ui_InitialConnectionHint"] = "Not connected - open Control Panel to connect to the server",
-            ["Ui_ServerOpcNotConnected"] = "OPC UA: NOT CONNECTED",
-            ["Ui_ServerOpcHint"] = "OPC UA not connected — open the connection flyout to connect to a PLC/OPC UA server",
+            ["Ui_ServerOpcNotConnected"] = "PLC: NOT CONNECTED",
+            ["Ui_ServerOpcHint"] = "PLC not connected — open the connection flyout to connect to the LabVIEW HMI over TCP",
             ["Ui_ClientNotConnected"] = "SERVER: NOT CONNECTED",
             ["Ui_ClientNotConnectedHint"] = "Not connected to TLIG Dashboard Server — open the connection flyout and enter the server address",
             ["Ui_ClientConnected"] = "SERVER: {0}",
@@ -2092,8 +2163,8 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             ["Ui_SourceNotConnected"] = "SUMBER: TIDAK TERHUBUNG",
             ["Ui_SourceConnected"] = "SUMBER: {0} @ {1}",
             ["Ui_InitialConnectionHint"] = "Tidak terhubung - buka Panel Kontrol untuk terhubung ke server",
-            ["Ui_ServerOpcNotConnected"] = "OPC UA: TIDAK TERHUBUNG",
-            ["Ui_ServerOpcHint"] = "OPC UA belum terhubung — buka flyout koneksi untuk menyambung ke PLC/server OPC UA",
+            ["Ui_ServerOpcNotConnected"] = "PLC: TIDAK TERHUBUNG",
+            ["Ui_ServerOpcHint"] = "PLC belum terhubung — buka flyout koneksi untuk menyambung ke HMI LabVIEW melalui TCP",
             ["Ui_ClientNotConnected"] = "SERVER: TIDAK TERHUBUNG",
             ["Ui_ClientNotConnectedHint"] = "Belum terhubung ke TLIG Dashboard Server — buka flyout koneksi dan masukkan alamat server",
             ["Ui_ClientConnected"] = "SERVER: {0}",

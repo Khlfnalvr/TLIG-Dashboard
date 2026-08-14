@@ -6,23 +6,6 @@
 
     <UserControl.Resources>
 
-        <!-- Accent palette — fixed colours, readable on both light & dark themes -->
-        <SolidColorBrush x:Key="AccentGreen"  Color="#FF10B981"/>
-        <SolidColorBrush x:Key="AccentBlue"   Color="#FF3B82F6"/>
-        <SolidColorBrush x:Key="AccentPurple" Color="#FF8B5CF6"/>
-        <SolidColorBrush x:Key="AccentOrange" Color="#FFF59E0B"/>
-
-        <!-- Soft tints for icon chips / pills (~15% alpha) -->
-        <SolidColorBrush x:Key="TintGreen"  Color="#2610B981"/>
-        <SolidColorBrush x:Key="TintBlue"   Color="#263B82F6"/>
-        <SolidColorBrush x:Key="TintPurple" Color="#268B5CF6"/>
-        <SolidColorBrush x:Key="TintOrange" Color="#26F59E0B"/>
-
-        <LinearGradientBrush x:Key="GaugeValueBrush" StartPoint="0,1" EndPoint="1,0">
-            <GradientStop Color="#FF34D399" Offset="0"/>
-            <GradientStop Color="#FF059669" Offset="1"/>
-        </LinearGradientBrush>
-
         <Style x:Key="LDCard" TargetType="Border">
             <Setter Property="Background"      Value="{ThemeResource CardBackgroundFillColorDefaultBrush}"/>
             <Setter Property="BorderBrush"     Value="{ThemeResource CardStrokeColorDefaultBrush}"/>
@@ -75,7 +58,7 @@
                                          StrokeStartLineCap="Round"
                                          StrokeEndLineCap="Round"/>
                             <shapes:Path x:Name="GaugeValue"
-                                         Stroke="{StaticResource GaugeValueBrush}"
+                                         Stroke="{ThemeResource AccentFillColorDefaultBrush}"
                                          StrokeThickness="14"
                                          StrokeStartLineCap="Round"
                                          StrokeEndLineCap="Round"/>
@@ -98,8 +81,8 @@
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <Border Grid.Column="0" Width="40" Height="40" CornerRadius="11" Background="{StaticResource TintBlue}" VerticalAlignment="Center">
-                            <FontIcon FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" Glyph="&#xE9D5;" FontSize="18" Foreground="{StaticResource AccentBlue}"/>
+                        <Border Grid.Column="0" Width="40" Height="40" CornerRadius="11" Background="{ThemeResource SubtleFillColorSecondaryBrush}" VerticalAlignment="Center">
+                            <FontIcon FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" Glyph="&#xE9D5;" FontSize="18" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
                         </Border>
                         <TextBlock Grid.Column="1" VerticalAlignment="Center" Text="{x:Bind Lang.LearnDash_TotalTasks, Mode=OneWay}" FontSize="13" FontWeight="SemiBold"/>
                         <TextBlock Grid.Column="2" x:Name="TotalTasksText" Text="0" FontSize="20" FontWeight="Bold" VerticalAlignment="Center"/>
@@ -111,11 +94,11 @@
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <Border Grid.Column="0" Width="40" Height="40" CornerRadius="11" Background="{StaticResource TintGreen}" VerticalAlignment="Center">
-                            <FontIcon FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" Glyph="&#xE930;" FontSize="18" Foreground="{StaticResource AccentGreen}"/>
+                        <Border Grid.Column="0" Width="40" Height="40" CornerRadius="11" Background="{ThemeResource SystemFillColorSuccessBackgroundBrush}" VerticalAlignment="Center">
+                            <FontIcon FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" Glyph="&#xE930;" FontSize="18" Foreground="{ThemeResource SystemFillColorSuccessBrush}"/>
                         </Border>
                         <TextBlock Grid.Column="1" VerticalAlignment="Center" Text="{x:Bind Lang.LearnDash_Completed, Mode=OneWay}" FontSize="13" FontWeight="SemiBold"/>
-                        <TextBlock Grid.Column="2" x:Name="DoneTasksText" Text="0" FontSize="20" FontWeight="Bold" Foreground="{StaticResource AccentGreen}" VerticalAlignment="Center"/>
+                        <TextBlock Grid.Column="2" x:Name="DoneTasksText" Text="0" FontSize="20" FontWeight="Bold" Foreground="{ThemeResource SystemFillColorSuccessBrush}" VerticalAlignment="Center"/>
                     </Grid>
 
                     <Grid ColumnSpacing="12">
@@ -124,11 +107,11 @@
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <Border Grid.Column="0" Width="40" Height="40" CornerRadius="11" Background="{StaticResource TintOrange}" VerticalAlignment="Center">
-                            <FontIcon FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" Glyph="&#xE823;" FontSize="18" Foreground="{StaticResource AccentOrange}"/>
+                        <Border Grid.Column="0" Width="40" Height="40" CornerRadius="11" Background="{ThemeResource SystemFillColorCautionBackgroundBrush}" VerticalAlignment="Center">
+                            <FontIcon FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" Glyph="&#xE823;" FontSize="18" Foreground="{ThemeResource SystemFillColorCautionBrush}"/>
                         </Border>
                         <TextBlock Grid.Column="1" VerticalAlignment="Center" Text="{x:Bind Lang.LearnDash_Remaining, Mode=OneWay}" FontSize="13" FontWeight="SemiBold"/>
-                        <TextBlock Grid.Column="2" x:Name="RemainingTasksText" Text="0" FontSize="20" FontWeight="Bold" Foreground="{StaticResource AccentOrange}" VerticalAlignment="Center"/>
+                        <TextBlock Grid.Column="2" x:Name="RemainingTasksText" Text="0" FontSize="20" FontWeight="Bold" Foreground="{ThemeResource SystemFillColorCautionBrush}" VerticalAlignment="Center"/>
                     </Grid>
                 </StackPanel>
             </Border>

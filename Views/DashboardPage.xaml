@@ -235,17 +235,50 @@
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="Kp" Style="{StaticResource DashTinyLabelStyle}" VerticalAlignment="Center"/>
-                                <NumberBox x:Name="CtlKp" ValueChanged="CtlKp_ValueChanged" Grid.Column="1" Value="10" Minimum="0" SmallChange="1" SpinButtonPlacementMode="Compact" FontSize="11" Style="{StaticResource DashNumberBoxStyle}"/>
+                                <NumberBox x:Name="KpBox" Grid.Column="1" Value="1.5" Minimum="0" SmallChange="0.1" SpinButtonPlacementMode="Compact" FontSize="11" Style="{StaticResource DashNumberBoxStyle}"/>
                                 <TextBlock Grid.Column="2" Text="Ki" Style="{StaticResource DashTinyLabelStyle}" VerticalAlignment="Center"/>
-                                <NumberBox x:Name="CtlKi" ValueChanged="CtlKi_ValueChanged" Grid.Column="3" Value="10" Minimum="0" SmallChange="1" SpinButtonPlacementMode="Compact" FontSize="11" Style="{StaticResource DashNumberBoxStyle}"/>
+                                <NumberBox x:Name="KiBox" Grid.Column="3" Value="0.015" Minimum="0" SmallChange="0.005" SpinButtonPlacementMode="Compact" FontSize="11" Style="{StaticResource DashNumberBoxStyle}"/>
                                 <TextBlock Grid.Column="4" Text="Kd" Style="{StaticResource DashTinyLabelStyle}" VerticalAlignment="Center"/>
-                                <NumberBox x:Name="CtlKd" ValueChanged="CtlKd_ValueChanged" Grid.Column="5" Value="10" Minimum="0" SmallChange="1" SpinButtonPlacementMode="Compact" FontSize="11" Style="{StaticResource DashNumberBoxStyle}"/>
+                                <NumberBox x:Name="KdBox" Grid.Column="5" Value="8" Minimum="0" SmallChange="0.5" SpinButtonPlacementMode="Compact" FontSize="11" Style="{StaticResource DashNumberBoxStyle}"/>
+                            </Grid>
+
+                            <TextBlock Text="{x:Bind Lang.Pid_RunHint, Mode=OneWay}"
+                                       Style="{StaticResource DashTinyLabelStyle}"
+                                       Opacity="0.65" TextWrapping="Wrap"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Human-in-the-loop: the AI Advisor's recommended next gains sit here,
+                         pending, until the student explicitly accepts or declines — never
+                         written to Kp/Ki/Kd on their own. Accepting auto re-runs the sim. -->
+                    <Border x:Name="PidAdvisorPanel" Style="{StaticResource DashCardStyle}"
+                            Visibility="Collapsed" Padding="10,8">
+                        <StackPanel Spacing="7">
+                            <TextBlock Text="{x:Bind Lang.Pid_AdvisorTitle, Mode=OneWay}" Style="{StaticResource DashCardTitleStyle}"/>
+                            <TextBlock x:Name="PidAdvisorText" FontSize="11" TextWrapping="Wrap"/>
+                            <TextBlock x:Name="PidAdvisorRecommendationText" FontSize="11" FontFamily="Consolas" Opacity="0.75"/>
+                            <Grid ColumnSpacing="8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Button x:Name="PidAdvisorDeclineBtn" Grid.Column="0" HorizontalAlignment="Stretch" FontSize="11"
+                                        Content="{x:Bind Lang.Pid_AdvisorDecline, Mode=OneWay}"
+                                        Click="PidAdvisorDecline_Click"/>
+                                <Button x:Name="PidAdvisorAcceptBtn" Grid.Column="1" HorizontalAlignment="Stretch" FontSize="11"
+                                        Style="{ThemeResource AccentButtonStyle}"
+                                        Content="{x:Bind Lang.Pid_AdvisorAccept, Mode=OneWay}"
+                                        Click="PidAdvisorAccept_Click"/>
                             </Grid>
                         </StackPanel>
                     </Border>
 
-                    <!-- System Response -->
-                    <Border Style="{StaticResource DashCardStyle}" Height="142">
+                    <!-- System Response — the left panel is already inside a ScrollViewer
+                         (see Grid.Row="1" above), so a taller card here just means users
+                         scroll a bit further; it doesn't break the layout. 142px was only
+                         enough for the placeholder label — a real Chart.js line chart with
+                         axis titles needs more room or it renders squeezed/clipped. -->
+                    <Border Style="{StaticResource DashCardStyle}" Height="300">
                         <Grid RowSpacing="8">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto"/>
@@ -257,15 +290,15 @@
                             <Border Grid.Row="1"
                                     x:Name="ResponSistemChart"
                                     Style="{StaticResource DashInputBoxStyle}"
-                                    Padding="10">
-                                <TextBlock Text="{x:Bind Lang.Resp_Step, Mode=OneWay}"
-                                           Style="{StaticResource DashTinyLabelStyle}"
-                                           VerticalAlignment="Top"/>
+                                    Padding="2">
+                                <controls:PidResponseChart x:Name="RespChart"/>
                             </Border>
                         </Grid>
                     </Border>
 
-                    <!-- Rise/Overshoot/Settling/SteadyErr metrics -->
+                    <!-- Rise/Overshoot/Settling/SteadyErr metrics — read directly off the RK4
+                         curve above (see PidSimulator.ComputeStepMetrics), so these numbers
+                         and the chart can never disagree. -->
                     <Grid ColumnSpacing="8" RowSpacing="8">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
@@ -321,6 +354,17 @@
                         </Border>
                     </Grid>
 
+                    <!-- AI Diagnosis — multiclass classification of the current gains'
+                         actual response (SISTEM_SUDAH_IDEAL / TURUNKAN_KP_DAN_KI / dst.) -->
+                    <Border Style="{StaticResource DashCardStyle}" Padding="10,8">
+                        <StackPanel Spacing="7">
+                            <TextBlock Text="{x:Bind Lang.Pid_DiagnosisTitle, Mode=OneWay}" Style="{StaticResource DashCardTitleStyle}"/>
+                            <Border Style="{StaticResource DashInputBoxStyle}">
+                                <TextBlock x:Name="DiagnosisValue" Text="--" FontSize="11" HorizontalAlignment="Center"/>
+                            </Border>
+                        </StackPanel>
+                    </Border>
+
                     <!-- Transfer Function -->
                     <Border Style="{StaticResource DashCardStyle}" MinHeight="56">
                         <Grid RowSpacing="8">
@@ -332,8 +376,10 @@
                                        Text="{x:Bind Lang.Panel_TransferFunction, Mode=OneWay}"
                                        Style="{StaticResource DashCardTitleStyle}"/>
                             <Border Grid.Row="1" Style="{StaticResource DashInputBoxStyle}" Padding="10">
+                                <!-- Fixed plant the Smart PID Designer's local RK4 simulator models
+                                     (see PidSimulator.cs) — not tied to the System Model selector above. -->
                                 <TextBlock x:Name="TransferFunctionText"
-                                           Text="G(s) = K / (tau s + 1)"
+                                           Text="G(s) = 0.6361 / (101.53s + 1) · e^(−52.09s)"
                                            FontFamily="Consolas"
                                            FontSize="12"
                                            Opacity="0.72"
@@ -365,7 +411,7 @@
                                                 <ColumnDefinition Width="*"/>
                                                 <ColumnDefinition Width="Auto"/>
                                              </Grid.ColumnDefinitions>
-                                             <NumberBox x:Name="CtlSetpoint" ValueChanged="CtlSetpoint_ValueChanged"
+                                             <NumberBox x:Name="CtlSetpointBox"
                                                         Value="10" Minimum="0" SmallChange="1"
                                                         SpinButtonPlacementMode="Compact"
                                                         FontSize="11"
@@ -409,8 +455,11 @@
                                 </Border>
 
                                 <StackPanel Grid.Column="2" Width="106" Spacing="5" VerticalAlignment="Center">
-                                    <!-- RUN — green, inline Button.Resources overrides native visual states -->
-                                    <Button x:Name="CtlRunButton" Click="CtlRun_Click" HorizontalAlignment="Stretch" FontSize="11">
+                                    <!-- RUN — green, inline Button.Resources overrides native visual states.
+                                         Doubles as the Smart PID Designer's "Simulate": runs the RK4 step-response
+                                         simulation using the current Kp/Ki/Kd boxes above (also sends Run=1 + gains
+                                         to LabVIEW). -->
+                                    <Button x:Name="CtlRunBtn" HorizontalAlignment="Stretch" FontSize="11" Click="CtlRun_Click">
                                         <Button.Resources>
                                             <SolidColorBrush x:Key="ButtonBackground"             Color="{ThemeResource SystemFillColorSuccess}"/>
                                             <SolidColorBrush x:Key="ButtonBackgroundPointerOver"  Color="{ThemeResource SystemFillColorSuccess}"/>
@@ -745,7 +794,8 @@
                     PointerReleased="HSplitter_PointerReleased"
                     PointerCaptureLost="HSplitter_PointerCaptureLost"/>
 
-            <!-- Bottom section: Learning Analytic -->
+            <!-- Bottom section: Learning Analytic — students see progress
+                 tracking; Server/staff see the Challenge Learning manager -->
             <Border Grid.Row="3"
                     Margin="8,4,8,8"
                     Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
@@ -778,7 +828,8 @@
                         </Grid>
                     </Border>
 
-                    <controls:LearningAnalyticView Grid.Row="1" Margin="0,0,0,6"/>
+                    <controls:LearningAnalyticView x:Name="DashLearningView" Grid.Row="1" Margin="0,0,0,6"/>
+                    <Frame x:Name="DashChallengeFrame" Grid.Row="1" Margin="0,0,0,6" Visibility="Collapsed"/>
                 </Grid>
             </Border>
         </Grid>

@@ -118,7 +118,7 @@ public static class AiConfigClient
         foreach (var p in cfg.Providers)
         {
             var models = new JsonArray();
-            foreach (var m in p.Models) models.Add(m);
+            foreach (var m in p.Models) models.Add((JsonNode)m);
 
             var obj = new JsonObject
             {
@@ -128,7 +128,7 @@ public static class AiConfigClient
             };
             if (p.ClearKey) obj["clearKey"] = true;
             else if (!string.IsNullOrWhiteSpace(p.NewApiKey)) obj["apiKey"] = p.NewApiKey;
-            provs.Add(obj);
+            provs.Add((JsonNode)obj);
         }
 
         return new JsonObject

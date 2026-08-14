@@ -9,10 +9,10 @@ public partial class MainViewModel : ObservableObject
     private readonly DispatcherQueue _dispatcherQueue;
 
     // ── Services ──────────────────────────────────────────────────────────────
-    public OpcUaService OpcUa { get; } = new();
-    public OpcDaService OpcDa { get; } = new();
+    // PLC link — direct TCP to the LabVIEW HMI (replaces the former OPC UA/DA path).
+    public PlcTcpService Plc { get; } = new();
 
-    // ── OPC UA connection state (server uses this for the InfoBar) ─────────────
+    // ── PLC connection state (server uses this for the InfoBar) ────────────────
     [ObservableProperty] private string _connectionStatus =
         LocalizationManager.Instance.Get(
             BuildInfo.IsServer ? "Ui_ServerOpcHint" : "Ui_ClientNotConnectedHint");
@@ -49,18 +49,12 @@ public partial class MainViewModel : ObservableObject
         TemperatureUnit  = saved.TemperatureUnit;
         VoltageUnit      = saved.VoltageUnit;
         CapacityUnit     = saved.CapacityUnit;
-        OpcUa.NodeConfig = saved.OpcUaNodeConfig;
 
         LocalizationManager.Instance.PropertyChanged += (_, _) => RefreshLocalizedText();
 
-        // OPC UA events (used on both flavors, but only drives the InfoBar on server).
-        OpcUa.StatusChanged += msg => _dispatcherQueue.TryEnqueue(() => OnOpcUaStatus(msg));
-        OpcUa.ErrorOccurred += msg => _dispatcherQueue.TryEnqueue(() =>
-            ConnectionStatus = LocalizationManager.Instance.Format("Ui_ErrorWithMessage", msg));
-
-        // OPC DA events — mirror the same InfoBar path on server.
-        OpcDa.StatusChanged += msg => _dispatcherQueue.TryEnqueue(() => OnOpcDaStatus(msg));
-        OpcDa.ErrorOccurred += msg => _dispatcherQueue.TryEnqueue(() =>
+        // PLC TCP events (used on both flavors, but only drives the InfoBar on server).
+        Plc.StatusChanged += msg => _dispatcherQueue.TryEnqueue(() => OnPlcStatus(msg));
+        Plc.ErrorOccurred += msg => _dispatcherQueue.TryEnqueue(() =>
             ConnectionStatus = LocalizationManager.Instance.Format("Ui_ErrorWithMessage", msg));
 
         // ShareClient events (drives the InfoBar on the client).
@@ -71,28 +65,16 @@ public partial class MainViewModel : ObservableObject
         }
     }
 
-    // ── OPC UA status handler ─────────────────────────────────────────────────
-    private void OnOpcUaStatus(string msg)
+    // ── PLC status handler ────────────────────────────────────────────────────
+    private void OnPlcStatus(string msg)
     {
         ConnectionStatus = msg;
-        IsConnected      = OpcUa.IsConnected || OpcDa.IsConnected;
+        IsConnected      = Plc.IsConnected;
 
         if (BuildInfo.IsServer)
-            DataSourceText = OpcUa.IsConnected
-                ? LocalizationManager.Instance.Format("Ui_SourceConnected", OpcUa.EndpointUrl, "OPC UA")
+            DataSourceText = Plc.IsConnected
+                ? LocalizationManager.Instance.Format("Ui_SourceConnected", Plc.EndpointLabel, "TCP")
                 : LocalizationManager.Instance.Get("Ui_ServerOpcNotConnected");
-    }
-
-    // ── OPC DA status handler ─────────────────────────────────────────────────
-    private void OnOpcDaStatus(string msg)
-    {
-        ConnectionStatus = msg;
-        IsConnected      = OpcUa.IsConnected || OpcDa.IsConnected;
-
-        if (BuildInfo.IsServer)
-            DataSourceText = OpcDa.IsConnected
-                ? LocalizationManager.Instance.Format("Ui_SourceConnected", OpcDa.ProgId, "OPC DA")
-                : LocalizationManager.Instance.Get("Ui_ServerOpcDaNotConnected");
     }
 
     // ── Share-server status handler (client only) ─────────────────────────────
@@ -112,15 +94,10 @@ public partial class MainViewModel : ObservableObject
     {
         if (BuildInfo.IsServer)
         {
-            if (OpcUa.IsConnected)
+            if (Plc.IsConnected)
             {
-                DataSourceText   = LocalizationManager.Instance.Format("Ui_SourceConnected", OpcUa.EndpointUrl, "OPC UA");
-                ConnectionStatus = LocalizationManager.Instance.Format("OpcUa_StatusConnected", OpcUa.EndpointUrl);
-            }
-            else if (OpcDa.IsConnected)
-            {
-                DataSourceText   = LocalizationManager.Instance.Format("Ui_SourceConnected", OpcDa.ProgId, "OPC DA");
-                ConnectionStatus = LocalizationManager.Instance.Format("OpcUa_StatusConnected", OpcDa.ProgId);
+                DataSourceText   = LocalizationManager.Instance.Format("Ui_SourceConnected", Plc.EndpointLabel, "TCP");
+                ConnectionStatus = LocalizationManager.Instance.Format("OpcUa_StatusConnected", Plc.EndpointLabel);
             }
             else
             {
@@ -170,8 +147,8 @@ public partial class MainViewModel : ObservableObject
     public void SaveSettings()
     {
         var s = AppSettingsService.Load();
-        s.OpcUaEndpointUrl = OpcUa.EndpointUrl;
-        s.OpcUaNodeConfig  = OpcUa.NodeConfig;
+        if (!string.IsNullOrWhiteSpace(Plc.Host)) s.PlcTcpHost = Plc.Host;
+        if (Plc.Port > 0)                         s.PlcTcpPort = Plc.Port;
         s.TemperatureUnit  = TemperatureUnit;
         s.VoltageUnit      = VoltageUnit;
         s.CapacityUnit     = CapacityUnit;

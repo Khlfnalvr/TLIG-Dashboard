@@ -20,24 +20,28 @@ public sealed class AiProviderSettings
 
 public class AppSettings
 {
-    // OPC protocol selection: "UA" | "DA"
-    public string OpcProtocol             { get; set; } = "UA";
-
-    // OPC UA server connection settings
-    public string OpcUaEndpointUrl        { get; set; } = "opc.tcp://localhost:4840";
-    public string OpcUaSecurityMode       { get; set; } = "None";   // None | Sign | SignAndEncrypt
-    public bool   OpcUaUseAnonymous       { get; set; } = true;
-    public string OpcUaUsername           { get; set; } = "";
-    public int    OpcUaPublishingIntervalMs { get; set; } = 1000;
-    public OpcUaNodeConfig OpcUaNodeConfig { get; set; } = new();
-
-    // OPC DA server connection settings
-    public string OpcDaProgId             { get; set; } = "";
+    // ── PLC via LabVIEW HMI (direct TCP — replaces the former OPC UA/DA path) ──
+    // LabVIEW runs a TCP listener that bridges to the PLC; the server connects
+    // to it as a plain TCP client (see PlcTcpService).
+    public string PlcTcpHost              { get; set; } = "127.0.0.1";
+    public int    PlcTcpPort              { get; set; } = 5000;
 
     // ── LabVIEW → HMI data bridge (TCP telemetry) ─────────────────────────
     // The dashboard listens on this TCP port for "key=value" lines streamed by a
     // LabVIEW VI ("TCP Write"); the values are shown in the HMI panel.
     public int    HmiDataPort             { get; set; } = 5005;
+
+    // ── Python bridge (PIDtest.py → LabVIEW) ──────────────────────────────
+    // The HMI drives an external Python client that forwards SP/KC/KI/KD to
+    // LabVIEW over its own socket (see PythonBridgeService). The dashboard writes
+    // the current gains next to the script and launches it with RUN.
+    //   • PythonExe        — interpreter to launch. Defaults to "py" (the Windows
+    //     Python launcher), which is the reliable way to start Python on Windows —
+    //     a bare "python" often resolves to the Microsoft Store alias stub that does
+    //     nothing. Falls back to "python" automatically if "py" is not installed.
+    //   • PythonScriptPath — the PIDtest.py this machine should run.
+    public string PythonExe               { get; set; } = "py";
+    public string PythonScriptPath        { get; set; } = @"D:\PIDtest.py";
 
     // ── Sharing: server side ──────────────────────────────────────────────
     // The server broadcasts its camera + HMI screen and proxies AI chat.
@@ -67,7 +71,7 @@ public class AppSettings
     // cleanly into AiProviderConfigs below; no longer the source of truth.
     public string AiApiUrl       { get; set; } = "https://api.deepseek.com";
     public string AiApiKey       { get; set; } = "";
-    public string AiModel        { get; set; } = "deepseek-chat";
+    public string AiModel        { get; set; } = "deepseek-v4-flash";
     public string AiSystemPrompt { get; set; } = "You are a helpful assistant integrated in TLIG Dashboard, an industrial HMI dashboard and AI connector.";
 
     // Multi-provider config (DeepSeek / OpenAI / Anthropic). On the server each
@@ -96,6 +100,7 @@ public class AppSettings
     public bool   ShowNav_LiveView       { get; set; } = true;
     public bool   ShowNav_LearningAnalytic { get; set; } = true;
     public bool   ShowNav_AI             { get; set; } = true;
+    public bool   ShowNav_ControlEngineering { get; set; } = true;
 
     // UI zoom level (1.0 = 100%). Adjusted via the Zoom menu / Ctrl +/-/0.
     public double ZoomLevel              { get; set; } = 1.0;

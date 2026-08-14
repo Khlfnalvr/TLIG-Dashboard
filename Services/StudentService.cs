@@ -29,19 +29,7 @@ public sealed class StudentService
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "TLIGDashboard", "students.json");
 
-    private static readonly JsonSerializerOptions _json = new() { WriteIndented = true };
-
     private List<StudentInfo>? _students;
-
-    // ── Default seed data ────────────────────────────────────────────────────
-    private static readonly List<StudentInfo> _defaults = new()
-    {
-        new() { Id = "STU001", Name = "Rizky Pratama",   Nrp = "05211940000001", Kelas = "TK-3A", GroupId = "GRP-01" },
-        new() { Id = "STU002", Name = "Siti Nurhaliza",  Nrp = "05211940000002", Kelas = "TK-3A", GroupId = "GRP-01" },
-        new() { Id = "STU003", Name = "Ahmad Fauzi",     Nrp = "05211940000003", Kelas = "TK-3B", GroupId = "GRP-01" },
-        new() { Id = "STU004", Name = "Dewi Anggraini",  Nrp = "05211940000004", Kelas = "TK-3B", GroupId = "GRP-01" },
-        new() { Id = "STU005", Name = "Budi Santoso",    Nrp = "05211940000005", Kelas = "TK-3A", GroupId = "GRP-01" },
-    };
 
     // ── Load / Save ──────────────────────────────────────────────────────────
 
@@ -53,17 +41,12 @@ public sealed class StudentService
             if (File.Exists(_path))
             {
                 var json = await File.ReadAllTextAsync(_path);
-                _students = JsonSerializer.Deserialize<List<StudentInfo>>(json) ?? new();
+                _students = JsonSerializer.Deserialize(json, AppJsonContext.Default.ListStudentInfo) ?? new();
             }
         }
         catch { /* ignore corrupt file */ }
 
-        if (_students == null || _students.Count == 0)
-        {
-            _students = new(_defaults.Select(s => new StudentInfo
-                { Id = s.Id, Name = s.Name, Nrp = s.Nrp, Kelas = s.Kelas, GroupId = s.GroupId }));
-            await SaveAsync();
-        }
+        _students ??= new();
     }
 
     private async Task SaveAsync()
@@ -71,7 +54,7 @@ public sealed class StudentService
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
-            var json = JsonSerializer.Serialize(_students, _json);
+            var json = JsonSerializer.Serialize(_students ?? new(), AppJsonContext.Default.ListStudentInfo);
             await File.WriteAllTextAsync(_path, json);
         }
         catch { /* swallow — save is best-effort */ }
@@ -80,7 +63,7 @@ public sealed class StudentService
     // ── Queries ──────────────────────────────────────────────────────────────
 
     public IReadOnlyList<StudentInfo> GetAll() =>
-        (_students ?? _defaults).AsReadOnly();
+        (_students ?? new List<StudentInfo>()).AsReadOnly();
 
     public IReadOnlyList<StudentInfo> GetByGroup(string groupId) =>
         GetAll().Where(s => s.GroupId == groupId).ToList();
@@ -99,7 +82,7 @@ public sealed class StudentService
 
     public string GetName(string id)
     {
-        var s = (_students ?? _defaults).FirstOrDefault(x => x.Id == id);
+        var s = _students?.FirstOrDefault(x => x.Id == id);
         return s?.Name ?? id;
     }
 

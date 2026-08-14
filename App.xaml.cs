@@ -36,8 +36,31 @@ public partial class App : Application
     /// </summary>
     public static Services.SimulationTypeService SimType { get; } = Services.SimulationTypeService.Instance;
 
-    /// <summary>Latest PID step-response metrics written by DashboardPage simulation runs.</summary>
+    /// <summary>Latest PID step-response metrics reported by the PLC over TCP.</summary>
     public static Services.PidMetricsService PidMetrics { get; } = Services.PidMetricsService.Instance;
+
+    /// <summary>
+    /// Bridges the HMI's PID controls to the external Python client (PIDtest.py):
+    /// mirrors Kp/Ki/Kd/Setpoint into a file the script reads live, and launches /
+    /// stops the script from the RUN / STOP buttons.
+    /// </summary>
+    public static Services.PythonBridgeService PythonBridge { get; } = Services.PythonBridgeService.Instance;
+
+    /// <summary>
+    /// Shared Smart PID Designer state (gains, setpoint, last run). The Dashboard's
+    /// System Model panel and the Parameter page are two views of one designer, so a
+    /// RUN on either is reflected on the other.
+    /// </summary>
+    public static Services.ControlEngineering.PidSessionService PidSession { get; }
+        = Services.ControlEngineering.PidSessionService.Instance;
+
+    /// <summary>
+    /// Shared Cascade Control designer state (outer temperature PID + inner flow PI).
+    /// Backs the dedicated Cascade page the same way <see cref="PidSession"/> backs the
+    /// single-loop designer.
+    /// </summary>
+    public static Services.ControlEngineering.CascadeSessionService CascadeSession { get; }
+        = Services.ControlEngineering.CascadeSessionService.Instance;
 
     public App()
     {

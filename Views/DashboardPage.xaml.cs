@@ -9,6 +9,7 @@ using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
 using TLIGDashboard.Helpers;
 using TLIGDashboard.Services;
+using TLIGDashboard.Services.ControlEngineering;
 using Windows.Devices.Enumeration;
 using Windows.Media.Capture;
 using Windows.Media.Capture.Frames;
@@ -62,6 +63,7 @@ public sealed partial class DashboardPage : Page
         InitializeComponent();
         // Keep page cached so layout & chat bubbles survive navigation
         NavigationCacheMode = Microsoft.UI.Xaml.Navigation.NavigationCacheMode.Required;
+        WirePidInputs();
         Loaded += OnLoaded;
     }
 
@@ -99,38 +101,60 @@ public sealed partial class DashboardPage : Page
 
         // From here on, user edits to the controls are forwarded to LabVIEW.
         _controlsReady = true;
+
+        _ = RespChart.InitializeAsync();
+
+        ApplyLearningPanelContent();
+        App.Session.Changed += OnSessionChanged;
+    }
+
+    // Progress tracking in the bottom "Learning Analytic" panel is
+    // student-facing: on the Server flavor and for staff (Dosen/Asisten) on
+    // the Client the panel shows the Challenge Learning manager instead.
+    private static bool StaffLearningPanel =>
+        BuildInfo.IsServer || (App.Session.IsSignedIn && App.Session.IsStaff);
+
+    private void OnSessionChanged()
+        => DispatcherQueue.TryEnqueue(ApplyLearningPanelContent);
+
+    private void ApplyLearningPanelContent()
+    {
+        bool staff = StaffLearningPanel;
+        DashLearningView.Visibility   = staff ? Visibility.Collapsed : Visibility.Visible;
+        DashChallengeFrame.Visibility = staff ? Visibility.Visible   : Visibility.Collapsed;
+        if (staff && DashChallengeFrame.Content is null)
+            DashChallengeFrame.Navigate(typeof(ChallengeLearningPage));
     }
 
     // ── Dashboard → LabVIEW control commands ────────────────────────────────────
-    // Every control writes a "key=value" line back over the LabVIEW TCP link. Values
-    // use invariant culture so decimals are sent with '.' (LabVIEW numeric parsing),
+    // The whole control set is sent as ONE CRLF-terminated comma line the VI reads with
+    // "TCP Read (CRLF)" + "Scan From String" (%f,%f,%f,%f,%f,%f):
+    //     Kp,Ki,Kd,Setpoint,Pump,Run
+    // The gain/setpoint boxes are the Smart PID Designer's own KpBox/KiBox/KdBox/
+    // CtlSetpointBox, so editing them drives BOTH the PID simulator and LabVIEW — the send
+    // is hooked into PushPidInputs()/PullPidInputs(). Decimals use invariant culture ('.'),
     // never the ',' of the Indonesian UI locale.
-
-    // The VI reads one comma-separated line with "TCP Read (CRLF)" + "Scan From String"
-    // (%f,%f,%f,%f,%f,%f). So we send the WHOLE control set as ONE CRLF-terminated line —
-    // Kp,Ki,Kd,Setpoint,Pump,Run — on every change (not per-key), so a single Scan parses it.
     private int _runState;  // 6th CSV field: 1 = RUN, 0 = STOP / RESET / E-STOP
 
     private void SendControlLine()
     {
         if (!_controlsReady || _clientMode) return;
 
-        double kp = CtlKp.Value, ki = CtlKi.Value, kd = CtlKd.Value,
-               sp = CtlSetpoint.Value, pump = CtlPump.Value;
+        double kp = KpBox.Value, ki = KiBox.Value, kd = KdBox.Value,
+               sp = CtlSetpointBox.Value, pump = CtlPump.Value;
         // Skip while a box is mid-edit / empty so we never send a partial line.
         if (double.IsNaN(kp) || double.IsNaN(ki) || double.IsNaN(kd) ||
             double.IsNaN(sp) || double.IsNaN(pump))
             return;
 
         var inv = CultureInfo.InvariantCulture;
-        string line = string.Join(",",
+        Data.SendLine(string.Join(",",
             kp.ToString("0.###", inv),
             ki.ToString("0.###", inv),
             kd.ToString("0.###", inv),
             sp.ToString("0.###", inv),
             pump.ToString("0.###", inv),
-            _runState.ToString(inv));
-        Data.SendLine(line);
+            _runState.ToString(inv)));
     }
 
     private void OnLabViewClientConnected(bool connected)
@@ -139,17 +163,14 @@ public sealed partial class DashboardPage : Page
             DispatcherQueue.TryEnqueue(SendControlLine);   // sync the VI on (re)connect
     }
 
-    private void CtlKp_ValueChanged(NumberBox sender, NumberBoxValueChangedEventArgs args)       => SendControlLine();
-    private void CtlKi_ValueChanged(NumberBox sender, NumberBoxValueChangedEventArgs args)       => SendControlLine();
-    private void CtlKd_ValueChanged(NumberBox sender, NumberBoxValueChangedEventArgs args)       => SendControlLine();
-    private void CtlSetpoint_ValueChanged(NumberBox sender, NumberBoxValueChangedEventArgs args) => SendControlLine();
-    private void CtlPump_ValueChanged(NumberBox sender, NumberBoxValueChangedEventArgs args)     => SendControlLine();
-    private void CtlMode_Checked(object sender, RoutedEventArgs e)                               => SendControlLine();
+    // Pump/Mode/Stop/Reset/E-Stop are LabVIEW-only (the PID Designer doesn't use them);
+    // the gain + setpoint boxes reach LabVIEW via PushPidInputs()/PullPidInputs().
+    private void CtlPump_ValueChanged(NumberBox sender, NumberBoxValueChangedEventArgs args) => SendControlLine();
+    private void CtlMode_Checked(object sender, RoutedEventArgs e)                           => SendControlLine();
 
-    private void CtlRun_Click(object sender, RoutedEventArgs e)   { _runState = 1; SendControlLine(); }
-    private void CtlStop_Click(object sender, RoutedEventArgs e)  { _runState = 0; SendControlLine(); }
-    private void CtlReset_Click(object sender, RoutedEventArgs e) { _runState = 0; SendControlLine(); }
-    private void CtlEStop_Click(object sender, RoutedEventArgs e) { _runState = 0; SendControlLine(); }
+    private void CtlStop_Click(object sender, RoutedEventArgs e)  { _runState = 0; SendControlLine(); App.PythonBridge.Stop(); }
+    private void CtlReset_Click(object sender, RoutedEventArgs e) { _runState = 0; SendControlLine(); App.PythonBridge.Stop(); }
+    private void CtlEStop_Click(object sender, RoutedEventArgs e) { _runState = 0; SendControlLine(); App.PythonBridge.Stop(); }
 
     private void OnSimulationTypeChanged(object? sender, Services.SimulationType type)
         => DispatcherQueue.TryEnqueue(() => ApplySimulationType(type));
@@ -163,9 +184,221 @@ public sealed partial class DashboardPage : Page
         // Control panel label + unit
         if (CtlSetpointLabel != null) CtlSetpointLabel.Text = svc.SetpointLabel;
         if (CtlSetpointUnit  != null) CtlSetpointUnit.Text  = svc.ProcessVariableUnit;
-        // Transfer function with actual K and tau
-        if (TransferFunctionText != null) TransferFunctionText.Text = svc.TransferFunctionText;
+        // NOTE: TransferFunctionText is intentionally NOT updated here — that card now
+        // shows the Smart PID Designer's fixed plant (see PidSimulator.cs), not the
+        // selected System Model's own transfer function.
     }
+
+    // ── Smart PID Designer (AI-assisted tuning + RK4 step-response chart) ──
+    //
+    // Gains, setpoint and the last run live in App.PidSession, not in this page: the
+    // Parameter page is this panel's extended screen and must show the same state.
+    // This page keeps one extra job of its own — folding the advisor's review into the
+    // AI chat on the right, which only runs started from here do.
+
+    // Guards the echo when PullPidInputs() writes the boxes.
+    private bool _syncingPidInputs;
+
+    // Subscribed only while this page is navigated to — the Parameter page owns the
+    // rendering while it is up. `-=` first keeps each single if navigation unbalances.
+    private void SubscribePidSession()
+    {
+        var s = App.PidSession;
+        s.ResultChanged         -= OnPidResultChanged;
+        s.ResultChanged         += OnPidResultChanged;
+        s.RunningChanged        -= OnPidRunningChanged;
+        s.RunningChanged        += OnPidRunningChanged;
+        s.RunFailed             -= OnPidRunFailed;
+        s.RunFailed             += OnPidRunFailed;
+        s.RecommendationCleared -= OnPidRecommendationCleared;
+        s.RecommendationCleared += OnPidRecommendationCleared;
+    }
+
+    private void UnsubscribePidSession()
+    {
+        var s = App.PidSession;
+        s.ResultChanged         -= OnPidResultChanged;
+        s.RunningChanged        -= OnPidRunningChanged;
+        s.RunFailed             -= OnPidRunFailed;
+        s.RecommendationCleared -= OnPidRecommendationCleared;
+    }
+
+    /// <summary>
+    /// Attached here rather than via ValueChanged= in XAML: the markup assigns Value on
+    /// each box as it is parsed, which fires the handler while the boxes declared after
+    /// it are still null — taking the page down with a XamlParseException on startup.
+    /// </summary>
+    private void WirePidInputs()
+    {
+        // Ki=0.015 needs more than the NumberBox default 2 fraction digits; a
+        // significant-digits formatter shows small gains exactly without trailing zeros.
+        var gainFmt = new Windows.Globalization.NumberFormatting.DecimalFormatter
+        {
+            IntegerDigits = 1,
+            FractionDigits = 0,
+            NumberRounder = new Windows.Globalization.NumberFormatting.SignificantDigitsNumberRounder { SignificantDigits = 5 },
+        };
+        foreach (var box in new[] { KpBox, KiBox, KdBox, CtlSetpointBox })
+            box.NumberFormatter = gainFmt;
+
+        KpBox.ValueChanged          += PidInput_ValueChanged;
+        KiBox.ValueChanged          += PidInput_ValueChanged;
+        KdBox.ValueChanged          += PidInput_ValueChanged;
+        CtlSetpointBox.ValueChanged += PidInput_ValueChanged;
+    }
+
+    private void PidInput_ValueChanged(NumberBox sender, NumberBoxValueChangedEventArgs args)
+    {
+        if (_syncingPidInputs) return;
+        PushPidInputs();
+    }
+
+    private void PushPidInputs()
+    {
+        var s = App.PidSession;
+        s.Kp       = KpBox.Value;
+        s.Ki       = KiBox.Value;
+        s.Kd       = KdBox.Value;
+        s.Setpoint = CtlSetpointBox.Value;
+        SendControlLine();   // the same gains/setpoint drive LabVIEW
+        // …and the same gains/setpoint mirror into PIDtest.py's contract file.
+        App.PythonBridge.SyncParams(s.Kp, s.Ki, s.Kd, s.Setpoint);
+    }
+
+    private void PullPidInputs()
+    {
+        var s = App.PidSession;
+        _syncingPidInputs = true;
+        KpBox.Value          = s.Kp;
+        KiBox.Value          = s.Ki;
+        KdBox.Value          = s.Kd;
+        CtlSetpointBox.Value = s.Setpoint;
+        _syncingPidInputs = false;
+        SendControlLine();   // advisor-accepted / normalized gains also drive LabVIEW
+    }
+
+    // RUN in the Control card is the PID Designer's "Simulate": it runs the RK4
+    // step-response preview for the Kp/Ki/Kd values currently in the boxes above,
+    // asks PidDiagnosisAgent for a corrective-action label, asks PidMetricsRegressor
+    // for an instant ML estimate of the response metrics, and asks the AI Advisor
+    // (LLM) to review that estimate and propose new gains.
+    private async void CtlRun_Click(object sender, RoutedEventArgs e) => await RunPidAsync();
+
+    private async Task RunPidAsync()
+    {
+        _runState = 1;      // RUN also starts LabVIEW (6th CSV field)
+        PushPidInputs();    // pushes gains/setpoint to the PID session AND to LabVIEW (Run=1)
+
+        // RUN also launches the external Python client (PIDtest.py) with the current gains.
+        var ps = App.PidSession;
+        App.PythonBridge.Run(ps.Kp, ps.Ki, ps.Kd, ps.Setpoint);
+
+        // RUN drives both designers at once: the single-loop PID here and the Cascade
+        // session behind the dedicated Cascade page. Kicking the cascade off in parallel
+        // means the Cascade page always reflects the same click — it renders live if it's
+        // up, or catches up from LastResult on navigation. It keeps its own gains, so no
+        // inputs need pushing; RunAsync no-ops if a cascade run is already in flight.
+        var cascadeTask = App.CascadeSession.RunAsync();
+
+        // Fires ResultChanged (-> RenderPidResult) / RunFailed on the way through.
+        var result = await App.PidSession.RunAsync();
+        PullPidInputs();  // pick up the normalized setpoint
+        if (result is not null) FoldAdvisorIntoChat(result);
+
+        await cascadeTask;
+    }
+
+    private void OnPidResultChanged(object? sender, PidDesignResult result)
+        => DispatcherQueue.TryEnqueue(() => RenderPidResult(result));
+
+    private void OnPidRunningChanged(object? sender, bool running)
+        => DispatcherQueue.TryEnqueue(() => CtlRunBtn.IsEnabled = !running);
+
+    private void OnPidRunFailed(object? sender, EventArgs e)
+        => DispatcherQueue.TryEnqueue(() =>
+        {
+            AddChatBubble("ai", Lang.Pid_ErrorUnavailable);
+            ScrollChat();
+        });
+
+    private void OnPidRecommendationCleared(object? sender, EventArgs e)
+        => DispatcherQueue.TryEnqueue(() => PidAdvisorPanel.Visibility = Visibility.Collapsed);
+
+    /// <summary>
+    /// Draws a run into the panel. Safe to call repeatedly for the same result — it is
+    /// also how the page catches up on a run started from the Parameter page.
+    /// </summary>
+    private void RenderPidResult(PidDesignResult result)
+    {
+        RespChart.Update(result.Simulation.Time, result.Simulation.Amplitude, result.Setpoint);
+
+        // result.Metrics is read off the exact RK4 curve above — always consistent
+        // with what's plotted (result.MlEstimate exists but isn't shown here; see
+        // the comment on PidDesignResult for why).
+        RiseTimeValue.Text  = result.Metrics.RiseTime.ToString("0.00");
+        OvershootValue.Text = result.Metrics.Overshoot.ToString("0.0");
+        SettlingValue.Text  = result.Metrics.SettlingTime.ToString("0.00");
+        SteadyErrValue.Text = result.Metrics.SteadyStateError.ToString("0.000");
+
+        // result.Diagnosis is a code, not display text — localize it here so a Client
+        // shows its own language rather than whatever the Server is set to.
+        DiagnosisValue.Text = string.IsNullOrEmpty(result.Diagnosis)
+            ? "--" : PidDiagnosisCalculator.Describe(result.Diagnosis, result.Metrics);
+
+        // Read the pending gains from the session, not from result: a decline made on
+        // the Parameter page must stay declined here too.
+        if (App.PidSession.PendingRecommendation is { } rec)
+        {
+            PidAdvisorText.Text = Lang.Pid_AdvisorPrompt;
+            PidAdvisorRecommendationText.Text = $"Kp={rec.Kp:F3}  Ki={rec.Ki:F3}  Kd={rec.Kd:F3}";
+            PidAdvisorPanel.Visibility = Visibility.Visible;
+        }
+        else
+        {
+            PidAdvisorPanel.Visibility = Visibility.Collapsed;
+        }
+    }
+
+    /// <summary>
+    /// Puts the advisor's review in the chat panel and folds the exchange into App.Ai's
+    /// own history (not just a visual bubble) so a follow-up question typed in the chat
+    /// box below carries the actual simulation numbers as context instead of the LLM
+    /// answering blind. Only ever called for a run started from this page — replaying it
+    /// on navigation would re-post bubbles for a run the student already saw.
+    /// </summary>
+    private void FoldAdvisorIntoChat(PidDesignResult result)
+    {
+        if (string.IsNullOrWhiteSpace(result.AdvisorExplanation)) return;
+
+        AddChatBubble("ai", result.AdvisorExplanation);
+        ScrollChat();
+
+        // The synthetic "user" turn is never rendered as its own bubble — bump
+        // _renderedCount past it so SyncBubblesWithHistory() doesn't re-render it
+        // as a message the student never actually typed.
+        App.Ai.AddHistoryEntry("user",
+            $"[Ringkasan simulasi RUN] Setpoint={result.Setpoint:F2}, " +
+            $"Kp={result.Prediction.Kp:F3}, Ki={result.Prediction.Ki:F3}, Kd={result.Prediction.Kd:F3} " +
+            $"-> hasil simulasi RK4: Overshoot={result.Metrics.Overshoot:F2}%, Rise Time={result.Metrics.RiseTime:F3}s, " +
+            $"Settling Time={result.Metrics.SettlingTime:F2}s, Steady-State Error={result.Metrics.SteadyStateError:F3}. " +
+            $"Diagnosis: {PidDiagnosisCalculator.Describe(result.Diagnosis, result.Metrics)}");
+        App.Ai.AddHistoryEntry("assistant", result.AdvisorExplanation);
+        _renderedCount = App.Ai.History.Count;
+    }
+
+    // "Ya (Terapkan)" — fills Kp/Ki/Kd with the Advisor's recommendation and
+    // immediately re-runs the simulation (Auto-Run), same as the JS-driven
+    // apply-and-rerun a web frontend would do, just via native C# instead of DOM.
+    private async void PidAdvisorAccept_Click(object sender, RoutedEventArgs e)
+    {
+        var result = await App.PidSession.AcceptRecommendationAsync();
+        PullPidInputs();
+        if (result is not null) FoldAdvisorIntoChat(result);
+    }
+
+    // "Tidak" — leaves Kp/Ki/Kd untouched so the student can keep tuning manually.
+    private void PidAdvisorDecline_Click(object sender, RoutedEventArgs e)
+        => App.PidSession.ClearRecommendation();
 
     private void OnActualThemeChanged(FrameworkElement sender, object args)
     {
@@ -179,6 +412,23 @@ public sealed partial class DashboardPage : Page
     {
         base.OnNavigatedTo(e);
         _isDashboardPageActive = true;
+
+        // (Re)subscribe on every navigation — OnNavigatedFrom unsubscribes and the
+        // page is cached (NavigationCacheMode.Required), so a Loaded-time
+        // subscription would not survive leaving and re-entering the page.
+        // `-=` first keeps it single even if navigation events ever unbalance.
+        App.SimType.SimulationTypeChanged -= OnSimulationTypeChanged;
+        App.SimType.SimulationTypeChanged += OnSimulationTypeChanged;
+        ApplySimulationType(App.SimType.CurrentType);
+
+        SubscribePidSession();
+        // Catch up on anything run from the Parameter page while this page was away.
+        // The button state has to be re-synced by hand: a run in flight while we were
+        // unsubscribed would otherwise leave RUN disabled for good.
+        CtlRunBtn.IsEnabled = !App.PidSession.IsRunning;
+        PullPidInputs();
+        if (App.PidSession.LastResult is { } last) RenderPidResult(last);
+
         // If theme changed while this page was not in the visual tree, force full re-render.
         if (_renderedCount > 0 && _renderedTheme != ActualTheme)
             ClearChatPanel();
@@ -197,6 +447,7 @@ public sealed partial class DashboardPage : Page
         base.OnNavigatedFrom(e);
         _isDashboardPageActive = false;
         App.SimType.SimulationTypeChanged -= OnSimulationTypeChanged;
+        UnsubscribePidSession();
 
         if (_clientMode)
         {
