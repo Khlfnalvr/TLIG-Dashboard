@@ -21,10 +21,15 @@ public sealed class AiProviderSettings
 public class AppSettings
 {
     // ── PLC via LabVIEW HMI (direct TCP — replaces the former OPC UA/DA path) ──
-    // LabVIEW runs a TCP listener that bridges to the PLC; the server connects
-    // to it as a plain TCP client (see PlcTcpService).
+    // The dashboard bridges Kp/Ki/Kd (and cmd=run/stop) to the PLC through the
+    // LabVIEW HMI over a plain-text TCP link (see PlcTcpService).
+    //   • PlcServerMode = false (default) → dashboard connects out to a LabVIEW
+    //     "TCP Listen.vi" server at PlcTcpHost:PlcTcpPort (LabVIEW listens).
+    //   • PlcServerMode = true  → dashboard LISTENS on PlcTcpPort and LabVIEW
+    //     dials in with "TCP Open Connection" (PlcTcpHost is the bind address).
     public string PlcTcpHost              { get; set; } = "127.0.0.1";
-    public int    PlcTcpPort              { get; set; } = 5000;
+    public int    PlcTcpPort              { get; set; } = 6000;
+    public bool   PlcServerMode           { get; set; } = false;
 
     // ── LabVIEW → HMI data bridge (TCP telemetry) ─────────────────────────
     // The dashboard listens on this TCP port for "key=value" lines streamed by a

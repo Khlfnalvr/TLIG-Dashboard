@@ -126,7 +126,7 @@ public sealed partial class ParameterPage : Page
         double kd = double.IsNaN(KdBox.Value) ? 0 : KdBox.Value;
 
         // Tulis parameter ke PLC melalui HMI LabVIEW (TCP) bila terhubung.
-        App.ViewModel?.Plc.WriteTags(("kp", kp), ("ki", ki), ("kd", kd));
+        App.ViewModel?.Plc.WritePid(kp, ki, kd);
 
         ActivityStore.Instance.LogSession(
             ActivityCategory.ControlParameter,

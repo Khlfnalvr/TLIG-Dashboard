@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using TLIGDashboard.Models.ControlEngineering;
@@ -30,6 +31,14 @@ public sealed class CascadeSessionService
     public CascadeRecommendation? PendingRecommendation { get; private set; }
     public bool IsRunning { get; private set; }
 
+    // Attempts made this session, oldest first — sent to the advisor on each RUN so it reviews
+    // against the trajectory instead of treating every RUN as the first. Capped to bound the prompt.
+    private readonly List<CascadeAttempt> _attempts = new();
+    private const int MaxHistory = 5;
+
+    /// <summary>Forget the tuning trajectory (e.g. when starting a fresh design).</summary>
+    public void ResetHistory() => _attempts.Clear();
+
     public event EventHandler<CascadeDesignResult>? ResultChanged;
     public event EventHandler<bool>? RunningChanged;
     public event EventHandler? RunFailed;
@@ -43,7 +52,28 @@ public sealed class CascadeSessionService
         SetRunning(true);
         try
         {
-            var result = await CascadeDesignService.RunAsync(BuildInput(), ct);
+            // Prior attempts only — a snapshot taken before this run, so the advisor sees the
+            // trajectory that led here without this run in it yet.
+            var result = await CascadeDesignService.RunAsync(BuildInput(), new List<CascadeAttempt>(_attempts), ct);
+
+            // Record this run so the next advisor review sees it as prior context; keep only the
+            // most recent MaxHistory to bound the advisor prompt.
+            _attempts.Add(new CascadeAttempt
+            {
+                OuterKp = result.Input.OuterKp,
+                OuterKi = result.Input.OuterKi,
+                OuterKd = result.Input.OuterKd,
+                InnerKp = result.Input.InnerKp,
+                InnerKi = result.Input.InnerKi,
+                Overshoot = result.Metrics.Overshoot,
+                RiseTime = result.Metrics.RiseTime,
+                SettlingTime = result.Metrics.SettlingTime,
+                SteadyStateError = result.Metrics.SteadyStateError,
+                Diagnosis = result.Diagnosis,
+            });
+            if (_attempts.Count > MaxHistory)
+                _attempts.RemoveRange(0, _attempts.Count - MaxHistory);
+
             LastResult            = result;
             PendingRecommendation = result.AdvisorRecommendation;
             ResultChanged?.Invoke(this, result);

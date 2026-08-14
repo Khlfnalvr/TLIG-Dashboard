@@ -524,7 +524,10 @@ public sealed partial class MainWindow : Window
     {
         var s = AppSettingsService.Load();
         ApplyNavVisibility(NavDashboard, ViewNavDashboard, s.ShowNav_Dashboard);
-        ApplyNavVisibility(NavParameter, ViewNavParameter, s.ShowNav_Parameter);
+        // Single-loop Parameter page is retired: the Dashboard control panel is now the cascade
+        // designer and its extended screen is the Cascade page. Keep it force-hidden (the machinery
+        // and page stay in place, dormant) rather than honoring the saved ShowNav_Parameter pref.
+        ApplyNavVisibility(NavParameter, ViewNavParameter, false);
         ApplyNavVisibility(NavLiveView,  ViewNavLiveView,  s.ShowNav_LiveView);
         ApplyNavVisibility(NavLearningAnalytic, ViewNavLearningAnalytic, s.ShowNav_LearningAnalytic);
         ApplyNavVisibility(NavAI,        ViewNavAI,        s.ShowNav_AI);
@@ -583,26 +586,37 @@ public sealed partial class MainWindow : Window
 
     public void NavigateToPage(string tag)
     {
-        foreach (var (nav, _) in NavToggles())
+        // Search ALL nav items, not just the toggleable subset, so pages like Cascade —
+        // reached from the Dashboard System Model's "expand" button — also move the top-nav
+        // selection strip, not only the content frame.
+        var nav = FindNavItem(tag);
+        if (nav != null)
         {
-            if (nav.Tag is string navTag && navTag == tag)
+            // If this nav item is already selected (e.g. returning from the task detail page,
+            // which left the selection on Learning Analytic), setting SelectedItem again won't
+            // raise SelectionChanged — navigate directly.
+            if (ReferenceEquals(NavView.SelectedItem, nav))
             {
-                // If this nav item is already selected (e.g. returning from the task
-                // detail page, which left the selection on Learning Analytic), setting
-                // SelectedItem again won't raise SelectionChanged — navigate directly.
-                if (ReferenceEquals(NavView.SelectedItem, nav))
-                {
-                    if (_pages.TryGetValue(tag, out var pt)) ContentFrame.Navigate(pt);
-                }
-                else
-                {
-                    NavView.SelectedItem = nav;
-                }
-                return;
+                if (_pages.TryGetValue(tag, out var pt)) ContentFrame.Navigate(pt);
             }
+            else
+            {
+                NavView.SelectedItem = nav;
+            }
+            return;
         }
         if (_pages.TryGetValue(tag, out var pageType))
             ContentFrame.Navigate(pageType);
+    }
+
+    /// <summary>Finds a top/footer nav item by its Tag, or null if there is none.</summary>
+    private NavigationViewItem? FindNavItem(string tag)
+    {
+        foreach (var mi in NavView.MenuItems)
+            if (mi is NavigationViewItem nvi && nvi.Tag is string t && t == tag) return nvi;
+        foreach (var mi in NavView.FooterMenuItems)
+            if (mi is NavigationViewItem nvi && nvi.Tag is string t && t == tag) return nvi;
+        return null;
     }
 
     /// <summary>
@@ -1966,20 +1980,9 @@ public sealed partial class MainWindow : Window
 
     private void SelectControlPanelForTour()
     {
-        foreach (var (nav, toggle) in NavToggles())
-        {
-            if (nav.Tag is not string tag || tag != "Parameter")
-                continue;
-
-            if (nav.Visibility != Visibility.Visible)
-            {
-                ApplyNavVisibility(nav, toggle, true);
-                SaveNavVisibility();
-            }
-
-            NavView.SelectedItem = nav;
-            return;
-        }
+        // The Dashboard control panel's extended screen is the Cascade page; highlight it for
+        // the tour. NavCascade is always visible (not part of the toggleable nav set).
+        NavView.SelectedItem = NavCascade;
     }
 
     private static readonly Dictionary<string, string> TourTranslations = new()
@@ -2091,19 +2094,25 @@ public sealed partial class MainWindow : Window
 
     private void SyncOpcConnectButton()
     {
-        bool connected = ViewModel.Plc.IsConnected;
+        var  plc    = ViewModel.Plc;
+        bool active = plc.IsActive;
 
-        OpcConnectBtn.Content = connected ? Lang.Ctrl_Disconnect : Lang.Ctrl_Connect;
-        PlcHostBox.IsEnabled  = !connected;
-        PlcPortBox.IsEnabled  = !connected;
-        OpcStatusText.Text = connected
-            ? LocalizationManager.Instance.Format("OpcUa_StatusConnected", ViewModel.Plc.EndpointLabel)
-            : LocalizationManager.Instance.Get("Ctrl_NotConnected");
+        OpcConnectBtn.Content = active ? Lang.Ctrl_Disconnect : Lang.Ctrl_Connect;
+        PlcHostBox.IsEnabled  = !active;
+        PlcPortBox.IsEnabled  = !active;
+
+        var loc = LocalizationManager.Instance;
+        OpcStatusText.Text =
+            plc.IsConnected ? loc.Format("OpcUa_StatusConnected", plc.EndpointLabel)
+            : !active       ? loc.Get("Ctrl_NotConnected")
+            : plc.Mode == PlcTcpService.LinkMode.Server
+                            ? loc.Format("OpcUa_StatusListening", plc.EndpointLabel)
+                            : loc.Get("OpcUa_StatusConnecting");
     }
 
     private async void OpcConnectBtn_Click(object sender, RoutedEventArgs e)
     {
-        if (ViewModel.Plc.IsConnected)
+        if (ViewModel.Plc.IsActive)
         {
             ViewModel.Plc.Disconnect();
             SyncOpcConnectButton();
@@ -2115,18 +2124,22 @@ public sealed partial class MainWindow : Window
         int port = double.IsNaN(PlcPortBox.Value) ? 0 : (int)PlcPortBox.Value;
         if (string.IsNullOrEmpty(host) || port is <= 0 or > 65535) return;
 
+        var s = AppSettingsService.Load();
+        bool serverMode = s.PlcServerMode;
+
         OpcConnectBtn.IsEnabled = false;
-        OpcStatusText.Text      = LocalizationManager.Instance.Get("OpcUa_StatusConnecting");
+        OpcStatusText.Text = serverMode
+            ? LocalizationManager.Instance.Format("OpcUa_StatusListening", $"{host}:{port}")
+            : LocalizationManager.Instance.Get("OpcUa_StatusConnecting");
 
         string? capturedError = null;
         void OnError(string msg) => capturedError = msg;
         ViewModel.Plc.ErrorOccurred += OnError;
-        bool ok = await ViewModel.Plc.ConnectAsync(host, port);
+        bool ok = await ViewModel.Plc.StartAsync(serverMode, host, port);
         ViewModel.Plc.ErrorOccurred -= OnError;
 
         if (ok)
         {
-            var s = AppSettingsService.Load();
             s.PlcTcpHost = host;
             s.PlcTcpPort = port;
             AppSettingsService.Save(s);

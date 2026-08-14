@@ -22,7 +22,18 @@ public sealed partial class CascadeControlPage : Page
         InitializeComponent();
         NavigationCacheMode = Microsoft.UI.Xaml.Navigation.NavigationCacheMode.Required;
         WireInputs();
+        LoadBlockDiagram();
         Loaded += OnLoaded;
+    }
+
+    // Relative XAML image sources don't resolve in this unpackaged WinUI app (see
+    // MainWindow.UpdateLogo), so load the block-diagram picture from the app base directory
+    // by absolute path — same pattern the logo uses.
+    private void LoadBlockDiagram()
+    {
+        string path = System.IO.Path.Combine(System.AppContext.BaseDirectory, "cascade-block-diagram.png");
+        if (System.IO.File.Exists(path))
+            BlockDiagramImage.Source = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage(new System.Uri(path));
     }
 
     private void OnLoaded(object sender, RoutedEventArgs e)
@@ -177,11 +188,18 @@ public sealed partial class CascadeControlPage : Page
         SettlingValue.Text  = m.SettlingTime.ToString("0.0");
         SteadyErrValue.Text = m.SteadyStateError.ToString("0.000");
 
+        IaeValue.Text  = FormatIndex(m.IAE);
+        IseValue.Text  = FormatIndex(m.ISE);
+        ItaeValue.Text = FormatIndex(m.ITAE);
+
         CascadeDevValue.Text  = m.CascadeMaxDeviation.ToString("0.00");
         SingleDevValue.Text   = m.SingleLoopMaxDeviation.ToString("0.00");
         ImprovementValue.Text = m.DisturbanceImprovement >= 1 ? m.DisturbanceImprovement.ToString("0.0") : "--";
 
-        DiagnosisValue.Text = string.IsNullOrEmpty(result.Diagnosis) ? "--" : result.Diagnosis;
+        // result.Diagnosis is a PidDiagnosisCode name, not display text — localize it here
+        // (from the outer-loop step metrics) so a Client shows its own language, not the Server's.
+        DiagnosisValue.Text = string.IsNullOrEmpty(result.Diagnosis)
+            ? "--" : PidDiagnosisCalculator.Describe(result.Diagnosis, result.Metrics.PrimaryStepMetrics());
 
         bool hasExplanation = !string.IsNullOrWhiteSpace(result.AdvisorExplanation);
         AdvisorExplanationHost.Child = hasExplanation
@@ -215,6 +233,16 @@ public sealed partial class CascadeControlPage : Page
 
     private void AdvisorDecline_Click(object sender, RoutedEventArgs e)
         => App.CascadeSession.ClearRecommendation();
+
+    // Compact form for the (often large) error-index integrals, e.g. 7399 -> "7.4k", 1.8e6 -> "1.80M".
+    private static string FormatIndex(double v)
+    {
+        if (double.IsNaN(v) || double.IsInfinity(v)) return "--";
+        double a = System.Math.Abs(v);
+        if (a >= 1e6) return (v / 1e6).ToString("0.00") + "M";
+        if (a >= 1e3) return (v / 1e3).ToString("0.0") + "k";
+        return v.ToString("0.0");
+    }
 
     // Every stride-th sample, always keeping the last point so the curve reaches the end.
     private static double[] Sample(double[] a, int stride)

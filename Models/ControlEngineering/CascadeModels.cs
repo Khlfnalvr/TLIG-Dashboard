@@ -27,10 +27,11 @@ public class CascadeInput
     public float Setpoint { get; set; } = 60f;
 
     /// <summary>
-    /// Step change in the flow path injected partway through the run (e.g. a supply-
-    /// pressure drop), in flow units. The inner loop sees and corrects it fast; a
-    /// single-loop temperature controller does not — this is what makes cascade shine.
-    /// Zero disables the disturbance (pure setpoint-tracking view).
+    /// Step change in the flow path (e.g. a supply-pressure drop), in flow units, injected once
+    /// the temperature step has settled so its rejection is measured on a system already at the
+    /// setpoint. The inner loop sees and corrects it fast; a single-loop temperature controller
+    /// does not — this is what makes cascade shine. Zero disables the disturbance entirely (no
+    /// injection, and the disturbance-rejection cards read "--") for a pure setpoint-tracking view.
     /// </summary>
     public float Disturbance { get; set; } = -40f;
 }
@@ -55,6 +56,33 @@ public class CascadeSimulationResult
     public double[] SingleLoopTemperature { get; set; } = Array.Empty<double>();
     /// <summary>Time the flow disturbance was applied (s), or a negative value if none.</summary>
     public double DisturbanceTime    { get; set; } = -1;
+    /// <summary>
+    /// True if the temperature step actually settled at the setpoint within the run budget
+    /// (adaptive runs). A loop that oscillates or is too sluggish to settle runs to the cap
+    /// with this false — the honest stability signal for a saturating plant whose output can
+    /// never diverge to infinity, so a bounded-amplitude test alone never catches a limit cycle.
+    /// </summary>
+    public bool Settled              { get; set; }
+}
+
+/// <summary>
+/// One past cascade RUN in a tuning session: the five gains tried and the temperature step
+/// metrics they produced. Carried into the advisor prompt so it reviews the current attempt
+/// against the trajectory instead of in isolation (mirrors <see cref="PidAttempt"/>).
+/// </summary>
+public class CascadeAttempt
+{
+    public float OuterKp { get; set; }
+    public float OuterKi { get; set; }
+    public float OuterKd { get; set; }
+    public float InnerKp { get; set; }
+    public float InnerKi { get; set; }
+    public float Overshoot { get; set; }
+    public float RiseTime { get; set; }
+    public float SettlingTime { get; set; }
+    public float SteadyStateError { get; set; }
+    /// <summary>PidDiagnosisCode name for this attempt (see PidDiagnosisCalculator).</summary>
+    public string Diagnosis { get; set; } = "";
 }
 
 /// <summary>
@@ -70,6 +98,12 @@ public class CascadeMetrics
     public float SettlingTime     { get; set; }
     public float SteadyStateError { get; set; }   // fraction (0..1)
 
+    // Error-performance indices over the temperature step response — integrals of the tracking
+    // error e = setpoint − T (see PidSimulator.ComputePerformanceIndices). Lower is better.
+    public float IAE  { get; set; }   // ∫|e| dt    (°C·s)
+    public float ISE  { get; set; }   // ∫e² dt     (°C²·s)
+    public float ITAE { get; set; }   // ∫t·|e| dt  (°C·s²)
+
     // Secondary (flow) loop.
     public float FlowPeak         { get; set; }   // L/min, transient peak
     public float FlowSettled      { get; set; }   // L/min, value just before the disturbance
@@ -83,4 +117,20 @@ public class CascadeMetrics
     /// <summary>How many times smaller the cascade's peak deviation is vs single-loop.</summary>
     public float DisturbanceImprovement =>
         CascadeMaxDeviation > 1e-6 ? SingleLoopMaxDeviation / CascadeMaxDeviation : 0f;
+
+    /// <summary>
+    /// The primary (temperature) step-response metrics packed as a
+    /// <see cref="PidMetricsPrediction"/> so the shared
+    /// <see cref="Services.ControlEngineering.PidDiagnosisCalculator"/> can diagnose the
+    /// outer loop. The outer plant is the identical FOPDT Gp1 the calculator's thresholds
+    /// are anchored to, and these four fields carry the same units it expects
+    /// (overshoot %, seconds, steady-state error as a fraction).
+    /// </summary>
+    public PidMetricsPrediction PrimaryStepMetrics() => new()
+    {
+        Overshoot        = Overshoot,
+        RiseTime         = RiseTime,
+        SettlingTime     = SettlingTime,
+        SteadyStateError = SteadyStateError,
+    };
 }
