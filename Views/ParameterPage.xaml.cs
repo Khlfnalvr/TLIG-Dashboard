@@ -125,8 +125,11 @@ public sealed partial class ParameterPage : Page
         double ki = double.IsNaN(KiBox.Value) ? 0 : KiBox.Value;
         double kd = double.IsNaN(KdBox.Value) ? 0 : KdBox.Value;
 
-        // Tulis parameter ke PLC melalui HMI LabVIEW (TCP) bila terhubung.
-        App.ViewModel?.Plc.WritePid(kp, ki, kd);
+        // Kirim parameter ke client Python (PIDtest.py) via pid_bridge.json. Python
+        // yang meneruskan ke LabVIEW (port 6000, biner) — dashboard tidak lagi kirim
+        // teks langsung ke LabVIEW agar tidak bentrok dengan data biner Python.
+        double sp = double.IsNaN(CtlSetpointBox.Value) ? 0 : CtlSetpointBox.Value;
+        App.PythonBridge.SyncParams(kp, ki, kd, sp);
 
         ActivityStore.Instance.LogSession(
             ActivityCategory.ControlParameter,
@@ -158,10 +161,8 @@ public sealed partial class ParameterPage : Page
         double kd = double.IsNaN(KdBox.Value) ? 0 : KdBox.Value;
         double sp = double.IsNaN(CtlSetpointBox.Value) ? 0 : CtlSetpointBox.Value;
 
-        // Perintahkan HMI LabVIEW menjalankan proses (cmd=run) bila terhubung.
-        App.ViewModel?.Plc.WriteTag("cmd", "run");
-
         // Jalankan client Python (PIDtest.py) dengan parameter terbaru.
+        // Python yang meneruskan ke LabVIEW (port 6000, biner).
         App.PythonBridge.Run(kp, ki, kd, sp);
 
         ActivityStore.Instance.LogSession(
@@ -181,9 +182,6 @@ public sealed partial class ParameterPage : Page
 
     private void StopBtn_Click(object sender, RoutedEventArgs e)
     {
-        // Perintahkan HMI LabVIEW menghentikan proses (cmd=stop) bila terhubung.
-        App.ViewModel?.Plc.WriteTag("cmd", "stop");
-
         // Hentikan client Python (PIDtest.py).
         App.PythonBridge.Stop();
 
