@@ -269,8 +269,9 @@ public sealed partial class DashboardPage : Page
         s.OuterKd  = KdBox.Value;
         s.Setpoint = CtlSetpointBox.Value;
         SendControlLine();   // the same gains/setpoint drive LabVIEW
-        // …and the same gains/setpoint mirror into PIDtest.py's contract file.
-        App.PythonBridge.SyncParams(s.Kp, s.Ki, s.Kd, s.Setpoint);
+        // …and the same gains/setpoint mirror into PIDtest.py's contract file
+        // (the Control card drives the cascade's outer temperature PID).
+        App.PythonBridge.SyncParams(s.OuterKp, s.OuterKi, s.OuterKd, s.Setpoint);
     }
 
     private void PullPidInputs()
@@ -296,9 +297,10 @@ public sealed partial class DashboardPage : Page
         _runState = 1;      // RUN also starts LabVIEW (6th CSV field)
         PushPidInputs();    // pushes gains/setpoint to the PID session AND to LabVIEW (Run=1)
 
-        // RUN also launches the external Python client (PIDtest.py) with the current gains.
-        var ps = App.PidSession;
-        App.PythonBridge.Run(ps.Kp, ps.Ki, ps.Kd, ps.Setpoint);
+        // RUN also launches the external Python client (PIDtest.py) with the current gains
+        // (the Control card drives the cascade's outer temperature PID).
+        var cs = App.CascadeSession;
+        App.PythonBridge.Run(cs.OuterKp, cs.OuterKi, cs.OuterKd, cs.Setpoint);
 
         // One RUN drives the cascade session that both this panel and the Cascade page show.
         // Fires ResultChanged (-> RenderCascadeResult) / RunFailed on the way through.
