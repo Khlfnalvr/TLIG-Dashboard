@@ -56,7 +56,26 @@ public sealed class PythonBridgeService : IDisposable
     private AppSettings? _settings;
     private AppSettings  Cfg        => _settings ??= AppSettingsService.Load();
     private string       PythonExe  => string.IsNullOrWhiteSpace(Cfg.PythonExe) ? "python" : Cfg.PythonExe.Trim();
-    private string       ScriptPath => (Cfg.PythonScriptPath ?? "").Trim();
+
+    // The configured script (default D:\PIDtest.py) when it exists on this machine;
+    // otherwise the copy bundled next to the executable, so a fresh clone/install runs
+    // the bridge with no per-machine setup. A user editing their own D:\PIDtest.py
+    // still wins, because the configured path is preferred whenever it is present.
+    private string ScriptPath
+    {
+        get
+        {
+            var configured = (Cfg.PythonScriptPath ?? "").Trim();
+            if (!string.IsNullOrWhiteSpace(configured) && File.Exists(configured))
+                return configured;
+
+            var bundled = Path.Combine(AppContext.BaseDirectory, "PIDtest.py");
+            if (File.Exists(bundled))
+                return bundled;
+
+            return configured;   // neither exists → keep configured so the error names it
+        }
+    }
 
     /// <summary>The JSON contract file, next to the script so PIDtest.py finds it by __file__.</summary>
     private string ParamsFilePath

@@ -140,5 +140,14 @@
     <Content Include="DataDiagnosisPID_Dashboard.csv">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
+    <!--
+      Python bridge client (PIDtest.py → LabVIEW). Bundled and copied next to the
+      exe so a fresh clone/install has it even when the user's own D:\PIDtest.py is
+      absent; PythonBridgeService falls back to this copy when the configured path
+      does not exist on the machine.
+    -->
+    <Content Include="PIDtest.py">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
 </Project>
