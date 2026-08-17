@@ -22,7 +22,10 @@ namespace TLIGDashboard.Services;
 ///     is what actually starts the Python client.
 ///
 /// The JSON file is the single contract with the script:
-///     { "sp": 60, "kp": 1.5, "ki": 0.015, "kd": 8, "run": true }
+///     { "sp": 60, "kp": 1.5, "ki": 0.015, "kd": 8, "run": true, "host": "127.0.0.1", "port": 6000 }
+/// "host"/"port" tell the script which LabVIEW to reach — taken from the dashboard's
+/// "Host / IP address (LabVIEW HMI)" setting, so another PC's IP is all it takes to
+/// drive a remote LabVIEW (no editing the Python script on each machine).
 /// It lives beside the script (derived from <see cref="AppSettings.PythonScriptPath"/>)
 /// so the script can locate it from its own __file__ with no extra configuration.
 /// </summary>
@@ -77,6 +80,14 @@ public sealed class PythonBridgeService : IDisposable
         }
     }
 
+    // Where PIDtest.py should send the PID struct: the LabVIEW HMI host/port the user
+    // configures in the dashboard ("Host / IP address (LabVIEW HMI)"). Shared with
+    // PlcTcpService's setting so there is a single "where is LabVIEW" address. Written
+    // into pid_bridge.json on every sync; PIDtest.py reads it each cycle, so pointing
+    // the dashboard at another PC's IP is all it takes to reach a remote LabVIEW.
+    private string LabViewHost => string.IsNullOrWhiteSpace(Cfg.PlcTcpHost) ? "127.0.0.1" : Cfg.PlcTcpHost.Trim();
+    private int    LabViewPort => Cfg.PlcTcpPort is > 0 and <= 65535 ? Cfg.PlcTcpPort : 6000;
+
     /// <summary>The JSON contract file, next to the script so PIDtest.py finds it by __file__.</summary>
     private string ParamsFilePath
     {
@@ -105,6 +116,10 @@ public sealed class PythonBridgeService : IDisposable
     /// <summary>Writes the given gains with run=true, then launches the script (no-op if already up).</summary>
     public void Run(double kp, double ki, double kd, double sp)
     {
+        // Re-read settings so a LabVIEW IP / script path the user just changed in the
+        // dashboard takes effect on this RUN without needing an app restart.
+        _settings = null;
+
         _kp = kp; _ki = ki; _kd = kd; _sp = sp;
         _run = true;
         WriteParamsFile();   // run=true must be on disk before the script starts reading
@@ -127,13 +142,18 @@ public sealed class PythonBridgeService : IDisposable
         static string Num(double v) =>
             (double.IsNaN(v) ? 0 : v).ToString("0.###############", CultureInfo.InvariantCulture);
 
+        // Escape backslash/quote so an unusual host string can't break the JSON.
+        static string Esc(string s) => s.Replace("\\", "\\\\").Replace("\"", "\\\"");
+
         string json =
             "{\n" +
             $"  \"sp\": {Num(_sp)},\n" +
             $"  \"kp\": {Num(_kp)},\n" +
             $"  \"ki\": {Num(_ki)},\n" +
             $"  \"kd\": {Num(_kd)},\n" +
-            $"  \"run\": {(_run ? "true" : "false")}\n" +
+            $"  \"run\": {(_run ? "true" : "false")},\n" +
+            $"  \"host\": \"{Esc(LabViewHost)}\",\n" +
+            $"  \"port\": {LabViewPort}\n" +
             "}\n";
 
         try

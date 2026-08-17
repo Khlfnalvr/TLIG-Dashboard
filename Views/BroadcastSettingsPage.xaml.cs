@@ -411,6 +411,23 @@ public sealed partial class BroadcastSettingsPage : Page
         SyncOpcConnectButton();
     }
 
+    // Persist the LabVIEW host/port as soon as the user edits it — the Python PID
+    // bridge reads these to know where to send, so they must be saved even when the
+    // user never presses Connect (Connect on the PID port would collide with the
+    // running PIDtest.py client). Typing the IP here is enough.
+    private void PlcEndpoint_LostFocus(object sender, RoutedEventArgs e)
+    {
+        var host = PlcHostBox.Text.Trim();
+        int port = double.IsNaN(PlcPortBox.Value) ? 0 : (int)PlcPortBox.Value;
+        if (string.IsNullOrEmpty(host) || port is <= 0 or > 65535) return;
+
+        var s = AppSettingsService.Load();
+        if (s.PlcTcpHost == host && s.PlcTcpPort == port) return;   // nothing changed
+        s.PlcTcpHost = host;
+        s.PlcTcpPort = port;
+        AppSettingsService.Save(s);
+    }
+
     // ── AI API settings (server provider key; same as the flyout's quick config) ─
 
     private void InitAiSection(AppSettings s)

@@ -2152,6 +2152,23 @@ public sealed partial class MainWindow : Window
         UpdateOpcStatusDot();
     }
 
+    // Persist the LabVIEW host/port the moment the user edits it — the Python PID
+    // bridge reads these to know where to send, so they must be saved even when the
+    // user never presses Connect (pressing Connect on the PID port would add a second
+    // client that collides with the running PIDtest.py). Just typing the IP is enough.
+    private void PlcEndpoint_LostFocus(object sender, RoutedEventArgs e)
+    {
+        var host = PlcHostBox.Text.Trim();
+        int port = double.IsNaN(PlcPortBox.Value) ? 0 : (int)PlcPortBox.Value;
+        if (string.IsNullOrEmpty(host) || port is <= 0 or > 65535) return;
+
+        var s = AppSettingsService.Load();
+        if (s.PlcTcpHost == host && s.PlcTcpPort == port) return;   // nothing changed
+        s.PlcTcpHost = host;
+        s.PlcTcpPort = port;
+        AppSettingsService.Save(s);
+    }
+
     private void UpdateOpcStatusDot()
     {
         bool connected = ViewModel.Plc.IsConnected;
