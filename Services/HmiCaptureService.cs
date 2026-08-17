@@ -190,8 +190,28 @@ public sealed class HmiCaptureService
                 0,
                 new System.Drawing.Size(bounds.Width, bounds.Height),
                 CopyPixelOperation.SourceCopy);
+            return EncodeFrame(bitmap, alsoJpeg);
         }
 
+        // PrintWindow renders a DPI-unaware window (e.g. LabVIEW on a monitor scaled above
+        // 100%) at its native size into the TOP-LEFT of the bitmap — which we sized to the
+        // window's scaled physical rect — leaving a solid-black margin down the right and
+        // bottom. Crop to the painted content so that dead padding is not baked into every
+        // frame and the preview/stream fills its area (Stretch=Uniform then has nothing to
+        // letterbox around). No-op for content that already fills the bitmap.
+        var content = FindContentBounds(bitmap);
+        if (content.Width > 0 && content.Height > 0 &&
+            (content.Width < bounds.Width || content.Height < bounds.Height))
+        {
+            using var cropped = bitmap.Clone(content, PixelFormat.Format24bppRgb);
+            return EncodeFrame(cropped, alsoJpeg);
+        }
+
+        return EncodeFrame(bitmap, alsoJpeg);
+    }
+
+    private static CapturedFrame EncodeFrame(Bitmap bitmap, bool alsoJpeg)
+    {
         using var pngMs = new MemoryStream();
         bitmap.Save(pngMs, ImageFormat.Png);
 
@@ -200,6 +220,65 @@ public sealed class HmiCaptureService
             jpeg = EncodeJpeg(bitmap, 70L);
 
         return new CapturedFrame(pngMs.ToArray(), jpeg);
+    }
+
+    // Reusable scan buffer for content-bounds detection. Capture ticks are serialized by
+    // the _capturing guard, so one shared buffer is safe and avoids a per-frame allocation.
+    private static byte[] _scanBuffer = [];
+
+    /// <summary>
+    /// Returns the tight bounding box of non-black pixels in a 24bpp bitmap, used to strip
+    /// the solid-black margin PrintWindow leaves around a DPI-scaled window's content. Only
+    /// fully-black outer rows/columns are dropped — any row or column holding a non-black
+    /// pixel is kept — so interior black text or graphics never cause an over-crop. Returns
+    /// <see cref="Rectangle.Empty"/> when the frame is entirely black.
+    /// </summary>
+    private static Rectangle FindContentBounds(Bitmap bitmap)
+    {
+        int w = bitmap.Width, h = bitmap.Height;
+        var full = new Rectangle(0, 0, w, h);
+        var data = bitmap.LockBits(full, ImageLockMode.ReadOnly, PixelFormat.Format24bppRgb);
+        try
+        {
+            int stride = data.Stride;
+            int needed = stride * h;
+            if (_scanBuffer.Length < needed)
+                _scanBuffer = new byte[needed];
+            Marshal.Copy(data.Scan0, _scanBuffer, 0, needed);
+
+            const int black = 8; // channel value at/below this is treated as black padding
+            var buf = _scanBuffer;
+            int minX = w, minY = h, maxX = -1, maxY = -1;
+
+            for (int y = 0; y < h; y++)
+            {
+                int row = y * stride;
+                bool rowHasContent = false;
+                for (int x = 0; x < w; x++)
+                {
+                    int i = row + x * 3;
+                    if (buf[i] > black || buf[i + 1] > black || buf[i + 2] > black)
+                    {
+                        rowHasContent = true;
+                        if (x < minX) minX = x;
+                        if (x > maxX) maxX = x;
+                    }
+                }
+                if (rowHasContent)
+                {
+                    if (y < minY) minY = y;
+                    maxY = y;
+                }
+            }
+
+            return maxX < 0
+                ? Rectangle.Empty
+                : Rectangle.FromLTRB(minX, minY, maxX + 1, maxY + 1);
+        }
+        finally
+        {
+            bitmap.UnlockBits(data);
+        }
     }
 
     /// <summary>
