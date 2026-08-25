@@ -1050,6 +1050,14 @@ public sealed partial class DashboardPage : Page
         // Re-point the shared AI service at the active provider/model (same as AIPage).
         AiConfigService.ApplyActive(_ai);
 
+        // Selipkan data live LabVIEW/HMI (TCP 5005) ke system prompt untuk kiriman ini,
+        // supaya jawaban AI memperhitungkan nilai proses yang sedang berjalan. ApplyActive
+        // di atas mereset system prompt tiap kirim, jadi data ini sekali-pakai — tidak
+        // menumpuk, tidak masuk riwayat maupun tampilan chat.
+        string liveContext = BuildLiveDataContext();
+        if (!string.IsNullOrEmpty(liveContext))
+            _ai.SystemPrompt += "\n\n" + liveContext;
+
         if (string.IsNullOrEmpty(_ai.ApiKey))
         {
             AddChatBubble("ai", Lang.Ai_ErrorNoKey);
@@ -1119,6 +1127,18 @@ public sealed partial class DashboardPage : Page
 
         // Keep rendered count in sync with history
         _renderedCount = App.Ai.History.Count;
+    }
+
+    // Rangkum nilai live dari LabVIEW/HMI (HmiDataService, TCP 5005) menjadi satu baris
+    // konteks untuk AI chat. Kosong kalau belum ada data yang masuk. Dipanggil tiap kirim
+    // pesan, jadi AI selalu melihat pembacaan proses terbaru.
+    private static string BuildLiveDataContext()
+    {
+        var snap = Data.Snapshot();
+        if (snap.Count == 0) return "";
+        var pairs = string.Join(", ", snap.Select(d => $"{d.Key}={d.Value}"));
+        return "Data live dari LabVIEW/HMI (TCP 5005) saat ini — " + pairs +
+               ". Gunakan angka ini bila pengguna bertanya soal kondisi/pembacaan proses saat ini.";
     }
 
     // Returns the bubble Border and the streaming TextBlock so callers can replace content after streaming.

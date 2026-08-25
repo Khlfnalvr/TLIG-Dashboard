@@ -3,6 +3,7 @@ import struct
 import time
 import json
 import os
+import re
 
 # ── Target LabVIEW (default) ───────────────────────────────────────────────
 # Dipakai kalau dashboard belum menuliskan host/port ke file jembatan (mis.
@@ -124,6 +125,36 @@ def forward_chart_to_dashboard(values: dict):
         print(f"[ERROR] Gagal kirim ke dashboard {DASHBOARD_HOST}:{DASHBOARD_PORT} -> {e}")
 
 
+def parse_reply(raw: bytes) -> dict:
+    """Ubah balasan mentah dari LabVIEW jadi {field: nilai}.
+
+    LabVIEW bisa mengirim TEKS (mis. "DATA,-30.09,0,0,0,0" — pemisah apa saja)
+    ATAU biner. Dideteksi otomatis:
+      - Mayoritas byte printable  -> ambil semua angka dari teks, urut, lalu
+        petakan ke CHART_FIELDS.
+      - Selain itu (biner)        -> coba 5 double lalu 5 single, big-endian
+        (urutan byte sama dgn packet PID ">dddd" yang sudah terbukti jalan).
+
+    Urutan angka DIANGGAP sama dengan urutan CHART_FIELDS. Kalau ternyata beda
+    (mis. LabVIEW kirim SP dulu, atau ada nilai ekstra), cukup ubah/atur ulang
+    CHART_FIELDS di atas — nilainya sudah benar, tinggal labelnya.
+    """
+    if not raw:
+        return {}
+    printable = sum(1 for b in raw if b in (9, 10, 13) or 32 <= b <= 126)
+    if printable >= 0.8 * len(raw):                       # kelihatan teks
+        nums = re.findall(r"[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?",
+                          raw.decode("ascii", "ignore"))
+        if nums:
+            return dict(zip(CHART_FIELDS, (float(x) for x in nums)))
+    for ch in ("d", "f"):                                 # biner: double lalu single
+        fmt = ">" + ch * len(CHART_FIELDS)
+        n = struct.calcsize(fmt)
+        if len(raw) >= n:
+            return dict(zip(CHART_FIELDS, struct.unpack(fmt, raw[:n])))
+    return {}
+
+
 def run_client():
     print(f"[CLIENT] Baca parameter dari: {BRIDGE_FILE}")
     print(f"[CLIENT] Target Dashboard: {DASHBOARD_HOST}:{DASHBOARD_PORT}")
@@ -157,21 +188,23 @@ def run_client():
                     f"({len(packet)} byte)"
                 )
 
-                # Tunggu balasan data chart dari LabVIEW di koneksi yang SAMA.
-                # Timeout supaya loop tidak macet kalau LabVIEW belum dimodif
-                # untuk kirim balik (lihat catatan CHART_* di atas).
+                # Tunggu balasan data dari LabVIEW di koneksi yang SAMA, lalu
+                # deteksi format otomatis (teks / biner) dan ambil angkanya.
                 client.settimeout(2.0)
                 try:
-                    reply = recv_exact(client, CHART_RECV_SIZE)
-                    if reply is None:
-                        print("[RECV] LabVIEW menutup koneksi tanpa kirim data chart.")
+                    raw = client.recv(4096)
+                    if not raw:
+                        print("[RECV] LabVIEW menutup koneksi tanpa kirim data.")
                     else:
-                        parsed = struct.unpack(CHART_STRUCT_FMT, reply)
-                        values = dict(zip(CHART_FIELDS, parsed))
-                        print(f"[RECV] <- {values}")
-                        forward_chart_to_dashboard(values)
+                        print(f"[RECV-RAW] {len(raw)} byte: {raw!r}")   # untuk verifikasi
+                        values = parse_reply(raw)
+                        if values:
+                            print(f"[RECV] -> {values}")
+                            forward_chart_to_dashboard(values)
+                        else:
+                            print("[WARN] Balasan tak bisa di-parse (lihat RAW di atas).")
                 except socket.timeout:
-                    print("[WARN] Tidak ada balasan chart dari LabVIEW (timeout 2s).")
+                    print("[WARN] Tidak ada balasan dari LabVIEW (timeout 2s).")
 
         except (ConnectionRefusedError, OSError) as e:
             print(f"[ERROR] Gagal connect ke {host}:{port} -> {e}")
