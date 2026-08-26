@@ -62,6 +62,8 @@ public sealed partial class ParameterPage : Page
         ApplySimulationType(App.SimType.CurrentType);
 
         SubscribePidSession();
+        App.PythonBridge.StatusChanged -= OnPythonBridgeStatus;
+        App.PythonBridge.StatusChanged += OnPythonBridgeStatus;
         // Catch up on anything run from the Dashboard's System Model panel while this
         // page was away — this page is that panel's extended screen, not a separate one.
         // The button state has to be re-synced by hand: a run in flight while we were
@@ -75,8 +77,19 @@ public sealed partial class ParameterPage : Page
     {
         base.OnNavigatedFrom(e);
         App.SimType.SimulationTypeChanged -= OnSimulationTypeChanged;
+        App.PythonBridge.StatusChanged -= OnPythonBridgeStatus;
         UnsubscribePidSession();
     }
+
+    private void OnPythonBridgeStatus(string message)
+        => DispatcherQueue.TryEnqueue(() =>
+        {
+            bool isError = message.StartsWith("Gagal", StringComparison.Ordinal)
+                        || message.Contains("tidak ditemukan", StringComparison.Ordinal);
+            PythonBridgeInfoBar.Severity = isError ? InfoBarSeverity.Error : InfoBarSeverity.Informational;
+            PythonBridgeInfoBar.Message  = message;
+            PythonBridgeInfoBar.IsOpen   = true;
+        });
 
     private void OnSimulationTypeChanged(object? sender, SimulationType type)
         => DispatcherQueue.TryEnqueue(() => ApplySimulationType(type));
@@ -112,8 +125,11 @@ public sealed partial class ParameterPage : Page
         double ki = double.IsNaN(KiBox.Value) ? 0 : KiBox.Value;
         double kd = double.IsNaN(KdBox.Value) ? 0 : KdBox.Value;
 
-        // Tulis parameter ke PLC melalui HMI LabVIEW (TCP) bila terhubung.
-        App.ViewModel?.Plc.WriteTags(("kp", kp), ("ki", ki), ("kd", kd));
+        // Kirim parameter ke client Python (PIDtest.py) via pid_bridge.json. Python
+        // yang meneruskan ke LabVIEW (port 6000, biner) — dashboard tidak lagi kirim
+        // teks langsung ke LabVIEW agar tidak bentrok dengan data biner Python.
+        double sp = double.IsNaN(CtlSetpointBox.Value) ? 0 : CtlSetpointBox.Value;
+        App.PythonBridge.SyncParams(kp, ki, kd, sp);
 
         ActivityStore.Instance.LogSession(
             ActivityCategory.ControlParameter,
@@ -143,9 +159,11 @@ public sealed partial class ParameterPage : Page
         double kp = double.IsNaN(KpBox.Value) ? 0 : KpBox.Value;
         double ki = double.IsNaN(KiBox.Value) ? 0 : KiBox.Value;
         double kd = double.IsNaN(KdBox.Value) ? 0 : KdBox.Value;
+        double sp = double.IsNaN(CtlSetpointBox.Value) ? 0 : CtlSetpointBox.Value;
 
-        // Perintahkan HMI LabVIEW menjalankan proses (cmd=run) bila terhubung.
-        App.ViewModel?.Plc.WriteTag("cmd", "run");
+        // Jalankan client Python (PIDtest.py) dengan parameter terbaru.
+        // Python yang meneruskan ke LabVIEW (port 6000, biner).
+        App.PythonBridge.Run(kp, ki, kd, sp);
 
         ActivityStore.Instance.LogSession(
             ActivityCategory.Simulation,
@@ -164,8 +182,8 @@ public sealed partial class ParameterPage : Page
 
     private void StopBtn_Click(object sender, RoutedEventArgs e)
     {
-        // Perintahkan HMI LabVIEW menghentikan proses (cmd=stop) bila terhubung.
-        App.ViewModel?.Plc.WriteTag("cmd", "stop");
+        // Hentikan client Python (PIDtest.py).
+        App.PythonBridge.Stop();
 
         ActivityStore.Instance.LogSession(
             ActivityCategory.Simulation,
@@ -218,6 +236,9 @@ public sealed partial class ParameterPage : Page
         s.Ki       = KiBox.Value;
         s.Kd       = KdBox.Value;
         s.Setpoint = CtlSetpointBox.Value;
+        // Mirror the same gains/setpoint into PIDtest.py's contract file — a running
+        // script picks them up on its next send (this is the "auto-update" path).
+        App.PythonBridge.SyncParams(s.Kp, s.Ki, s.Kd, s.Setpoint);
     }
 
     private void PullPidInputs()

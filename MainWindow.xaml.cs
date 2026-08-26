@@ -133,6 +133,9 @@ public sealed partial class MainWindow : Window
 
         Closed += (_, _) =>
         {
+            // Don't leave the external Python client (PIDtest.py) running after the HMI closes.
+            try { App.PythonBridge.Dispose(); } catch { }
+
             if (_hwnd != IntPtr.Zero && _oldWndProc != IntPtr.Zero)
                 SetWindowLongPtr(_hwnd, GWLP_WNDPROC, _oldWndProc);
         };
@@ -2091,19 +2094,25 @@ public sealed partial class MainWindow : Window
 
     private void SyncOpcConnectButton()
     {
-        bool connected = ViewModel.Plc.IsConnected;
+        var  plc    = ViewModel.Plc;
+        bool active = plc.IsActive;
 
-        OpcConnectBtn.Content = connected ? Lang.Ctrl_Disconnect : Lang.Ctrl_Connect;
-        PlcHostBox.IsEnabled  = !connected;
-        PlcPortBox.IsEnabled  = !connected;
-        OpcStatusText.Text = connected
-            ? LocalizationManager.Instance.Format("OpcUa_StatusConnected", ViewModel.Plc.EndpointLabel)
-            : LocalizationManager.Instance.Get("Ctrl_NotConnected");
+        OpcConnectBtn.Content = active ? Lang.Ctrl_Disconnect : Lang.Ctrl_Connect;
+        PlcHostBox.IsEnabled  = !active;
+        PlcPortBox.IsEnabled  = !active;
+
+        var loc = LocalizationManager.Instance;
+        OpcStatusText.Text =
+            plc.IsConnected ? loc.Format("OpcUa_StatusConnected", plc.EndpointLabel)
+            : !active       ? loc.Get("Ctrl_NotConnected")
+            : plc.Mode == PlcTcpService.LinkMode.Server
+                            ? loc.Format("OpcUa_StatusListening", plc.EndpointLabel)
+                            : loc.Get("OpcUa_StatusConnecting");
     }
 
     private async void OpcConnectBtn_Click(object sender, RoutedEventArgs e)
     {
-        if (ViewModel.Plc.IsConnected)
+        if (ViewModel.Plc.IsActive)
         {
             ViewModel.Plc.Disconnect();
             SyncOpcConnectButton();
@@ -2115,18 +2124,22 @@ public sealed partial class MainWindow : Window
         int port = double.IsNaN(PlcPortBox.Value) ? 0 : (int)PlcPortBox.Value;
         if (string.IsNullOrEmpty(host) || port is <= 0 or > 65535) return;
 
+        var s = AppSettingsService.Load();
+        bool serverMode = s.PlcServerMode;
+
         OpcConnectBtn.IsEnabled = false;
-        OpcStatusText.Text      = LocalizationManager.Instance.Get("OpcUa_StatusConnecting");
+        OpcStatusText.Text = serverMode
+            ? LocalizationManager.Instance.Format("OpcUa_StatusListening", $"{host}:{port}")
+            : LocalizationManager.Instance.Get("OpcUa_StatusConnecting");
 
         string? capturedError = null;
         void OnError(string msg) => capturedError = msg;
         ViewModel.Plc.ErrorOccurred += OnError;
-        bool ok = await ViewModel.Plc.ConnectAsync(host, port);
+        bool ok = await ViewModel.Plc.StartAsync(serverMode, host, port);
         ViewModel.Plc.ErrorOccurred -= OnError;
 
         if (ok)
         {
-            var s = AppSettingsService.Load();
             s.PlcTcpHost = host;
             s.PlcTcpPort = port;
             AppSettingsService.Save(s);
@@ -2137,6 +2150,23 @@ public sealed partial class MainWindow : Window
         if (!ok && capturedError is not null)
             OpcStatusText.Text = capturedError;
         UpdateOpcStatusDot();
+    }
+
+    // Persist the LabVIEW host/port the moment the user edits it — the Python PID
+    // bridge reads these to know where to send, so they must be saved even when the
+    // user never presses Connect (pressing Connect on the PID port would add a second
+    // client that collides with the running PIDtest.py). Just typing the IP is enough.
+    private void PlcEndpoint_LostFocus(object sender, RoutedEventArgs e)
+    {
+        var host = PlcHostBox.Text.Trim();
+        int port = double.IsNaN(PlcPortBox.Value) ? 0 : (int)PlcPortBox.Value;
+        if (string.IsNullOrEmpty(host) || port is <= 0 or > 65535) return;
+
+        var s = AppSettingsService.Load();
+        if (s.PlcTcpHost == host && s.PlcTcpPort == port) return;   // nothing changed
+        s.PlcTcpHost = host;
+        s.PlcTcpPort = port;
+        AppSettingsService.Save(s);
     }
 
     private void UpdateOpcStatusDot()

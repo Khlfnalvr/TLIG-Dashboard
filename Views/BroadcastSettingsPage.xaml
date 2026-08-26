@@ -257,6 +257,7 @@
                                     <TextBlock Text="{x:Bind Lang.Ui_PlcTcpHost, Mode=OneWay}"
                                                Style="{StaticResource FieldLabelStyle}"/>
                                     <TextBox x:Name="PlcHostBox" FontSize="13"
+                                             LostFocus="PlcEndpoint_LostFocus"
                                              PlaceholderText="192.168.1.10"/>
                                 </StackPanel>
 
@@ -267,6 +268,7 @@
                                     <NumberBox x:Name="PlcPortBox" FontSize="13"
                                                Minimum="1" Maximum="65535"
                                                SpinButtonPlacementMode="Compact"
+                                               LostFocus="PlcEndpoint_LostFocus"
                                                HorizontalAlignment="Stretch"/>
                                 </StackPanel>
 

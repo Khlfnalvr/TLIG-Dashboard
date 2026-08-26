@@ -417,6 +417,13 @@
                          IsOpen="False" IsClosable="True"
                          Severity="Warning"
                          Title="Smart PID Designer"/>
+
+                <!-- Status of the external Python client (PIDtest.py) launched by RUN:
+                     "running", "stopped", or an error such as python not found. -->
+                <InfoBar x:Name="PythonBridgeInfoBar"
+                         IsOpen="False" IsClosable="True"
+                         Severity="Informational"
+                         Title="Python (PIDtest.py)"/>
             </StackPanel>
 
             <!-- ── AI Diagnosis + AI Advisor (mirrors the Dashboard's System Model panel) ── -->

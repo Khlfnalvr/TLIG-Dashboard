@@ -384,6 +384,9 @@ public sealed class LocalizationManager : INotifyPropertyChanged
     public string Hmi_CaptureError => T(nameof(Hmi_CaptureError));
     public string Hmi_CaptureErrorUnknown => T(nameof(Hmi_CaptureErrorUnknown));
     public string Hmi_WaitingStream => T(nameof(Hmi_WaitingStream));
+    public string Hmi_DataHeader   => T(nameof(Hmi_DataHeader));
+    public string Hmi_DataWaiting  => T(nameof(Hmi_DataWaiting));
+    public string Hmi_DataPort     => T(nameof(Hmi_DataPort));
 
     // ── Sharing (server broadcast / client connect) ──────────────────────────
     public string Share_TabBroadcast   => T(nameof(Share_TabBroadcast));
@@ -497,6 +500,7 @@ public sealed class LocalizationManager : INotifyPropertyChanged
     public string Ctl_Header       => T(nameof(Ctl_Header));
     public string Ctl_Setpoint     => T(nameof(Ctl_Setpoint));
     public string Ctl_Mode         => T(nameof(Ctl_Mode));
+    public string Ctl_Pump         => T(nameof(Ctl_Pump));
     public string Ctl_Manual       => T(nameof(Ctl_Manual));
     public string Ctl_Auto         => T(nameof(Ctl_Auto));
     public string Ctl_Cascade      => T(nameof(Ctl_Cascade));
@@ -782,7 +786,7 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             [nameof(Ui_SwitchToDark)]  = "Switch to Dark mode",
             [nameof(Ui_ChangeLanguage)] = "Change language",
             [nameof(Ui_OpcUaConnection)]  = "PLC Connection (TCP)",
-            [nameof(Ui_PlcTcpHint)]       = "Connects directly to the LabVIEW HMI over TCP; LabVIEW bridges reads/writes to the PLC.",
+            [nameof(Ui_PlcTcpHint)]       = "Connects directly to the LabVIEW HMI over TCP; LabVIEW bridges reads/writes to the PLC. The PID bridge (RUN) also sends to this address — enter your LabVIEW PC's IP here; you don't need to press Connect.",
             [nameof(Ui_PlcTcpHost)]       = "Host / IP address (LabVIEW HMI)",
             [nameof(Ui_PlcTcpPort)]       = "TCP Port",
             ["OpcDa_ServerNotRunning"]       = "OPC DA server state: {0} (not running)",
@@ -1067,6 +1071,9 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             [nameof(Hmi_CaptureError)] = "Screen sharing failed: {0}",
             [nameof(Hmi_CaptureErrorUnknown)] = "Screen sharing failed.",
             [nameof(Hmi_WaitingStream)] = "Waiting for the server stream...",
+            [nameof(Hmi_DataHeader)]   = "LabVIEW Data",
+            [nameof(Hmi_DataWaiting)]  = "Waiting for data from LabVIEW (TCP {0})...",
+            [nameof(Hmi_DataPort)]     = "TCP {0}",
 
             [nameof(Share_TabBroadcast)] = "Broadcast",
             [nameof(Share_TabConnect)]   = "Connect",
@@ -1348,6 +1355,7 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             [nameof(Ctl_Manual)]       = "Manual",
             [nameof(Ctl_Auto)]         = "Auto",
             [nameof(Ctl_Cascade)]      = "Cascade",
+            [nameof(Ctl_Pump)]         = "Pump (%)",
             [nameof(Ctl_Run)]          = "RUN",
             [nameof(Ctl_Stop)]         = "STOP",
             [nameof(Ctl_Reset)]        = "RESET",
@@ -1397,7 +1405,7 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             [nameof(Ui_SwitchToDark)]  = "Beralih ke Mode Gelap",
             [nameof(Ui_ChangeLanguage)] = "Ubah bahasa",
             [nameof(Ui_OpcUaConnection)]  = "Koneksi PLC (TCP)",
-            [nameof(Ui_PlcTcpHint)]       = "Terhubung langsung ke HMI LabVIEW melalui TCP; LabVIEW meneruskan baca/tulis ke PLC.",
+            [nameof(Ui_PlcTcpHint)]       = "Terhubung langsung ke HMI LabVIEW melalui TCP; LabVIEW meneruskan baca/tulis ke PLC. Jembatan PID (RUN) juga mengirim ke alamat ini — isi IP komputer LabVIEW di sini; tidak perlu menekan Connect.",
             [nameof(Ui_PlcTcpHost)]       = "Host / Alamat IP (HMI LabVIEW)",
             [nameof(Ui_PlcTcpPort)]       = "Port TCP",
             ["OpcDa_ServerNotRunning"]       = "Status server OPC DA: {0} (tidak berjalan)",
@@ -1682,6 +1690,9 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             [nameof(Hmi_CaptureError)] = "Screen sharing gagal: {0}",
             [nameof(Hmi_CaptureErrorUnknown)] = "Screen sharing gagal.",
             [nameof(Hmi_WaitingStream)] = "Menunggu stream dari server...",
+            [nameof(Hmi_DataHeader)]   = "Data LabVIEW",
+            [nameof(Hmi_DataWaiting)]  = "Menunggu data dari LabVIEW (TCP {0})...",
+            [nameof(Hmi_DataPort)]     = "TCP {0}",
 
             [nameof(Share_TabBroadcast)] = "Siaran",
             [nameof(Share_TabConnect)]   = "Sambung",
@@ -1963,6 +1974,7 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             [nameof(Ctl_Manual)]       = "Manual",
             [nameof(Ctl_Auto)]         = "Auto",
             [nameof(Ctl_Cascade)]      = "Cascade",
+            [nameof(Ctl_Pump)]         = "Pompa (%)",
             [nameof(Ctl_Run)]          = "JALANKAN",
             [nameof(Ctl_Stop)]         = "BERHENTI",
             [nameof(Ctl_Reset)]        = "RESET",
@@ -2019,6 +2031,7 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             ["OpcUa_StatusDisconnected"] = "Disconnected",
             ["OpcUa_StatusConnecting"]   = "Connecting…",
             ["OpcUa_StatusReconnecting"] = "Reconnecting…",
+            ["OpcUa_StatusListening"]    = "Waiting for LabVIEW — {0}",
             ["Serial_ReadError"] = "Serial read error: {0}",
             ["Serial_ParseError"] = "ESP JSON parse error (total: {0}) - data: \"{1}\"",
             ["AutoConnect_Suspended"] = "Auto-connect paused - click Connect to reconnect.",
@@ -2161,6 +2174,7 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             ["OpcUa_StatusDisconnected"] = "Terputus",
             ["OpcUa_StatusConnecting"]   = "Menghubungkan…",
             ["OpcUa_StatusReconnecting"] = "Menghubungkan kembali…",
+            ["OpcUa_StatusListening"]    = "Menunggu LabVIEW — {0}",
             ["Serial_ReadError"] = "Error baca serial: {0}",
             ["Serial_ParseError"] = "Error parsing JSON ESP (total: {0}) - data: \"{1}\"",
             ["AutoConnect_Suspended"] = "Auto-connect dijeda - klik Hubungkan untuk menghubungkan kembali.",

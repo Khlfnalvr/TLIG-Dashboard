@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Reflection;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Input;
@@ -30,6 +31,12 @@ public sealed partial class DashboardPage : Page
     private CancellationTokenSource? _chatCts;
 
     private readonly bool _clientMode = BuildInfo.IsClient;
+
+    // Dashboard → LabVIEW control link (Kp/Ki/Kd/Setpoint/Pump/Mode/Run...).
+    private static HmiDataService Data => HmiDataService.Instance;
+    // Suppresses command sends until the page has finished loading, so the initial
+    // XAML values ("10", "Auto") don't fire a burst of commands before the user acts.
+    private bool _controlsReady;
 
     private readonly SemaphoreSlim _dashboardCameraSwitchLock = new(1, 1);
     private DeviceInformationCollection? _dashboardCameraDevices;
@@ -87,10 +94,22 @@ public sealed partial class DashboardPage : Page
         App.SimType.SimulationTypeChanged += OnSimulationTypeChanged;
         ApplySimulationType(App.SimType.CurrentType);
 
+        // When a LabVIEW client (re)connects, push the current control values so the VI
+        // starts in sync with what the dashboard is showing.
+        if (!_clientMode)
+            Data.ClientConnectedChanged += OnLabViewClientConnected;
+
+        // From here on, user edits to the controls are forwarded to LabVIEW.
+        _controlsReady = true;
+
         _ = RespChart.InitializeAsync();
 
         ApplyLearningPanelContent();
         App.Session.Changed += OnSessionChanged;
+
+        // PID (Kp/Ki/Kd/Setpoint) tidak lagi dikirim langsung ke LabVIEW dari sini.
+        // Nilainya mengalir ke client Python (PIDtest.py) lewat PushPidInputs() ->
+        // App.PythonBridge.SyncParams(); Python yang meneruskan ke LabVIEW port 6000.
     }
 
     // Progress tracking in the bottom "Learning Analytic" panel is
@@ -110,6 +129,52 @@ public sealed partial class DashboardPage : Page
         if (staff && DashChallengeFrame.Content is null)
             DashChallengeFrame.Navigate(typeof(ChallengeLearningPage));
     }
+
+    // ── Dashboard → LabVIEW control commands ────────────────────────────────────
+    // The whole control set is sent as ONE CRLF-terminated comma line the VI reads with
+    // "TCP Read (CRLF)" + "Scan From String" (%f,%f,%f,%f,%f,%f):
+    //     Kp,Ki,Kd,Setpoint,Pump,Run
+    // The gain/setpoint boxes are the Smart PID Designer's own KpBox/KiBox/KdBox/
+    // CtlSetpointBox, so editing them drives BOTH the PID simulator and LabVIEW — the send
+    // is hooked into PushPidInputs()/PullPidInputs(). Decimals use invariant culture ('.'),
+    // never the ',' of the Indonesian UI locale.
+    private int _runState;  // 6th CSV field: 1 = RUN, 0 = STOP / RESET / E-STOP
+
+    private void SendControlLine()
+    {
+        if (!_controlsReady || _clientMode) return;
+
+        double kp = KpBox.Value, ki = KiBox.Value, kd = KdBox.Value,
+               sp = CtlSetpointBox.Value, pump = CtlPump.Value;
+        // Skip while a box is mid-edit / empty so we never send a partial line.
+        if (double.IsNaN(kp) || double.IsNaN(ki) || double.IsNaN(kd) ||
+            double.IsNaN(sp) || double.IsNaN(pump))
+            return;
+
+        var inv = CultureInfo.InvariantCulture;
+        Data.SendLine(string.Join(",",
+            kp.ToString("0.###", inv),
+            ki.ToString("0.###", inv),
+            kd.ToString("0.###", inv),
+            sp.ToString("0.###", inv),
+            pump.ToString("0.###", inv),
+            _runState.ToString(inv)));
+    }
+
+    private void OnLabViewClientConnected(bool connected)
+    {
+        if (connected)
+            DispatcherQueue.TryEnqueue(SendControlLine);   // sync the VI on (re)connect
+    }
+
+    // Pump/Mode/Stop/Reset/E-Stop are LabVIEW-only (the PID Designer doesn't use them);
+    // the gain + setpoint boxes reach LabVIEW via PushPidInputs()/PullPidInputs().
+    private void CtlPump_ValueChanged(NumberBox sender, NumberBoxValueChangedEventArgs args) => SendControlLine();
+    private void CtlMode_Checked(object sender, RoutedEventArgs e)                           => SendControlLine();
+
+    private void CtlStop_Click(object sender, RoutedEventArgs e)  { _runState = 0; SendControlLine(); App.PythonBridge.Stop(); }
+    private void CtlReset_Click(object sender, RoutedEventArgs e) { _runState = 0; SendControlLine(); App.PythonBridge.Stop(); }
+    private void CtlEStop_Click(object sender, RoutedEventArgs e) { _runState = 0; SendControlLine(); App.PythonBridge.Stop(); }
 
     private void OnSimulationTypeChanged(object? sender, Services.SimulationType type)
         => DispatcherQueue.TryEnqueue(() => ApplySimulationType(type));
@@ -198,6 +263,10 @@ public sealed partial class DashboardPage : Page
         s.OuterKi  = KiBox.Value;
         s.OuterKd  = KdBox.Value;
         s.Setpoint = CtlSetpointBox.Value;
+        SendControlLine();   // the same gains/setpoint drive LabVIEW
+        // …and the same gains/setpoint mirror into PIDtest.py's contract file
+        // (the Control card drives the cascade's outer temperature PID).
+        App.PythonBridge.SyncParams(s.OuterKp, s.OuterKi, s.OuterKd, s.Setpoint);
     }
 
     private void PullPidInputs()
@@ -209,6 +278,7 @@ public sealed partial class DashboardPage : Page
         KdBox.Value          = s.OuterKd;
         CtlSetpointBox.Value = s.Setpoint;
         _syncingPidInputs = false;
+        SendControlLine();   // advisor-accepted / normalized gains also drive LabVIEW
     }
 
     // RUN in the Control card is the designer's "Simulate": it runs the RK4 step-response
@@ -219,7 +289,13 @@ public sealed partial class DashboardPage : Page
 
     private async Task RunPidAsync()
     {
-        PushPidInputs();
+        _runState = 1;      // RUN also starts LabVIEW (6th CSV field)
+        PushPidInputs();    // pushes gains/setpoint to the PID session AND to LabVIEW (Run=1)
+
+        // RUN also launches the external Python client (PIDtest.py) with the current gains
+        // (the Control card drives the cascade's outer temperature PID).
+        var cs = App.CascadeSession;
+        App.PythonBridge.Run(cs.OuterKp, cs.OuterKi, cs.OuterKd, cs.Setpoint);
 
         // One RUN drives the cascade session that both this panel and the Cascade page show.
         // Fires ResultChanged (-> RenderCascadeResult) / RunFailed on the way through.
@@ -353,6 +429,12 @@ public sealed partial class DashboardPage : Page
     // "Tidak" — leaves the gains untouched so the student can keep tuning manually.
     private void PidAdvisorDecline_Click(object sender, RoutedEventArgs e)
         => App.CascadeSession.ClearRecommendation();
+
+    // ── PID → Python (PIDtest.py → LabVIEW) ───────────────────────────────────
+    // PID/Setpoint tidak lagi dikirim langsung ke LabVIEW dari dashboard. Nilainya
+    // mengalir ke client Python lewat PushPidInputs() -> App.PythonBridge.SyncParams(),
+    // dan Python (PIDtest.py) yang meneruskan ke LabVIEW port 6000 (biner). Ini
+    // menghindari bentrok dua pengirim (teks dashboard vs biner Python) di port 6000.
 
     private void OnActualThemeChanged(FrameworkElement sender, object args)
     {
@@ -968,6 +1050,14 @@ public sealed partial class DashboardPage : Page
         // Re-point the shared AI service at the active provider/model (same as AIPage).
         AiConfigService.ApplyActive(_ai);
 
+        // Selipkan data live LabVIEW/HMI (TCP 5005) ke system prompt untuk kiriman ini,
+        // supaya jawaban AI memperhitungkan nilai proses yang sedang berjalan. ApplyActive
+        // di atas mereset system prompt tiap kirim, jadi data ini sekali-pakai — tidak
+        // menumpuk, tidak masuk riwayat maupun tampilan chat.
+        string liveContext = BuildLiveDataContext();
+        if (!string.IsNullOrEmpty(liveContext))
+            _ai.SystemPrompt += "\n\n" + liveContext;
+
         if (string.IsNullOrEmpty(_ai.ApiKey))
         {
             AddChatBubble("ai", Lang.Ai_ErrorNoKey);
@@ -1037,6 +1127,18 @@ public sealed partial class DashboardPage : Page
 
         // Keep rendered count in sync with history
         _renderedCount = App.Ai.History.Count;
+    }
+
+    // Rangkum nilai live dari LabVIEW/HMI (HmiDataService, TCP 5005) menjadi satu baris
+    // konteks untuk AI chat. Kosong kalau belum ada data yang masuk. Dipanggil tiap kirim
+    // pesan, jadi AI selalu melihat pembacaan proses terbaru.
+    private static string BuildLiveDataContext()
+    {
+        var snap = Data.Snapshot();
+        if (snap.Count == 0) return "";
+        var pairs = string.Join(", ", snap.Select(d => $"{d.Key}={d.Value}"));
+        return "Data live dari LabVIEW/HMI (TCP 5005) saat ini — " + pairs +
+               ". Gunakan angka ini bila pengguna bertanya soal kondisi/pembacaan proses saat ini.";
     }
 
     // Returns the bubble Border and the streaming TextBlock so callers can replace content after streaming.

@@ -351,16 +351,19 @@ public sealed partial class BroadcastSettingsPage : Page
 
     private void SyncOpcConnectButton()
     {
-        var  plc       = App.ViewModel?.Plc;
-        bool connected = plc?.IsConnected == true;
+        var  plc    = App.ViewModel?.Plc;
+        bool active = plc?.IsActive == true;
 
-        OpcConnectBtn.Content = connected ? Lang.Ctrl_Disconnect : Lang.Ctrl_Connect;
-        PlcHostBox.IsEnabled  = !connected;
-        PlcPortBox.IsEnabled  = !connected;
+        OpcConnectBtn.Content = active ? Lang.Ctrl_Disconnect : Lang.Ctrl_Connect;
+        PlcHostBox.IsEnabled  = !active;
+        PlcPortBox.IsEnabled  = !active;
 
-        OpcStatusText.Text = connected
-            ? Lang.Format("OpcUa_StatusConnected", plc!.EndpointLabel)
-            : Lang.Get("Ctrl_NotConnected");
+        OpcStatusText.Text =
+            plc?.IsConnected == true ? Lang.Format("OpcUa_StatusConnected", plc.EndpointLabel)
+            : !active                ? Lang.Get("Ctrl_NotConnected")
+            : plc!.Mode == PlcTcpService.LinkMode.Server
+                                     ? Lang.Format("OpcUa_StatusListening", plc.EndpointLabel)
+                                     : Lang.Get("OpcUa_StatusConnecting");
     }
 
     private async void OpcConnectBtn_Click(object sender, RoutedEventArgs e)
@@ -368,7 +371,7 @@ public sealed partial class BroadcastSettingsPage : Page
         var plc = App.ViewModel?.Plc;
         if (plc is null) return;
 
-        if (plc.IsConnected)
+        if (plc.IsActive)
         {
             plc.Disconnect();
             SyncOpcConnectButton();
@@ -379,18 +382,22 @@ public sealed partial class BroadcastSettingsPage : Page
         int port = double.IsNaN(PlcPortBox.Value) ? 0 : (int)PlcPortBox.Value;
         if (string.IsNullOrEmpty(host) || port is <= 0 or > 65535) return;
 
+        var s = AppSettingsService.Load();
+        bool serverMode = s.PlcServerMode;
+
         OpcConnectBtn.IsEnabled = false;
-        OpcStatusText.Text      = Lang.Get("OpcUa_StatusConnecting");
+        OpcStatusText.Text = serverMode
+            ? Lang.Format("OpcUa_StatusListening", $"{host}:{port}")
+            : Lang.Get("OpcUa_StatusConnecting");
 
         string? capturedError = null;
         void OnError(string msg) => capturedError = msg;
         plc.ErrorOccurred += OnError;
-        bool ok = await plc.ConnectAsync(host, port);
+        bool ok = await plc.StartAsync(serverMode, host, port);
         plc.ErrorOccurred -= OnError;
 
         if (ok)
         {
-            var s = AppSettingsService.Load();
             s.PlcTcpHost = host;
             s.PlcTcpPort = port;
             AppSettingsService.Save(s);
@@ -401,7 +408,24 @@ public sealed partial class BroadcastSettingsPage : Page
         }
 
         OpcConnectBtn.IsEnabled = true;
-        if (ok) SyncOpcConnectButton();
+        SyncOpcConnectButton();
+    }
+
+    // Persist the LabVIEW host/port as soon as the user edits it — the Python PID
+    // bridge reads these to know where to send, so they must be saved even when the
+    // user never presses Connect (Connect on the PID port would collide with the
+    // running PIDtest.py client). Typing the IP here is enough.
+    private void PlcEndpoint_LostFocus(object sender, RoutedEventArgs e)
+    {
+        var host = PlcHostBox.Text.Trim();
+        int port = double.IsNaN(PlcPortBox.Value) ? 0 : (int)PlcPortBox.Value;
+        if (string.IsNullOrEmpty(host) || port is <= 0 or > 65535) return;
+
+        var s = AppSettingsService.Load();
+        if (s.PlcTcpHost == host && s.PlcTcpPort == port) return;   // nothing changed
+        s.PlcTcpHost = host;
+        s.PlcTcpPort = port;
+        AppSettingsService.Save(s);
     }
 
     // ── AI API settings (server provider key; same as the flyout's quick config) ─

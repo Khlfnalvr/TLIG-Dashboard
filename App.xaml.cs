@@ -40,6 +40,13 @@ public partial class App : Application
     public static Services.PidMetricsService PidMetrics { get; } = Services.PidMetricsService.Instance;
 
     /// <summary>
+    /// Bridges the HMI's PID controls to the external Python client (PIDtest.py):
+    /// mirrors Kp/Ki/Kd/Setpoint into a file the script reads live, and launches /
+    /// stops the script from the RUN / STOP buttons.
+    /// </summary>
+    public static Services.PythonBridgeService PythonBridge { get; } = Services.PythonBridgeService.Instance;
+
+    /// <summary>
     /// Shared Smart PID Designer state (gains, setpoint, last run). The Dashboard's
     /// System Model panel and the Parameter page are two views of one designer, so a
     /// RUN on either is reflected on the other.

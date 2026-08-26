@@ -21,10 +21,32 @@ public sealed class AiProviderSettings
 public class AppSettings
 {
     // ── PLC via LabVIEW HMI (direct TCP — replaces the former OPC UA/DA path) ──
-    // LabVIEW runs a TCP listener that bridges to the PLC; the server connects
-    // to it as a plain TCP client (see PlcTcpService).
+    // The dashboard bridges Kp/Ki/Kd (and cmd=run/stop) to the PLC through the
+    // LabVIEW HMI over a plain-text TCP link (see PlcTcpService).
+    //   • PlcServerMode = false (default) → dashboard connects out to a LabVIEW
+    //     "TCP Listen.vi" server at PlcTcpHost:PlcTcpPort (LabVIEW listens).
+    //   • PlcServerMode = true  → dashboard LISTENS on PlcTcpPort and LabVIEW
+    //     dials in with "TCP Open Connection" (PlcTcpHost is the bind address).
     public string PlcTcpHost              { get; set; } = "127.0.0.1";
-    public int    PlcTcpPort              { get; set; } = 5000;
+    public int    PlcTcpPort              { get; set; } = 6000;
+    public bool   PlcServerMode           { get; set; } = false;
+
+    // ── LabVIEW → HMI data bridge (TCP telemetry) ─────────────────────────
+    // The dashboard listens on this TCP port for "key=value" lines streamed by a
+    // LabVIEW VI ("TCP Write"); the values are shown in the HMI panel.
+    public int    HmiDataPort             { get; set; } = 5005;
+
+    // ── Python bridge (PIDtest.py → LabVIEW) ──────────────────────────────
+    // The HMI drives an external Python client that forwards SP/KC/KI/KD to
+    // LabVIEW over its own socket (see PythonBridgeService). The dashboard writes
+    // the current gains next to the script and launches it with RUN.
+    //   • PythonExe        — interpreter to launch. Defaults to "py" (the Windows
+    //     Python launcher), which is the reliable way to start Python on Windows —
+    //     a bare "python" often resolves to the Microsoft Store alias stub that does
+    //     nothing. Falls back to "python" automatically if "py" is not installed.
+    //   • PythonScriptPath — the PIDtest.py this machine should run.
+    public string PythonExe               { get; set; } = "py";
+    public string PythonScriptPath        { get; set; } = @"D:\PIDtest.py";
 
     // ── Sharing: server side ──────────────────────────────────────────────
     // The server broadcasts its camera + HMI screen and proxies AI chat.
