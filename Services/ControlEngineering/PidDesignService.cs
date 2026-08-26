@@ -17,23 +17,10 @@ public sealed class PidDesignResult
     /// Client shows its own language rather than the Server's.
     /// </summary>
     public string                Diagnosis            { get; set; } = "";
-    /// <summary>
-    /// <see cref="PidDiagnosisAgent"/>'s label for the same response, computed but not
-    /// shown — kept for the same reason as <see cref="MlEstimate"/>. The classifier only
-    /// ever imitated the threshold rule its training labels encode, and imitated it
-    /// imperfectly (see PidDiagnosisCalculator), so the rule itself is what students see.
-    /// </summary>
-    public string                MlDiagnosis          { get; set; } = "";
     /// Exact metrics read off the RK4 curve above — the only numbers ever shown to
     /// the student or handed to the LLM advisor, so nothing on screen can disagree
     /// with the plotted chart.
     public PidMetricsPrediction Metrics               { get; set; } = new();
-    /// PidMetricsRegressor's raw multi-output-regression estimate, computed on every
-    /// run but NOT surfaced in the UI: it was found to diverge sharply from the RK4
-    /// ground truth for gain combinations sparse in the training data (e.g. low Kp),
-    /// which produced Advisor text that contradicted the plotted chart. Kept here so
-    /// the model stays exercised/available without misleading anyone.
-    public PidMetricsPrediction MlEstimate            { get; set; } = new();
     public string                AdvisorExplanation   { get; set; } = "";
     public PidPrediction?       AdvisorRecommendation { get; set; }
 }
@@ -104,7 +91,6 @@ public static class PidDesignClient
         if (pred is null || sim is null) return null;
 
         var metrics    = node?["metrics"];
-        var mlEstimate = node?["mlEstimate"];
         var rec         = node?["advisorRecommendation"];
 
         return new PidDesignResult
@@ -121,20 +107,13 @@ public static class PidDesignClient
                 Amplitude = sim["amplitude"]?.AsArray().Select(n => (double?)n ?? 0).ToArray()  ?? [],
             },
             Diagnosis = (string?)node?["diagnosis"] ?? "",
-            MlDiagnosis = (string?)node?["mlDiagnosis"] ?? "",
+            // Older servers may also send mlDiagnosis/mlEstimate; those fields are dead and ignored.
             Metrics = new PidMetricsPrediction
             {
                 Overshoot        = (float?)metrics?["overshoot"]        ?? 0,
                 RiseTime         = (float?)metrics?["riseTime"]         ?? 0,
                 SettlingTime     = (float?)metrics?["settlingTime"]     ?? 0,
                 SteadyStateError = (float?)metrics?["steadyStateError"] ?? 0,
-            },
-            MlEstimate = new PidMetricsPrediction
-            {
-                Overshoot        = (float?)mlEstimate?["overshoot"]        ?? 0,
-                RiseTime         = (float?)mlEstimate?["riseTime"]         ?? 0,
-                SettlingTime     = (float?)mlEstimate?["settlingTime"]     ?? 0,
-                SteadyStateError = (float?)mlEstimate?["steadyStateError"] ?? 0,
             },
             AdvisorExplanation = (string?)node?["advisorExplanation"] ?? "",
             AdvisorRecommendation = rec is null ? null : new PidPrediction
@@ -150,15 +129,13 @@ public static class PidDesignClient
 /// <summary>
 /// Single integration point the Dashboard UI uses for the Smart PID Designer, hiding
 /// the server-vs-client difference: on the <b>Server</b> flavor it runs the RK4
-/// simulator + diagnosis classifier + metrics regressor + LLM advisor in-process; on
+/// simulator + rule-based diagnosis + LLM advisor in-process; on
 /// the <b>Client</b> flavor it goes over HTTP via <see cref="PidDesignClient"/> to the
 /// server the user is signed in to. Mirrors <see cref="LearningTaskService"/>.
 /// </summary>
 public static class PidDesignService
 {
-    private static readonly PidSimulator        _sim       = new();
-    private static readonly PidDiagnosisAgent   _diagnosis = new();
-    private static readonly PidMetricsRegressor _mlMetrics = new();
+    private static readonly PidSimulator _sim = new();
 
     public static async Task<PidDesignResult?> RunAsync(PidInput input, CancellationToken ct = default)
     {
@@ -187,24 +164,6 @@ public static class PidDesignService
             // quote the number behind the verdict (see PidDiagnosisCalculator).
             var diagnosis = PidDiagnosisCalculator.Evaluate(metrics, stable).ToString();
 
-            // Classifier still runs for comparison, but no longer drives what is shown.
-            var mlDiagnosis = await Task.Run(() => _diagnosis.Predict(new PidDiagnosisInput
-            {
-                Kp_Saat_Ini        = pred.Kp,
-                Ki_Saat_Ini        = pred.Ki,
-                Kd_Saat_Ini        = pred.Kd,
-                Overshoot_Riil     = metrics.Overshoot,
-                RiseTime_Riil      = metrics.RiseTime,
-                SettlingTime_Riil  = metrics.SettlingTime,
-                SteadyStateError   = metrics.SteadyStateError,
-                Is_Stable          = stable ? 1f : 0f,
-            }).Rekomendasi_Aksi, ct);
-
-            // Multi-output ML.NET estimate straight from Kp/Ki/Kd — kept computed and
-            // available (see PidDesignResult.MlEstimate) but no longer what drives the
-            // Advisor prompt or the metric cards; see the comment above PidDesignResult.
-            var mlEstimate = await Task.Run(() => _mlMetrics.Predict(pred.Kp, pred.Ki, pred.Kd), ct);
-
             // Gains to offer come from searching the simulator (verified against the same
             // criteria as the diagnosis), not from the LLM — so the card can't contradict the
             // diagnosis. Null when the current tuning is already ideal. The one-time grid
@@ -225,9 +184,7 @@ public static class PidDesignService
                 // the transient, so the flat tail isn't shipped or plotted.
                 Simulation = PidSimulator.BuildDisplayCurve(simResult, settling),
                 Diagnosis = diagnosis,
-                MlDiagnosis = mlDiagnosis,
                 Metrics = metrics,
-                MlEstimate = mlEstimate,
                 AdvisorExplanation = advisor.Explanation,
                 AdvisorRecommendation = advisor.Recommendation,
             };

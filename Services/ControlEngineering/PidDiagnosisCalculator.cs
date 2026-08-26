@@ -16,7 +16,7 @@ public enum PidDiagnosisCode
 /// Rule-based diagnosis computed directly from the RK4 response metrics — no model,
 /// no training, no inference.
 ///
-/// <para>This replaces <see cref="PidDiagnosisAgent"/> as the diagnosis students see.
+/// <para>This is the diagnosis students see, replacing an earlier ML classifier.
 /// The classifier's own training labels turned out to encode a plain threshold
 /// (overshoot &lt; 20% =&gt; ideal), so the model was only ever imitating arithmetic — and
 /// imitating it imperfectly: measured against the rule its labels encode it agreed just

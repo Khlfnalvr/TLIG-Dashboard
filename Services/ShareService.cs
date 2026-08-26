@@ -97,8 +97,6 @@ public sealed class ShareServer
 
     // Control Engineering Services
     private readonly TLIGDashboard.Services.ControlEngineering.PidSimulator _pidSim = new();
-    private readonly TLIGDashboard.Services.ControlEngineering.PidDiagnosisAgent _pidDiagnosis = new();
-    private readonly TLIGDashboard.Services.ControlEngineering.PidMetricsRegressor _pidMlMetrics = new();
 
     private string IssueSession(UserAccount user)
     {
@@ -1134,28 +1132,6 @@ public sealed class ShareServer
             var diagnosis = TLIGDashboard.Services.ControlEngineering.PidDiagnosisCalculator
                 .Evaluate(metrics, stable).ToString();
 
-            // Classifier still runs for comparison, but no longer drives what is shown.
-            var mlDiagnosis = await Task.Run(() => _pidDiagnosis.Predict(new TLIGDashboard.Models.ControlEngineering.PidDiagnosisInput
-            {
-                Kp_Saat_Ini        = finalPid.Kp,
-                Ki_Saat_Ini        = finalPid.Ki,
-                Kd_Saat_Ini        = finalPid.Kd,
-                Overshoot_Riil     = metrics.Overshoot,
-                RiseTime_Riil      = metrics.RiseTime,
-                SettlingTime_Riil  = metrics.SettlingTime,
-                SteadyStateError   = metrics.SteadyStateError,
-                Is_Stable          = stable ? 1f : 0f,
-            }).Rekomendasi_Aksi, ct);
-
-            // Multi-output ML.NET estimate straight from Kp/Ki/Kd — kept computed and
-            // returned to the client (see PidDesignResult.MlEstimate) but no longer
-            // what drives the Advisor prompt or the metric cards; it was found to
-            // diverge sharply from the RK4 ground truth for gain combinations sparse
-            // in the training data (e.g. low Kp), producing Advisor text that
-            // contradicted the plotted chart.
-            var mlEstimate = await Task.Run(
-                () => _pidMlMetrics.Predict(finalPid.Kp, finalPid.Ki, finalPid.Kd), ct);
-
             // Gains to offer come from searching the simulator (verified against the same
             // criteria as the diagnosis), not the LLM, so the card can't contradict the
             // diagnosis. Null when the current tuning is already ideal.
@@ -1182,20 +1158,12 @@ public sealed class ShareServer
                 ["simulation"] = BuildSimulationJson(
                     TLIGDashboard.Services.ControlEngineering.PidSimulator.BuildDisplayCurve(simResult, settling)),
                 ["diagnosis"] = diagnosis,
-                ["mlDiagnosis"] = mlDiagnosis,
                 ["metrics"] = new JsonObject
                 {
                     ["overshoot"]        = metrics.Overshoot,
                     ["riseTime"]         = metrics.RiseTime,
                     ["settlingTime"]     = metrics.SettlingTime,
                     ["steadyStateError"] = metrics.SteadyStateError,
-                },
-                ["mlEstimate"] = new JsonObject
-                {
-                    ["overshoot"]        = mlEstimate.Overshoot,
-                    ["riseTime"]         = mlEstimate.RiseTime,
-                    ["settlingTime"]     = mlEstimate.SettlingTime,
-                    ["steadyStateError"] = mlEstimate.SteadyStateError,
                 },
                 ["advisorExplanation"] = advisor.Explanation,
                 ["advisorRecommendation"] = advisor.Recommendation is null ? null : new JsonObject

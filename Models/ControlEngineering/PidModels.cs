@@ -59,8 +59,9 @@ public class SimulationResult
     public PidPrediction UsedParameters { get; set; } = new();
 }
 
-/// Output of PidMetricsRegressor — an instant ML.NET estimate of step-response
-/// metrics straight from Kp/Ki/Kd, independent of PidSimulator's exact RK4 curve.
+/// Step-response metrics (Overshoot, RiseTime, SettlingTime, SteadyStateError) read
+/// off PidSimulator's exact RK4 curve — the single source of truth shown to the
+/// student and fed to the diagnosis (PidDiagnosisCalculator) and the LLM advisor.
 public class PidMetricsPrediction
 {
     public float Overshoot { get; set; }

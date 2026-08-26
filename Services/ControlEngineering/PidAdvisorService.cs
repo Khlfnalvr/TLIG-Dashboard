@@ -24,9 +24,8 @@ public sealed class PidAdvisorResult
 /// recommendation, but those numbers were never simulated and routinely contradicted the
 /// diagnosis (applying one drove overshoot from 72.7% to 76.6%). Now the search decides the
 /// numbers and this service explains them: it is given the current response, the exact RK4
-/// metrics (PidSimulator.ComputeStepMetrics — <b>not</b> PidMetricsRegressor's estimate; see
-/// PidDesignResult.MlEstimate), the plant model, the session history, and the recommended
-/// gains, and returns prose only.
+/// metrics (PidSimulator.ComputeStepMetrics), the plant model, the session history, and the
+/// recommended gains, and returns prose only.
 /// </summary>
 public class PidAdvisorService
 {

@@ -292,7 +292,7 @@ public sealed partial class ParameterPage : Page
         RespChart.Update(result.Simulation.Time, result.Simulation.Amplitude, result.Setpoint);
 
         // result.Metrics is read off the exact RK4 curve above — always consistent with
-        // what's plotted (result.MlEstimate exists but isn't shown; see PidDesignResult).
+        // what's plotted.
         RiseTimeValue.Text  = result.Metrics.RiseTime.ToString("0.00");
         OvershootValue.Text = result.Metrics.Overshoot.ToString("0.0");
         SettlingValue.Text  = result.Metrics.SettlingTime.ToString("0.00");
