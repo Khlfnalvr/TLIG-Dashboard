@@ -26,16 +26,17 @@ DASHBOARD_HOST = "localhost"
 DASHBOARD_PORT = 5005
 
 # ── Balasan data chart dari LabVIEW ────────────────────────────────────────
-# Contoh: 5 double (PV, Flow Tube, Flow Shell, Sinyal mA, Sinyal %) =
-# 5 x 8 byte = 40 byte, big-endian ">ddddd" — SAMA POLA dengan packet PID
+# LabVIEW mengirim 4 nilai — PV, Flow Tube, Flow Shell, Sinyal mA — sesuai yang
+# tampil di panel "LabVIEW Data" dashboard. Sebagai biner itu = 4 double x
+# 8 byte = 32 byte, big-endian ">dddd" — SAMA POLA dengan packet PID
 # (">dddd", big-endian) yang sudah terbukti jalan.
 #
 # PENTING: urutan & jumlah field ini HARUS PERSIS SAMA dengan yang di-Build
 # lalu di-TCP-Write oleh LabVIEW pada koneksi yang SAMA, SETELAH dia selesai
-# baca 32 byte PID. Kalau field di LabVIEW beda (mis. cuma 4 nilai, atau
-# ditambah SP), sesuaikan CHART_FIELDS dan CHART_STRUCT_FMT di bawah ini.
-CHART_FIELDS = ["pv", "flow_tube", "flow_shell", "sinyal_ma", "sinyal_pct"]
-CHART_STRUCT_FMT = ">ddddd"
+# baca 32 byte PID. Kalau field di LabVIEW berubah (mis. ditambah Sinyal % atau
+# SP), sesuaikan CHART_FIELDS dan CHART_STRUCT_FMT di bawah ini.
+CHART_FIELDS = ["pv", "flow_tube", "flow_shell", "sinyal_ma"]
+CHART_STRUCT_FMT = ">dddd"
 CHART_RECV_SIZE = struct.calcsize(CHART_STRUCT_FMT)
 
 # =========================================================================
@@ -132,8 +133,8 @@ def parse_reply(raw: bytes) -> dict:
     ATAU biner. Dideteksi otomatis:
       - Mayoritas byte printable  -> ambil semua angka dari teks, urut, lalu
         petakan ke CHART_FIELDS.
-      - Selain itu (biner)        -> coba 5 double lalu 5 single, big-endian
-        (urutan byte sama dgn packet PID ">dddd" yang sudah terbukti jalan).
+      - Selain itu (biner)        -> coba N double lalu N single (N = jumlah
+        CHART_FIELDS = 4), big-endian (urutan byte sama dgn packet PID ">dddd").
 
     Urutan angka DIANGGAP sama dengan urutan CHART_FIELDS. Kalau ternyata beda
     (mis. LabVIEW kirim SP dulu, atau ada nilai ekstra), cukup ubah/atur ulang
