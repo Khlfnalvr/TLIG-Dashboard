@@ -11,6 +11,7 @@ using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
+using TLIGDashboard.Helpers;
 using TLIGDashboard.Models;
 using TLIGDashboard.Services;
 using Windows.Foundation;
@@ -19,6 +20,11 @@ namespace TLIGDashboard.Controls;
 
 internal static class StudentDetailDialog
 {
+    // Live app theme captured when the dialog is built, so the code-built cards
+    // resolve their brushes for the theme actually on screen rather than the
+    // app's startup/system theme (Application.Current). See Helpers/ThemeBrush.
+    private static ElementTheme _theme = ElementTheme.Dark;
+
     public static async Task ShowAsync(
         XamlRoot root,
         string studentId,
@@ -26,6 +32,8 @@ internal static class StudentDetailDialog
         string assignmentId,
         DateTime? deadline = null)
     {
+        _theme = (root.Content as FrameworkElement)?.ActualTheme ?? ElementTheme.Dark;
+
         var grading  = GradingService.Instance;
         var summaries = await grading.GetGradeSummaryByAssignmentAsync(assignmentId);
         var summary   = summaries.FirstOrDefault(s => s.StudentId == studentId);
@@ -979,10 +987,5 @@ internal static class StudentDetailDialog
         _                    => Windows.UI.Color.FromArgb(255, 196, 43,  28),
     };
 
-    private static Brush SafeThemeBrush(string key)
-    {
-        if (Application.Current.Resources.TryGetValue(key, out var val) && val is Brush b)
-            return b;
-        return new SolidColorBrush(Colors.Transparent);
-    }
+    private static Brush SafeThemeBrush(string key) => ThemeBrush.Get(key, _theme);
 }

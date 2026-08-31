@@ -290,13 +290,31 @@ public sealed partial class MainWindow : Window
         _initializing = false;
     }
 
+    /// <summary>
+    /// Raised after the app theme is (re)applied. Pages that build content in
+    /// code-behind (snapshotting brushes) subscribe to this to recolour themselves.
+    /// Unlike <c>FrameworkElement.ActualThemeChanged</c>, this fires reliably even
+    /// for pages nested inside a child <c>Frame</c> (e.g. Challenge Learning), where
+    /// the per-element event does not always propagate.
+    /// </summary>
+    public static event Action<ElementTheme>? AppThemeChanged;
+
+    /// <summary>
+    /// The theme currently applied to the app (Light/Dark). Pages that build content
+    /// in code read this instead of their own <c>ActualTheme</c>, which is not updated
+    /// reliably for pages nested inside a child <c>Frame</c>.
+    /// </summary>
+    public static ElementTheme CurrentAppTheme { get; private set; } = ElementTheme.Default;
+
     private void ApplyTheme(ElementTheme theme)
     {
         if (Content is FrameworkElement fe)
             fe.RequestedTheme = theme;
+        CurrentAppTheme = theme;
         UpdateTitleBarColors(theme);
         UpdateThemeButton(theme);
         UpdateLogo(theme);
+        AppThemeChanged?.Invoke(theme);
     }
 
     private void UpdateLogo(ElementTheme theme)

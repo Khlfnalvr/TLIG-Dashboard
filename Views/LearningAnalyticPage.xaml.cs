@@ -7,6 +7,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Navigation;
 using TLIGDashboard.Controls;
+using TLIGDashboard.Helpers;
 using TLIGDashboard.Models;
 using TLIGDashboard.Services;
 
@@ -36,6 +37,13 @@ public sealed partial class LearningAnalyticPage : Page
         Loaded += OnLoaded;
     }
 
+    // Fluent theme brush resolved for the page's LIVE ActualTheme. Using
+    // Application.Current.Resources here would pin every code-built card/badge to
+    // the startup/system theme (dark), leaving dark pills on light cards after a
+    // theme toggle. See Helpers/ThemeBrush. Content built with these is rebuilt on
+    // ActualThemeChanged (see OnThemeChanged).
+    private Brush R(string key) => ThemeBrush.Get(key, ActualTheme);
+
     // Progress tracking (overall performance + task summary) is student-facing:
     // hidden on the Server flavor and for staff (Dosen/Asisten) on the Client.
     private static bool ShowAnalyticOverview =>
@@ -53,7 +61,20 @@ public sealed partial class LearningAnalyticPage : Page
         InitGradingCombo();
         _ = LoadGradingSectionAsync();
         ChallengeLearningPage.GradeSaved += OnChallengeGradeSaved;
-        Unloaded += (_, _) => { ChallengeLearningPage.GradeSaved -= OnChallengeGradeSaved; };
+        ActualThemeChanged += OnThemeChanged;
+        Unloaded += (_, _) =>
+        {
+            ChallengeLearningPage.GradeSaved -= OnChallengeGradeSaved;
+            ActualThemeChanged -= OnThemeChanged;
+        };
+    }
+
+    // The grading recap rows/badges are built in code and snapshot their brushes,
+    // so a live theme toggle can't recolour them — rebuild for the new theme.
+    private void OnThemeChanged(FrameworkElement sender, object args)
+    {
+        if (GradingCard.Visibility == Visibility.Visible)
+            BuildChallengeRecap();
     }
 
     protected override void OnNavigatedTo(NavigationEventArgs e)
@@ -478,7 +499,7 @@ public sealed partial class LearningAnalyticPage : Page
             {
                 Padding = new Thickness(14, 10, 14, 10),
                 BorderThickness = new Thickness(0, 0, 0, 1),
-                BorderBrush = (Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"]
+                BorderBrush = R("CardStrokeColorDefaultBrush")
             };
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(180) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -574,8 +595,8 @@ public sealed partial class LearningAnalyticPage : Page
             sp.Children.Add(new TextBlock { Text = value, FontSize = 16, FontWeight = Microsoft.UI.Text.FontWeights.Bold, HorizontalAlignment = HorizontalAlignment.Center });
             return new Border
             {
-                Background      = (Brush)Application.Current.Resources["CardBackgroundFillColorDefaultBrush"],
-                BorderBrush     = (Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
+                Background      = R("CardBackgroundFillColorDefaultBrush"),
+                BorderBrush     = R("CardStrokeColorDefaultBrush"),
                 BorderThickness = new Thickness(1),
                 CornerRadius    = new CornerRadius(8),
                 Padding         = new Thickness(10, 8, 10, 8),
@@ -586,8 +607,8 @@ public sealed partial class LearningAnalyticPage : Page
         Border WrapSection(UIElement child)
             => new Border
             {
-                Background      = (Brush)Application.Current.Resources["CardBackgroundFillColorDefaultBrush"],
-                BorderBrush     = (Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
+                Background      = R("CardBackgroundFillColorDefaultBrush"),
+                BorderBrush     = R("CardStrokeColorDefaultBrush"),
                 BorderThickness = new Thickness(1),
                 CornerRadius    = new CornerRadius(7),
                 Padding         = new Thickness(12, 10, 12, 10),
@@ -750,8 +771,8 @@ public sealed partial class LearningAnalyticPage : Page
             sp.Children.Add(new TextBlock { Text = value, FontSize = 17, FontWeight = Microsoft.UI.Text.FontWeights.Bold, HorizontalAlignment = HorizontalAlignment.Center });
             return new Border
             {
-                Background      = (Brush)Application.Current.Resources["CardBackgroundFillColorDefaultBrush"],
-                BorderBrush     = (Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
+                Background      = R("CardBackgroundFillColorDefaultBrush"),
+                BorderBrush     = R("CardStrokeColorDefaultBrush"),
                 BorderThickness = new Thickness(1),
                 CornerRadius    = new CornerRadius(8),
                 Padding         = new Thickness(12, 8, 12, 8),
@@ -803,18 +824,18 @@ public sealed partial class LearningAnalyticPage : Page
                 {
                     CornerRadius = new CornerRadius(4),
                     Padding = new Thickness(6, 2, 6, 2),
-                    Background = (Brush)Application.Current.Resources[achieved.Value
+                    Background = R(achieved.Value
                         ? "SystemFillColorSuccessBackgroundBrush"
-                        : "SystemFillColorCriticalBackgroundBrush"],
+                        : "SystemFillColorCriticalBackgroundBrush"),
                     VerticalAlignment = VerticalAlignment.Center
                 };
                 badge.Child = new TextBlock
                 {
                     Text = achieved.Value ? "✓ Tercapai" : "✗ Belum",
                     FontSize = 10, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-                    Foreground = (Brush)Application.Current.Resources[achieved.Value
+                    Foreground = R(achieved.Value
                         ? "SystemFillColorSuccessBrush"
-                        : "SystemFillColorCriticalBrush"]
+                        : "SystemFillColorCriticalBrush")
                 };
                 nameRow.Children.Add(badge);
             }
@@ -845,7 +866,7 @@ public sealed partial class LearningAnalyticPage : Page
 
                 var metricCard = new Border
                 {
-                    Background = (Brush)Application.Current.Resources["SubtleFillColorSecondaryBrush"],
+                    Background = R("SubtleFillColorSecondaryBrush"),
                     CornerRadius = new CornerRadius(6), Padding = new Thickness(10, 8, 10, 8),
                     Child = metricGrid
                 };
@@ -901,8 +922,8 @@ public sealed partial class LearningAnalyticPage : Page
             Border WrapSection(StackPanel sp)
                 => new Border
                 {
-                    Background      = (Brush)Application.Current.Resources["CardBackgroundFillColorDefaultBrush"],
-                    BorderBrush     = (Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
+                    Background      = R("CardBackgroundFillColorDefaultBrush"),
+                    BorderBrush     = R("CardStrokeColorDefaultBrush"),
                     BorderThickness = new Thickness(1),
                     CornerRadius    = new CornerRadius(7),
                     Padding         = new Thickness(12, 10, 12, 10),
@@ -964,9 +985,8 @@ public sealed partial class LearningAnalyticPage : Page
     };
 
     /// <summary>Semantic WinUI badge colours (background, foreground) per grade.</summary>
-    private static (Brush Bg, Brush Fg) ChallengeGradeBrushes(string grade)
+    private (Brush Bg, Brush Fg) ChallengeGradeBrushes(string grade)
     {
-        static Brush R(string k) => (Brush)Application.Current.Resources[k];
         return grade switch
         {
             "A" or "AB" => (R("SystemFillColorSuccessBackgroundBrush"),  R("SystemFillColorSuccessBrush")),

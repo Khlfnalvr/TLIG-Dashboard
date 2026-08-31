@@ -8,6 +8,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Windows.Storage.Pickers;
 using Windows.UI;
+using TLIGDashboard.Helpers;
 using TLIGDashboard.Models;
 using TLIGDashboard.Services;
 using WinRT.Interop;
@@ -33,32 +34,47 @@ public sealed partial class ChallengeLearningPage : Page
 
     public static void NotifySubmissionReceived() => SubmissionReceived?.Invoke();
 
-    // ── Theme brushes (WinUI 3 Fluent resources — adapt to light/dark) ────────
-    private static Brush Res(string key) => (Brush)Application.Current.Resources[key];
+    // ── Theme brushes ─────────────────────────────────────────────────────────
+    // Resolved against _themeNow — the theme MainWindow tells us it applied — NOT
+    // this page's ActualTheme. ActualTheme is unreliable here because the page lives
+    // inside a child Frame, so on a toggle it can still report the old theme, which
+    // would hand back dark brushes in light mode (white text, dark badges). See
+    // Helpers/ThemeBrush. Content is rebuilt on MainWindow.AppThemeChanged.
+    private ElementTheme _themeNow = ElementTheme.Default;
+    private Brush Res(string key) => ThemeBrush.Get(key, _themeNow);
 
-    private static Brush TextPrimary   => Res("TextFillColorPrimaryBrush");
-    private static Brush TextSecondary => Res("TextFillColorSecondaryBrush");
-    private static Brush AccentText    => Res("AccentTextFillColorPrimaryBrush");
-    private static Brush Success       => Res("SystemFillColorSuccessBrush");
-    private static Brush SuccessBg     => Res("SystemFillColorSuccessBackgroundBrush");
-    private static Brush Caution       => Res("SystemFillColorCautionBrush");
-    private static Brush CautionBg     => Res("SystemFillColorCautionBackgroundBrush");
-    private static Brush Critical      => Res("SystemFillColorCriticalBrush");
-    private static Brush CriticalBg    => Res("SystemFillColorCriticalBackgroundBrush");
-    private static Brush SubtleBg      => Res("SubtleFillColorSecondaryBrush");
-    private static Brush CardBg        => Res("CardBackgroundFillColorDefaultBrush");
-    private static Brush CardStroke    => Res("CardStrokeColorDefaultBrush");
+    private Brush TextPrimary   => Res("TextFillColorPrimaryBrush");
+    private Brush TextSecondary => Res("TextFillColorSecondaryBrush");
+    private Brush AccentText    => Res("AccentTextFillColorPrimaryBrush");
+    private Brush Success       => Res("SystemFillColorSuccessBrush");
+    private Brush SuccessBg     => Res("SystemFillColorSuccessBackgroundBrush");
+    private Brush Caution       => Res("SystemFillColorCautionBrush");
+    private Brush CautionBg     => Res("SystemFillColorCautionBackgroundBrush");
+    private Brush Critical      => Res("SystemFillColorCriticalBrush");
+    private Brush CriticalBg    => Res("SystemFillColorCriticalBackgroundBrush");
+    private Brush SubtleBg      => Res("SubtleFillColorSecondaryBrush");
+    private Brush CardBg        => Res("CardBackgroundFillColorDefaultBrush");
+    private Brush CardStroke    => Res("CardStrokeColorDefaultBrush");
 
     // ── Init ─────────────────────────────────────────────────────────────────
     public ChallengeLearningPage()
     {
         InitializeComponent();
         Loaded += OnLoaded;
+        // Subscribe in the constructor (not OnLoaded) so the theme-change hook is
+        // guaranteed to be wired regardless of this Frame-hosted page's load timing.
+        _themeNow = MainWindow.CurrentAppTheme != ElementTheme.Default
+            ? MainWindow.CurrentAppTheme
+            : ElementTheme.Dark;
+        MainWindow.AppThemeChanged += OnAppThemeChanged;
     }
 
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
         Loaded -= OnLoaded;
+        _themeNow = MainWindow.CurrentAppTheme != ElementTheme.Default
+            ? MainWindow.CurrentAppTheme
+            : ActualTheme;
         // Set NumberBox defaults (cannot be set in XAML in WinUI 3 1.8)
         WeightDosenBox.Value = 50;
         WeightAiBox.Value    = 30;
@@ -72,6 +88,56 @@ public sealed partial class ChallengeLearningPage : Page
             ActivityStore.Instance.Changed -= OnActivityChanged;
             SubmissionReceived -= OnSubmissionReceived;
         };
+    }
+
+    // Code-built rows snapshot their brushes, so a live theme toggle can't recolour
+    // them on its own. Record the theme MainWindow just applied (authoritative) and
+    // rebuild the visible read-only views; deferred to the next tick so the rebuild
+    // runs after the theme change settles.
+    private void OnAppThemeChanged(ElementTheme theme)
+    {
+        _themeNow = theme;
+        DispatcherQueue.TryEnqueue(RebuildForTheme);
+    }
+
+    private void RebuildForTheme()
+    {
+        if (!IsLoaded) return; // skip detached instances; a fresh load rebuilds anyway
+        ReBadgeChallengeList();
+
+        // Leave panels that hold unsaved input alone (the challenge form and the
+        // grading card use XAML controls, which follow the theme automatically).
+        if (AdminFormPanel.Visibility == Visibility.Visible) return;
+        if (StudentDetailCard is not null && StudentDetailCard.Visibility == Visibility.Visible) return;
+
+        if (_isAdmin)
+        {
+            if (AdminDetailPanel.Visibility == Visibility.Visible && _selected is not null)
+                ShowAdminDetail(_selected);
+        }
+        else if (StudentDetailPanel.Visibility == Visibility.Visible && _selected is not null)
+        {
+            ShowStudentDetail(_selected);
+        }
+        else if (StudentOverviewPanel.Visibility == Visibility.Visible)
+        {
+            ShowStudentOverview();
+        }
+    }
+
+    // Re-applies the status badge (built in code, so theme-fixed) on each visible
+    // list container without resetting ItemsSource — keeps the current selection.
+    private void ReBadgeChallengeList()
+    {
+        for (int i = 0; i < ChallengeList.Items.Count; i++)
+        {
+            if (ChallengeList.ContainerFromIndex(i) is not ListViewItem container) continue;
+            if (ChallengeList.Items[i] is not Challenge ch) continue;
+            var badge     = FindChild<Border>(container, "StatusBadge");
+            var badgeText = FindChild<TextBlock>(container, "StatusText");
+            if (badge is not null && badgeText is not null)
+                ApplyStatusBadge(badge, badgeText, ch.Status);
+        }
     }
 
     private void OnActivityChanged()
@@ -136,7 +202,7 @@ public sealed partial class ChallengeLearningPage : Page
         }
     }
 
-    private static void ApplyStatusBadge(Border b, TextBlock t, ChallengeStatus s)
+    private void ApplyStatusBadge(Border b, TextBlock t, ChallengeStatus s)
     {
         (b.Background, t.Foreground, t.Text) = s switch
         {

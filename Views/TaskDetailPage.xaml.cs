@@ -4,6 +4,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Navigation;
+using TLIGDashboard.Helpers;
 using TLIGDashboard.Services;
 
 namespace TLIGDashboard.Views;
@@ -191,7 +192,7 @@ public sealed partial class TaskDetailPage : Page
             SimBtnIcon.Glyph = Glyph(GlyphPlay);
             SimCountdownText.Text = FormatTime(TimeSpan.FromMinutes(_task.SimulationTimeMinutes));
             SimTimerStatus.Text   = $"{_task.SimulationTimeMinutes} {Lang.Sim_Minutes}";
-            SimTimerIcon.Foreground = (Brush)Application.Current.Resources["AccentTextFillColorPrimaryBrush"];
+            SimTimerIcon.Foreground = ThemeBrush.Get("AccentTextFillColorPrimaryBrush", ActualTheme);
         }
     }
 

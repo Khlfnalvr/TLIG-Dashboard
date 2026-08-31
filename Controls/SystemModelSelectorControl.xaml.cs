@@ -2,6 +2,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
+using TLIGDashboard.Helpers;
 using TLIGDashboard.Services;
 
 namespace TLIGDashboard.Controls;
@@ -13,8 +14,10 @@ namespace TLIGDashboard.Controls;
 /// </summary>
 public sealed partial class SystemModelSelectorControl : UserControl
 {
-    // Theme-aware WinUI brushes (follow light/dark theme + system accent)
-    private static Brush Res(string key) => (Brush)Application.Current.Resources[key];
+    // Theme-aware WinUI brushes (follow light/dark theme + system accent).
+    // Resolved against the control's live ActualTheme, not Application.Current
+    // (which is pinned to the startup theme). See Helpers/ThemeBrush.
+    private Brush Res(string key) => ThemeBrush.Get(key, ActualTheme);
 
     // Per-system collapsed-view glyphs (Segoe Fluent / MDL2)
     private static readonly Dictionary<SimulationType, (string Glyph, string Name, string Unit)> _meta = new()

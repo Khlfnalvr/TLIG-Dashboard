@@ -1,6 +1,7 @@
 using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using TLIGDashboard.Helpers;
 using TLIGDashboard.Services;
 
 namespace TLIGDashboard.Views;
@@ -31,6 +32,10 @@ internal static class AiConfigUi
     {
         var cfg = await AiConfigService.LoadAsync();
         if (!cfg.CanEdit) return false;
+
+        // Resolve card brushes against the live app theme (the root element's
+        // ActualTheme), not Application.Current — see Helpers/ThemeBrush.
+        ElementTheme theme = (root.Content as FrameworkElement)?.ActualTheme ?? ElementTheme.Dark;
 
         var panel = new StackPanel { Spacing = 12, Width = 380 };
         var rows  = new List<Row>();
@@ -82,8 +87,8 @@ internal static class AiConfigUi
                 Padding = new Thickness(12),
                 CornerRadius = new CornerRadius(8),
                 BorderThickness = new Thickness(1),
-                BorderBrush = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
-                Background = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["CardBackgroundFillColorDefaultBrush"],
+                BorderBrush = ThemeBrush.Get("CardStrokeColorDefaultBrush", theme),
+                Background = ThemeBrush.Get("CardBackgroundFillColorDefaultBrush", theme),
                 Child = card,
             });
 
