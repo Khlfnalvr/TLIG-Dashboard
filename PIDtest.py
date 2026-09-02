@@ -1,5 +1,6 @@
 import socket
 import struct
+import math
 import time
 import json
 import os
@@ -164,10 +165,16 @@ _NUM_RE = re.compile(r"[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?")
 
 
 def _looks_sane(vals) -> bool:
-    """True kalau semua nilai wajar untuk data proses (bukan NaN/inf, tidak
-    berskala ekstrem). Dipakai untuk menolak pembacaan biner yang salah-align
-    (mis. karena ada/tidak-adanya prefiks panjang) lalu mencoba tafsir lain."""
-    return all(v == v and abs(v) < 1e12 for v in vals)
+    """True kalau semua nilai wajar untuk data proses. Dipakai untuk menolak
+    pembacaan biner yang salah-align (mis. karena ada/tidak-adanya prefiks
+    panjang) lalu mencoba tafsir lain.
+
+    Double yang salah-align hampir selalu menghasilkan nilai EKSTREM: sangat
+    besar (>1e9) ATAU sangat kecil/subnormal (mis. 1e-314). Nilai proses nyata
+    di sini (suhu, flow, mA, %, PID) berada di rentang wajar, jadi kita terima
+    hanya 0.0 atau |v| di [1e-9, 1e9]."""
+    return all(math.isfinite(v) and (v == 0.0 or 1e-9 <= abs(v) < 1e9)
+               for v in vals)
 
 
 def parse_reply(raw: bytes) -> dict:
@@ -177,9 +184,10 @@ def parse_reply(raw: bytes) -> dict:
          LabVIEW dipakai; URUTAN tak penting). Jalur paling andal & anti salah
          petakan — ini yang disarankan dipakai di LabVIEW.
       2) TEKS ANGKA POLOS ("1.36,1.37,…") -> dipetakan berurutan ke CHART_FIELDS.
-      3) BINER -> N double (lalu N single) big-endian, dicoba apa adanya LALU
-         setelah membuang prefiks panjang I32 4-byte; hasil yang jelas ngawur
-         ditolak (_looks_sane) supaya alignmen yang benar yang dipakai.
+      3) BINER -> decode SEBANYAK nilai yang dikirim (double lalu single),
+         big-endian, apa adanya LALU setelah membuang prefiks panjang I32
+         4-byte; hasil ngawur ditolak (_looks_sane). Dipetakan berurutan ke
+         CHART_FIELDS sejauh tersedia; kelebihan diberi label "LV[i]".
 
     Untuk jalur biner urutan DIANGGAP = urutan CHART_FIELDS, jadi Build Array di
     LabVIEW harus dalam urutan itu. Jalur teks berlabel tidak butuh kesepakatan
@@ -200,16 +208,39 @@ def parse_reply(raw: bytes) -> dict:
         if nums:                                          # (2) angka polos → urut
             return dict(zip(CHART_FIELDS, (float(x) for x in nums)))
 
-    # (3) Biner: utamakan double, coba apa adanya lalu buang prefiks 4-byte.
-    n = len(CHART_FIELDS)
+    # (3) Biner: decode SEBANYAK nilai yang benar-benar dikirim LabVIEW (bukan
+    #     dipaksa 7). Utamakan double lalu single; coba apa adanya lalu buang
+    #     prefiks panjang I32 4-byte. Tidak pernah kosong hanya karena jumlahnya
+    #     != len(CHART_FIELDS) — jadi dashboard tetap hidup & log tetap terekam
+    #     walau LabVIEW masih kirim 4 nilai (atau malah 13).
+    bodies = [raw, raw[4:]]                       # apa adanya, lalu tanpa prefiks
+    if len(raw) >= 8:
+        hdr = struct.unpack(">i", raw[:4])[0]     # I32 big-endian di depan
+        rest = len(raw) - 4
+        # Prefiks panjang LabVIEW = jumlah elemen (rest//8 double / rest//4 single)
+        # atau jumlah byte (rest). Kalau cocok, utamakan versi yang sudah dibuang.
+        if hdr in (rest, rest // 8, rest // 4) and hdr > 0:
+            bodies = [raw[4:], raw]
+    best = None
     for ch in ("d", "f"):
         size = struct.calcsize(">" + ch)
-        for body in (raw, raw[4:]):
-            if len(body) >= n * size:
-                vals = struct.unpack(">" + ch * n, body[:n * size])
-                if _looks_sane(vals):
-                    return dict(zip(CHART_FIELDS, vals))
-    return {}
+        for body in bodies:
+            count = len(body) // size
+            if count == 0:
+                continue
+            vals = struct.unpack(f">{count}{ch}", body[:count * size])
+            if _looks_sane(vals):
+                best = list(vals)
+                break
+        if best is not None:
+            break
+    if not best:
+        return {}
+    # Petakan berurutan ke CHART_FIELDS sejauh tersedia; nilai ekstra (kalau
+    # LabVIEW kirim LEBIH banyak dari 7) tetap ditampilkan dgn label generik
+    # "LV[i]" supaya kelihatan di dashboard dan bisa dicocokkan dgn panel.
+    return {(CHART_FIELDS[i] if i < len(CHART_FIELDS) else f"LV[{i}]"): v
+            for i, v in enumerate(best)}
 
 
 def recv_reply(sock, first_timeout=2.0, drain_timeout=0.3, max_bytes=65536):
