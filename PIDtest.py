@@ -26,18 +26,47 @@ DASHBOARD_HOST = "localhost"
 DASHBOARD_PORT = 5005
 
 # ── Balasan data chart dari LabVIEW ────────────────────────────────────────
-# LabVIEW mengirim 4 nilai — PV, Flow Tube, Flow Shell, Sinyal mA — sesuai yang
-# tampil di panel "LabVIEW Data" dashboard. Sebagai biner itu = 4 double x
-# 8 byte = 32 byte, big-endian ">dddd" — SAMA POLA dengan packet PID
-# (">dddd", big-endian) yang sudah terbukti jalan.
+# 7 variabel yang tampil di tab "Chart" LabVIEW dan yang HARUS ikut tampil sama
+# persis di panel "LabVIEW Data" dashboard. Label di bawah = teks yang muncul di
+# dashboard, jadi sengaja dibuat SAMA dengan indikator LabVIEW.
 #
-# PENTING: urutan & jumlah field ini HARUS PERSIS SAMA dengan yang di-Build
-# lalu di-TCP-Write oleh LabVIEW pada koneksi yang SAMA, SETELAH dia selesai
-# baca 32 byte PID. Kalau field di LabVIEW berubah (mis. ditambah Sinyal % atau
-# SP), sesuaikan CHART_FIELDS dan CHART_STRUCT_FMT di bawah ini.
-CHART_FIELDS = ["pv", "flow_tube", "flow_shell", "sinyal_ma"]
-CHART_STRUCT_FMT = ">dddd"
+# Ada DUA cara LabVIEW boleh mengirim balasan (parse_reply mengenali keduanya):
+#
+#   1) TEKS BERLABEL  (PALING andal — DISARANKAN)
+#      Setiap siklus, "Format Into String" lalu "TCP Write":
+#          Flow Tube=%.2f\nFlow Shell=%.2f\nSinyal mA=%.2f\nSinyal %%=%.2f\n
+#          PV Shell in=%.2f\nSet Point=%.2f\nPV Shell out=%.2f\n
+#      Label ikut terkirim, jadi URUTAN tidak perlu disepakati — dashboard
+#      meniru label & nilai apa adanya. Anti salah-petakan.
+#
+#   2) BINER  (kalau tetap pakai array double seperti packet PID)
+#      "Build Array" 7 DBL DALAM URUTAN PERSIS seperti CHART_FIELDS lalu kirim
+#      sebagai byte mentah big-endian (Type Cast ke string, ATAU Flatten To
+#      String dengan "prepend size?"=FALSE). = 7 x 8 = 56 byte. Kalau size ikut
+#      ter-prepend (4 byte I32) pun parser tetap otomatis membuangnya.
+#
+# Kalau daftar/urutan variabel berubah di LabVIEW, cukup sesuaikan CHART_FIELDS
+# ini (dan Build Array di LabVIEW) — nilai biner dipetakan menurut urutan ini.
+CHART_FIELDS = [
+    "Flow Tube",     # L/min
+    "Flow Shell",    # L/min
+    "Sinyal mA",     # mA
+    "Sinyal %",      # %
+    "PV Shell in",   # Celcius
+    "Set Point",     # Celcius
+    "PV Shell out",  # Celcius
+]
+CHART_STRUCT_FMT = ">" + "d" * len(CHART_FIELDS)
 CHART_RECV_SIZE = struct.calcsize(CHART_STRUCT_FMT)
+
+# ── Diagnosa balasan LabVIEW ───────────────────────────────────────────────
+# File log untuk MEMBUKTIKAN format kawat balasan LabVIEW. Setiap balasan yang
+# BERUBAH dicatat: hex mentah + SEMUA interpretasi (double/single big-endian &
+# teks). Bandingkan angka di log ini dengan angka di panel depan LabVIEW
+# (Flow Tube, Flow Shell, Sinyal mA, PV, dst.) untuk tahu urutan/isi asli yang
+# dikirim VI — lalu set CHART_FIELDS/urutan di atas agar dashboard = LabVIEW.
+# Aman dihapus kapan saja; dibuat ulang saat script jalan lagi.
+DIAG_LOG = os.path.join(os.path.dirname(os.path.abspath(__file__)), "labview_reply.log")
 
 # =========================================================================
 # File "jembatan" dari TLIG Dashboard.
@@ -126,34 +155,134 @@ def forward_chart_to_dashboard(values: dict):
         print(f"[ERROR] Gagal kirim ke dashboard {DASHBOARD_HOST}:{DASHBOARD_PORT} -> {e}")
 
 
+# Regex balasan LabVIEW:
+#   _KV_RE  : pasangan "Label = angka" (label boleh spasi, %, /, kurung, dsb;
+#             non-greedy supaya tidak melahap unit/teks setelah angka).
+#   _NUM_RE : angka polos (fallback kalau LabVIEW kirim angka tanpa label).
+_KV_RE = re.compile(r"([A-Za-z][\w %/().+\-]*?)\s*=\s*([-+]?\d*\.?\d+(?:[eE][-+]?\d+)?)")
+_NUM_RE = re.compile(r"[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?")
+
+
+def _looks_sane(vals) -> bool:
+    """True kalau semua nilai wajar untuk data proses (bukan NaN/inf, tidak
+    berskala ekstrem). Dipakai untuk menolak pembacaan biner yang salah-align
+    (mis. karena ada/tidak-adanya prefiks panjang) lalu mencoba tafsir lain."""
+    return all(v == v and abs(v) < 1e12 for v in vals)
+
+
 def parse_reply(raw: bytes) -> dict:
-    """Ubah balasan mentah dari LabVIEW jadi {field: nilai}.
+    """Ubah balasan mentah LabVIEW jadi {label: nilai}. Deteksi otomatis:
 
-    LabVIEW bisa mengirim TEKS (mis. "DATA,-30.09,0,0,0,0" — pemisah apa saja)
-    ATAU biner. Dideteksi otomatis:
-      - Mayoritas byte printable  -> ambil semua angka dari teks, urut, lalu
-        petakan ke CHART_FIELDS.
-      - Selain itu (biner)        -> coba N double lalu N single (N = jumlah
-        CHART_FIELDS = 4), big-endian (urutan byte sama dgn packet PID ">dddd").
+      1) TEKS BERLABEL "Label=nilai"  -> diteruskan APA ADANYA (label asli
+         LabVIEW dipakai; URUTAN tak penting). Jalur paling andal & anti salah
+         petakan — ini yang disarankan dipakai di LabVIEW.
+      2) TEKS ANGKA POLOS ("1.36,1.37,…") -> dipetakan berurutan ke CHART_FIELDS.
+      3) BINER -> N double (lalu N single) big-endian, dicoba apa adanya LALU
+         setelah membuang prefiks panjang I32 4-byte; hasil yang jelas ngawur
+         ditolak (_looks_sane) supaya alignmen yang benar yang dipakai.
 
-    Urutan angka DIANGGAP sama dengan urutan CHART_FIELDS. Kalau ternyata beda
-    (mis. LabVIEW kirim SP dulu, atau ada nilai ekstra), cukup ubah/atur ulang
-    CHART_FIELDS di atas — nilainya sudah benar, tinggal labelnya.
+    Untuk jalur biner urutan DIANGGAP = urutan CHART_FIELDS, jadi Build Array di
+    LabVIEW harus dalam urutan itu. Jalur teks berlabel tidak butuh kesepakatan
+    urutan sama sekali.
     """
     if not raw:
         return {}
+
     printable = sum(1 for b in raw if b in (9, 10, 13) or 32 <= b <= 126)
     if printable >= 0.8 * len(raw):                       # kelihatan teks
-        nums = re.findall(r"[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?",
-                          raw.decode("ascii", "ignore"))
-        if nums:
+        text = raw.decode("ascii", "ignore")
+        pairs = _KV_RE.findall(text)
+        if pairs:                                         # (1) teks berlabel
+            # Pertahankan STRING asli (mis. "60.00", "0.01") supaya format angka
+            # di dashboard sama persis dengan yang tampil di LabVIEW.
+            return {k.strip(): v for k, v in pairs}
+        nums = _NUM_RE.findall(text)
+        if nums:                                          # (2) angka polos → urut
             return dict(zip(CHART_FIELDS, (float(x) for x in nums)))
-    for ch in ("d", "f"):                                 # biner: double lalu single
-        fmt = ">" + ch * len(CHART_FIELDS)
-        n = struct.calcsize(fmt)
-        if len(raw) >= n:
-            return dict(zip(CHART_FIELDS, struct.unpack(fmt, raw[:n])))
+
+    # (3) Biner: utamakan double, coba apa adanya lalu buang prefiks 4-byte.
+    n = len(CHART_FIELDS)
+    for ch in ("d", "f"):
+        size = struct.calcsize(">" + ch)
+        for body in (raw, raw[4:]):
+            if len(body) >= n * size:
+                vals = struct.unpack(">" + ch * n, body[:n * size])
+                if _looks_sane(vals):
+                    return dict(zip(CHART_FIELDS, vals))
     return {}
+
+
+def recv_reply(sock, first_timeout=2.0, drain_timeout=0.3, max_bytes=65536):
+    """Baca balasan LabVIEW SELENGKAP mungkin.
+
+    TCP adalah stream: satu balasan bisa terpecah jadi beberapa segmen, dan
+    satu `recv` bisa mengembalikan hanya sebagian. Kita tunggu segmen pertama
+    (timeout `first_timeout`), lalu terus membaca dengan timeout pendek sampai
+    LabVIEW berhenti mengirim. Ini penting supaya diagnosa melihat SELURUH
+    packet (bukan cuma 32 byte pertama), termasuk field yang selama ini
+    terlewat karena hanya 4 double pertama yang dibaca."""
+    sock.settimeout(first_timeout)
+    try:
+        first = sock.recv(4096)
+    except socket.timeout:
+        return b""
+    if not first:
+        return b""
+    buf = bytearray(first)
+    sock.settimeout(drain_timeout)
+    while len(buf) < max_bytes:
+        try:
+            chunk = sock.recv(4096)
+        except socket.timeout:
+            break
+        if not chunk:
+            break
+        buf.extend(chunk)
+    return bytes(buf)
+
+
+def decode_all_numbers(raw: bytes) -> dict:
+    """Semua cara masuk akal membaca `raw`, untuk diagnosa. Tidak memutuskan
+    apa-apa — hanya memaparkan agar kita bisa mencocokkan dengan panel LabVIEW."""
+    out = {}
+    printable = sum(1 for b in raw if b in (9, 10, 13) or 32 <= b <= 126)
+    out["printable_ratio"] = round(printable / max(1, len(raw)), 3)
+    out["as_text"] = raw.decode("ascii", "ignore")
+    n8 = len(raw) // 8
+    if n8:
+        out[f"doubles_BE(x{n8})"] = [round(x, 6) for x in struct.unpack(f">{n8}d", raw[:n8 * 8])]
+        out[f"doubles_LE(x{n8})"] = [round(x, 6) for x in struct.unpack(f"<{n8}d", raw[:n8 * 8])]
+    n4 = len(raw) // 4
+    if n4:
+        out[f"singles_BE(x{n4})"] = [round(x, 6) for x in struct.unpack(f">{n4}f", raw[:n4 * 4])]
+        out[f"singles_LE(x{n4})"] = [round(x, 6) for x in struct.unpack(f"<{n4}f", raw[:n4 * 4])]
+    return out
+
+
+_last_logged_hex = None
+
+
+def log_reply(raw: bytes, forwarded: dict):
+    """Catat balasan yang BERUBAH ke DIAG_LOG (hex + semua interpretasi).
+
+    De-dup: kalau bytes-nya sama dgn yang terakhir dicatat, dilewati supaya log
+    tidak membengkak saat nilai diam."""
+    global _last_logged_hex
+    hx = raw.hex(" ")
+    if hx == _last_logged_hex:
+        return
+    _last_logged_hex = hx
+    try:
+        with open(DIAG_LOG, "a", encoding="utf-8") as f:
+            f.write("=" * 72 + "\n")
+            f.write(f"waktu     : {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
+            f.write(f"panjang   : {len(raw)} byte\n")
+            f.write(f"hex       : {hx}\n")
+            for k, v in decode_all_numbers(raw).items():
+                f.write(f"{k:16s}: {v}\n")
+            f.write(f"diteruskan: {forwarded}\n")
+    except OSError:
+        pass
 
 
 def run_client():
@@ -189,23 +318,26 @@ def run_client():
                     f"({len(packet)} byte)"
                 )
 
-                # Tunggu balasan data dari LabVIEW di koneksi yang SAMA, lalu
-                # deteksi format otomatis (teks / biner) dan ambil angkanya.
-                client.settimeout(2.0)
-                try:
-                    raw = client.recv(4096)
-                    if not raw:
-                        print("[RECV] LabVIEW menutup koneksi tanpa kirim data.")
+                # Tunggu balasan data dari LabVIEW di koneksi yang SAMA (drain
+                # sampai lengkap), lalu deteksi format otomatis (teks / biner).
+                raw = recv_reply(client)
+                if not raw:
+                    print("[WARN] Tidak ada balasan dari LabVIEW (timeout).")
+                else:
+                    print(f"[RECV-RAW] {len(raw)} byte: {raw!r}")   # untuk verifikasi
+                    # Cetak SEMUA double big-endian agar mudah dibandingkan
+                    # langsung dengan angka di panel depan LabVIEW.
+                    n8 = len(raw) // 8
+                    if n8:
+                        alld = struct.unpack(f">{n8}d", raw[:n8 * 8])
+                        print(f"[RECV-ALL doubles BE x{n8}]: {[round(x, 5) for x in alld]}")
+                    values = parse_reply(raw)
+                    log_reply(raw, values)          # simpan bukti ke labview_reply.log
+                    if values:
+                        print(f"[RECV] -> {values}")
+                        forward_chart_to_dashboard(values)
                     else:
-                        print(f"[RECV-RAW] {len(raw)} byte: {raw!r}")   # untuk verifikasi
-                        values = parse_reply(raw)
-                        if values:
-                            print(f"[RECV] -> {values}")
-                            forward_chart_to_dashboard(values)
-                        else:
-                            print("[WARN] Balasan tak bisa di-parse (lihat RAW di atas).")
-                except socket.timeout:
-                    print("[WARN] Tidak ada balasan dari LabVIEW (timeout 2s).")
+                        print("[WARN] Balasan tak bisa di-parse (lihat RAW di atas).")
 
         except (ConnectionRefusedError, OSError) as e:
             print(f"[ERROR] Gagal connect ke {host}:{port} -> {e}")
