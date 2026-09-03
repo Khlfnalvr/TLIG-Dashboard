@@ -694,6 +694,7 @@ public sealed class LocalizationManager : INotifyPropertyChanged
     public string Um_Save            => T(nameof(Um_Save));
     public string Um_Cancel          => T(nameof(Um_Cancel));
     public string Um_Confirm         => T(nameof(Um_Confirm));
+    public string Um_RoleAdmin       => T(nameof(Um_RoleAdmin));
     public string Um_RoleDosen       => T(nameof(Um_RoleDosen));
     public string Um_RoleAsisten     => T(nameof(Um_RoleAsisten));
     public string Um_RoleMahasiswa   => T(nameof(Um_RoleMahasiswa));
@@ -1205,6 +1206,7 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             [nameof(Um_Save)]    = "Save",
             [nameof(Um_Cancel)]  = "Cancel",
             [nameof(Um_Confirm)] = "Confirm",
+            [nameof(Um_RoleAdmin)]     = "Administrator",
             [nameof(Um_RoleDosen)]     = "Lecturer",
             [nameof(Um_RoleAsisten)]   = "Assistant",
             [nameof(Um_RoleMahasiswa)] = "Student",
@@ -1213,7 +1215,7 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             [nameof(Um_ErrPasswordEmpty)] = "Password cannot be empty.",
             [nameof(Um_ErrUserExists)]    = "A user with that name already exists.",
             [nameof(Um_ErrUserNotFound)]  = "User not found.",
-            [nameof(Um_ErrLastAdmin)]     = "There must be at least one enabled staff account (Lecturer or Assistant).",
+            [nameof(Um_ErrLastAdmin)]     = "There must be at least one enabled staff account (Administrator, Lecturer or Assistant).",
             [nameof(Um_ErrInvalidRole)]   = "Invalid role.",
 
             // User Performance page
@@ -1824,6 +1826,7 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             [nameof(Um_Save)]    = "Simpan",
             [nameof(Um_Cancel)]  = "Batal",
             [nameof(Um_Confirm)] = "Konfirmasi",
+            [nameof(Um_RoleAdmin)]     = "Admin",
             [nameof(Um_RoleDosen)]     = "Dosen",
             [nameof(Um_RoleAsisten)]   = "Asisten",
             [nameof(Um_RoleMahasiswa)] = "Mahasiswa",
@@ -1832,7 +1835,7 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             [nameof(Um_ErrPasswordEmpty)] = "Kata sandi tidak boleh kosong.",
             [nameof(Um_ErrUserExists)]    = "Pengguna dengan nama itu sudah ada.",
             [nameof(Um_ErrUserNotFound)]  = "Pengguna tidak ditemukan.",
-            [nameof(Um_ErrLastAdmin)]     = "Harus ada minimal satu akun staf aktif (Dosen atau Asisten).",
+            [nameof(Um_ErrLastAdmin)]     = "Harus ada minimal satu akun staf aktif (Admin, Dosen, atau Asisten).",
             [nameof(Um_ErrInvalidRole)]   = "Peran tidak valid.",
 
             // User Performance page

@@ -101,6 +101,7 @@ public sealed partial class UserManagementPage : Page
 
     private string RoleLabel(string role) => role switch
     {
+        UserRoles.Admin     => Lang.Um_RoleAdmin,
         UserRoles.Dosen     => Lang.Um_RoleDosen,
         UserRoles.Asisten   => Lang.Um_RoleAsisten,
         _                   => Lang.Um_RoleMahasiswa,
@@ -230,14 +231,16 @@ public sealed partial class UserManagementPage : Page
             Header = Lang.Um_FieldRole,
             HorizontalAlignment = HorizontalAlignment.Stretch,
         };
+        combo.Items.Add(new ComboBoxItem { Content = Lang.Um_RoleAdmin,     Tag = UserRoles.Admin });
         combo.Items.Add(new ComboBoxItem { Content = Lang.Um_RoleDosen,     Tag = UserRoles.Dosen });
         combo.Items.Add(new ComboBoxItem { Content = Lang.Um_RoleAsisten,   Tag = UserRoles.Asisten });
         combo.Items.Add(new ComboBoxItem { Content = Lang.Um_RoleMahasiswa, Tag = UserRoles.Mahasiswa });
         combo.SelectedIndex = selectedRole switch
         {
-            UserRoles.Dosen   => 0,
-            UserRoles.Asisten => 1,
-            _                 => 2,
+            UserRoles.Admin   => 0,
+            UserRoles.Dosen   => 1,
+            UserRoles.Asisten => 2,
+            _                 => 3,
         };
         return combo;
     }
