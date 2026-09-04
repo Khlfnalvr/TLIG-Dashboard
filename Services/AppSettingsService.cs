@@ -33,8 +33,12 @@ public class AppSettings
 
     // ── LabVIEW → HMI data bridge (TCP telemetry) ─────────────────────────
     // The dashboard listens on this TCP port for "key=value" lines streamed by a
-    // LabVIEW VI ("TCP Write"); the values are shown in the HMI panel.
-    public int    HmiDataPort             { get; set; } = 5005;
+    // LabVIEW VI ("TCP Write") or forwarded by PIDtest.py; the values are shown in
+    // the HMI panel. Together with PlcTcpPort the dashboard uses two adjacent ports:
+    //   • 6000 (PlcTcpPort)  — dashboard ↔ LabVIEW control link (PlcTcpService)
+    //   • 6001 (HmiDataPort) — dashboard ← telemetry/chart data (HmiDataService)
+    // Keep this in sync with DASHBOARD_PORT in PIDtest.py.
+    public int    HmiDataPort             { get; set; } = 6001;
 
     // ── Python bridge (PIDtest.py → LabVIEW) ──────────────────────────────
     // The HMI drives an external Python client that forwards SP/KC/KI/KD to
@@ -152,6 +156,16 @@ public static class AppSettingsService
                 if (settings.AiApiUrl.EndsWith("/v1", StringComparison.OrdinalIgnoreCase))
                 {
                     settings.AiApiUrl = settings.AiApiUrl[..^3]; // strip trailing /v1
+                    Save(settings);
+                }
+
+                // Migration: the LabVIEW telemetry listener moved off 5005 so the two
+                // LabVIEW-facing ports sit together (6000 control + 6001 telemetry).
+                // Installs that still carry the old default are moved along with it;
+                // any other value is a deliberate override and is left untouched.
+                if (settings.HmiDataPort == 5005)
+                {
+                    settings.HmiDataPort = 6001;
                     Save(settings);
                 }
             }
