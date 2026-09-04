@@ -1,6 +1,9 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
+using System.Net.Http;
+using System.Text;
+using System.Text.Json.Nodes;
 
 namespace TLIGDashboard.Services;
 
@@ -28,6 +31,15 @@ namespace TLIGDashboard.Services;
 /// drive a remote LabVIEW (no editing the Python script on each machine).
 /// It lives beside the script (derived from <see cref="AppSettings.PythonScriptPath"/>)
 /// so the script can locate it from its own __file__ with no extra configuration.
+///
+/// <para><b>Server vs Client.</b> Only the Server PC is wired to LabVIEW, so the local
+/// process/JSON path above runs on the <b>Server</b> flavor. On the <b>Client</b> flavor
+/// the same <see cref="Run"/> / <see cref="Stop"/> / <see cref="SyncParams"/> calls are
+/// forwarded over HTTP to the signed-in server (<see cref="ShareProtocol.PidRunPath"/>),
+/// which drives its own bridge — so the Client's RUN button reaches the lab LabVIEW just
+/// like the Server's. This mirrors how <see cref="ControlEngineering.PidDesignService"/>
+/// hides the server/client split, and keeps both callers (Dashboard + Parameter page)
+/// flavor-agnostic.</para>
 /// </summary>
 public sealed class PythonBridgeService : IDisposable
 {
@@ -42,7 +54,20 @@ public sealed class PythonBridgeService : IDisposable
     /// <summary>Raised when the child process starts (true) or exits (false).</summary>
     public event Action<bool>? RunningChanged;
 
-    public bool IsRunning { get { lock (_procLock) return _process is { HasExited: false }; } }
+    public bool IsRunning
+    {
+        get
+        {
+            // Client has no local process — RUN/STOP are forwarded to the server, so track
+            // the last forwarded state instead of a child process handle.
+            if (BuildInfo.IsClient) return _clientRunning;
+            lock (_procLock) return _process is { HasExited: false };
+        }
+    }
+
+    // Optimistic RUN/STOP state on the Client flavor (see ForwardToServer). Volatile: read
+    // by IsRunning on the UI thread, written from the forward task.
+    private volatile bool _clientRunning;
 
     // ── Internals ───────────────────────────────────────────────────────────────
     private Process?        _process;
@@ -108,6 +133,7 @@ public sealed class PythonBridgeService : IDisposable
     public void SyncParams(double kp, double ki, double kd, double sp)
     {
         _kp = kp; _ki = ki; _kd = kd; _sp = sp;
+        if (BuildInfo.IsClient) { ForwardToServer("sync"); return; }
         WriteParamsFile();
     }
 
@@ -122,6 +148,7 @@ public sealed class PythonBridgeService : IDisposable
 
         _kp = kp; _ki = ki; _kd = kd; _sp = sp;
         _run = true;
+        if (BuildInfo.IsClient) { ForwardToServer("run"); return; }
         WriteParamsFile();   // run=true must be on disk before the script starts reading
         StartProcess();
     }
@@ -130,8 +157,61 @@ public sealed class PythonBridgeService : IDisposable
     public void Stop()
     {
         _run = false;
+        if (BuildInfo.IsClient) { ForwardToServer("stop"); return; }
         WriteParamsFile();   // a still-looping script sees run=false and exits cleanly…
         KillProcess();       // …and we make it immediate regardless.
+    }
+
+    // ── Client → Server forwarding ──────────────────────────────────────────────
+
+    /// <summary>
+    /// Client flavor only: sends the current gains + <paramref name="action"/> to the
+    /// signed-in server, which runs it on its own bridge (the machine wired to LabVIEW).
+    /// Fire-and-forget; the outcome is surfaced through <see cref="StatusChanged"/> and,
+    /// for run/stop, <see cref="RunningChanged"/> so the RUN button state stays honest.
+    /// </summary>
+    private void ForwardToServer(string action)
+    {
+        var s     = AppSettingsService.Load();
+        var host  = s.ServerHost;
+        var token = s.ServerToken;
+
+        // Snapshot the current contract so the async post is not racing later edits.
+        double kp = _kp, ki = _ki, kd = _kd, sp = _sp;
+
+        if (string.IsNullOrWhiteSpace(AuthClient.NormalizeHost(host)) || string.IsNullOrWhiteSpace(token))
+        {
+            // A background parameter sync stays silent; an explicit RUN/STOP reports why nothing happened.
+            if (action is "run" or "stop")
+                StatusChanged?.Invoke("Gagal mengirim perintah: belum tersambung ke server.");
+            return;
+        }
+
+        // Optimistic RUN/STOP state so the UI reacts immediately; rolled back on failure.
+        if (action == "run")  { _clientRunning = true;  RunningChanged?.Invoke(true); }
+        if (action == "stop") { _clientRunning = false; RunningChanged?.Invoke(false); }
+
+        _ = Task.Run(async () =>
+        {
+            bool ok = await PidRunClient.PostAsync(host, token, action, kp, ki, kd, sp);
+            switch (action)
+            {
+                case "run":
+                    if (!ok) { _clientRunning = false; RunningChanged?.Invoke(false); }
+                    StatusChanged?.Invoke(ok
+                        ? "Perintah RUN dikirim ke server (LabVIEW)."
+                        : "Gagal mengirim perintah RUN ke server.");
+                    break;
+                case "stop":
+                    StatusChanged?.Invoke(ok
+                        ? "Perintah STOP dikirim ke server (LabVIEW)."
+                        : "Gagal mengirim perintah STOP ke server.");
+                    break;
+                case "sync":
+                    if (!ok) StatusChanged?.Invoke("Gagal menyinkronkan parameter ke server.");
+                    break;
+            }
+        });
     }
 
     // ── File writer (atomic) ────────────────────────────────────────────────────
@@ -279,4 +359,44 @@ public sealed class PythonBridgeService : IDisposable
     }
 
     public void Dispose() => KillProcess();
+}
+
+/// <summary>
+/// Client-side helper that forwards a PID process command (run / stop / sync) to a
+/// <see cref="ShareServer"/>'s <see cref="ShareProtocol.PidRunPath"/> endpoint, presenting
+/// the session token as the Bearer credential. Mirrors <see cref="TaskClient"/> /
+/// <see cref="ControlEngineering.PidDesignClient"/>.
+/// </summary>
+public static class PidRunClient
+{
+    /// <summary>POSTs one command; returns true on a 2xx response, false on any error.</summary>
+    public static async Task<bool> PostAsync(
+        string host, string token, string action, double kp, double ki, double kd, double sp)
+    {
+        if (string.IsNullOrWhiteSpace(AuthClient.NormalizeHost(host)) || string.IsNullOrWhiteSpace(token))
+            return false;
+
+        try
+        {
+            var body = new JsonObject
+            {
+                ["action"] = action,
+                ["kp"] = kp,
+                ["ki"] = ki,
+                ["kd"] = kd,
+                ["sp"] = sp,
+            };
+
+            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
+            using var req  = new HttpRequestMessage(HttpMethod.Post, $"{AuthClient.BaseUrl(host)}{ShareProtocol.PidRunPath}")
+            {
+                Content = new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json"),
+            };
+            req.Headers.TryAddWithoutValidation("Authorization", $"Bearer {token}");
+
+            using var resp = await http.SendAsync(req);
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
 }

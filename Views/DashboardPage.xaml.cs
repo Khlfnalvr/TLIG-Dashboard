@@ -95,9 +95,9 @@ public sealed partial class DashboardPage : Page
         ApplySimulationType(App.SimType.CurrentType);
 
         // When a LabVIEW client (re)connects, push the current control values so the VI
-        // starts in sync with what the dashboard is showing.
-        if (!_clientMode)
-            Data.ClientConnectedChanged += OnLabViewClientConnected;
+        // starts in sync with what the dashboard is showing. Wired on both flavors so the
+        // Client drives LabVIEW (setpoint / Run / Stop) exactly like the Server.
+        Data.ClientConnectedChanged += OnLabViewClientConnected;
 
         // From here on, user edits to the controls are forwarded to LabVIEW.
         _controlsReady = true;
@@ -107,9 +107,10 @@ public sealed partial class DashboardPage : Page
         ApplyLearningPanelContent();
         App.Session.Changed += OnSessionChanged;
 
-        // PID (Kp/Ki/Kd/Setpoint) tidak lagi dikirim langsung ke LabVIEW dari sini.
-        // Nilainya mengalir ke client Python (PIDtest.py) lewat PushPidInputs() ->
-        // App.PythonBridge.SyncParams(); Python yang meneruskan ke LabVIEW port 6000.
+        // Dua jalur kontrol ke LabVIEW aktif di kedua flavor (Server & Client):
+        //   1) Baris CSV langsung (Kp,Ki,Kd,Setpoint,Pump,Run) via SendControlLine() ->
+        //      HmiDataService (port 6001), untuk LabVIEW yang connect masuk ke dashboard.
+        //   2) PIDtest.py via PushPidInputs()/RUN -> App.PythonBridge (port 6000).
     }
 
     // Progress tracking in the bottom "Learning Analytic" panel is
@@ -142,7 +143,7 @@ public sealed partial class DashboardPage : Page
 
     private void SendControlLine()
     {
-        if (!_controlsReady || _clientMode) return;
+        if (!_controlsReady) return;
 
         double kp = KpBox.Value, ki = KiBox.Value, kd = KdBox.Value,
                sp = CtlSetpointBox.Value, pump = CtlPump.Value;
@@ -1050,7 +1051,7 @@ public sealed partial class DashboardPage : Page
         // Re-point the shared AI service at the active provider/model (same as AIPage).
         AiConfigService.ApplyActive(_ai);
 
-        // Selipkan data live LabVIEW/HMI (TCP 5005) ke system prompt untuk kiriman ini,
+        // Selipkan data live LabVIEW/HMI (TCP 6001) ke system prompt untuk kiriman ini,
         // supaya jawaban AI memperhitungkan nilai proses yang sedang berjalan. ApplyActive
         // di atas mereset system prompt tiap kirim, jadi data ini sekali-pakai — tidak
         // menumpuk, tidak masuk riwayat maupun tampilan chat.
@@ -1129,7 +1130,7 @@ public sealed partial class DashboardPage : Page
         _renderedCount = App.Ai.History.Count;
     }
 
-    // Rangkum nilai live dari LabVIEW/HMI (HmiDataService, TCP 5005) menjadi satu baris
+    // Rangkum nilai live dari LabVIEW/HMI (HmiDataService, TCP 6001) menjadi satu baris
     // konteks untuk AI chat. Kosong kalau belum ada data yang masuk. Dipanggil tiap kirim
     // pesan, jadi AI selalu melihat pembacaan proses terbaru.
     private static string BuildLiveDataContext()
@@ -1137,7 +1138,7 @@ public sealed partial class DashboardPage : Page
         var snap = Data.Snapshot();
         if (snap.Count == 0) return "";
         var pairs = string.Join(", ", snap.Select(d => $"{d.Key}={d.Value}"));
-        return "Data live dari LabVIEW/HMI (TCP 5005) saat ini — " + pairs +
+        return "Data live dari LabVIEW/HMI (TCP 6001) saat ini — " + pairs +
                ". Gunakan angka ini bila pengguna bertanya soal kondisi/pembacaan proses saat ini.";
     }
 

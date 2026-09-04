@@ -44,6 +44,7 @@ public static class ShareProtocol
     public const string ActivityPath           = "/activity";            // POST ActivityLog (client→server sync)
     public const string ChallengeSubmitPath    = "/challenge/submit";    // POST ChallengeSubmission (client→server)
     public const string PidSimPath             = "/sim/pid";             // POST {Kp, Ki, Kd, Setpoint}
+    public const string PidRunPath             = "/sim/pid/run";         // POST {action:"run"|"stop"|"sync", kp, ki, kd, sp} — drives the server's LabVIEW bridge
     public const string ChallengeSubmissionsPath = "/challenge/submissions"; // GET all submissions (staff only)
     public const string ChallengeGradePath     = "/challenge/grade";     // POST dosen grade (staff only)
     public const string StudentsPath           = "/students";            // GET student roster (staff only)
@@ -251,6 +252,10 @@ public sealed class ShareServer
             else if (method == "POST" && path == ShareProtocol.PidSimPath)
             {
                 await HandlePidSimulationAsync(stream, headers, ct);
+            }
+            else if (method == "POST" && path == ShareProtocol.PidRunPath)
+            {
+                await HandlePidRunAsync(stream, headers, ct);
             }
             else if (method == "GET" && path == ShareProtocol.ChallengeSubmissionsPath)
             {
@@ -1175,6 +1180,60 @@ public sealed class ShareServer
             };
 
             await WriteJsonAsync(stream, response.ToJsonString(), ct);
+        }
+        catch (Exception ex)
+        {
+            await WriteSimpleAsync(stream, "400 Bad Request", "application/json",
+                new JsonObject { ["error"] = ex.Message }.ToJsonString(), ct);
+        }
+    }
+
+    // ── PID process control over HTTP (a CLIENT drives the server's LabVIEW) ──
+
+    /// <summary>
+    /// POST /sim/pid/run — a Client forwards a RUN / STOP / SYNC of the physical
+    /// process here. Only the Server PC is wired to LabVIEW, so it runs the command on
+    /// its own <see cref="PythonBridgeService"/> (PIDtest.py → LabVIEW, port 6000) — the
+    /// same bridge the Server's own RUN button uses. Any signed-in session may call this;
+    /// tighten with a <c>UserRoles.IsStaff(session.Role)</c> check if only Dosen/Asisten
+    /// should be allowed to actuate the rig.
+    /// </summary>
+    private async Task HandlePidRunAsync(NetworkStream stream, Dictionary<string, string> headers, CancellationToken ct)
+    {
+        var session = GetSession(BearerToken(headers));
+        if (session is null)
+        {
+            await WriteSimpleAsync(stream, "401 Unauthorized", "text/plain", "Invalid or expired session", ct);
+            return;
+        }
+
+        var body = await ReadBodyAsync(stream, headers, ct);
+        try
+        {
+            var node   = JsonNode.Parse(body) ?? throw new Exception("Invalid input");
+            var action = ((string?)node["action"] ?? "").Trim().ToLowerInvariant();
+            double kp  = (double?)node["kp"] ?? 0;
+            double ki  = (double?)node["ki"] ?? 0;
+            double kd  = (double?)node["kd"] ?? 0;
+            double sp  = (double?)node["sp"] ?? 0;
+
+            var bridge = PythonBridgeService.Instance;
+            switch (action)
+            {
+                case "run":  bridge.Run(kp, ki, kd, sp);        break;
+                case "stop": bridge.Stop();                     break;
+                case "sync": bridge.SyncParams(kp, ki, kd, sp); break;
+                default:
+                    await WriteSimpleAsync(stream, "400 Bad Request", "application/json",
+                        new JsonObject { ["error"] = $"Unknown action '{action}'" }.ToJsonString(), ct);
+                    return;
+            }
+
+            await WriteJsonAsync(stream, new JsonObject
+            {
+                ["ok"]      = true,
+                ["running"] = bridge.IsRunning,
+            }.ToJsonString(), ct);
         }
         catch (Exception ex)
         {

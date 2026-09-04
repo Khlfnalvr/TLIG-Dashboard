@@ -47,8 +47,10 @@ public sealed partial class HmiShareView : UserControl
         if (_clientMode)
         {
             // Client: display the HMI stream received from the server instead of
-            // capturing a local screen. The LabVIEW TCP data readout lives on the
-            // server machine (where LabVIEW runs), so hide it here.
+            // capturing a local screen. The LabVIEW numeric readout stays hidden here (the
+            // client's HMI panel shows the server's shared screen), but the LabVIEW TCP
+            // link itself is started so the Dashboard's Control panel can drive a LabVIEW
+            // (setpoint / Run / Stop over the same socket) exactly like the Server.
             SourceSelector.Visibility       = Visibility.Collapsed;
             RefreshSourcesButton.Visibility = Visibility.Collapsed;
             DataSection.Visibility          = Visibility.Collapsed;
@@ -60,6 +62,7 @@ public sealed partial class HmiShareView : UserControl
             {
                 ShareClient.Instance.FrameReceived -= OnRemoteFrame;
                 ShareClient.Instance.FrameReceived += OnRemoteFrame;
+                Data.Start(AppSettingsService.Load().HmiDataPort);   // enable dashboard → LabVIEW commands
             };
             Unloaded += (_, _) => ShareClient.Instance.FrameReceived -= OnRemoteFrame;
         }
