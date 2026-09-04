@@ -18,13 +18,13 @@ HOST_DEFAULT = "localhost"
 PORT_DEFAULT = 6000
 SEND_INTERVAL = 1.0
 
-# ── Tujuan meneruskan data chart ke dashboard (TCP 5005) ───────────────────
-# Dashboard men-LISTEN di TCP 5005 (HmiDataService) dan membaca baris teks
+# ── Tujuan meneruskan data chart ke dashboard (TCP 6001) ───────────────────
+# Dashboard men-LISTEN di TCP 6001 (HmiDataService) dan membaca baris teks
 # "key=value\n" (BUKAN JSON). PIDtest.py connect sebagai client lalu mengirim
 # data chart dalam format itu. Dashboard biasanya di komputer yang sama dengan
 # script (dashboard yang me-launch script), jadi localhost.
 DASHBOARD_HOST = "localhost"
-DASHBOARD_PORT = 5005
+DASHBOARD_PORT = 6001
 
 # ── Balasan data chart dari LabVIEW ────────────────────────────────────────
 # 7 variabel yang tampil di tab "Chart" LabVIEW dan yang HARUS ikut tampil sama
@@ -73,7 +73,7 @@ DIAG_LOG = os.path.join(os.path.dirname(os.path.abspath(__file__)), "labview_rep
 # File "jembatan" dari TLIG Dashboard.
 #
 #   TLIG Dashboard --pid_bridge.json--> PIDtest.py --TCP--> LabVIEW
-#   TLIG Dashboard <---TCP 5005-------- PIDtest.py <--TCP-- LabVIEW  (data chart)
+#   TLIG Dashboard <---TCP 6001-------- PIDtest.py <--TCP-- LabVIEW  (data chart)
 #
 # Dashboard menulis Kp/Ki/Kd/Setpoint, flag run, DAN alamat host/port LabVIEW
 # ke file ini setiap kali diubah. Script membacanya ULANG tiap kali mau kirim,
@@ -83,7 +83,7 @@ DIAG_LOG = os.path.join(os.path.dirname(os.path.abspath(__file__)), "labview_rep
 #
 # Alur balik: setelah kirim PID, script menunggu sebentar balasan data chart
 # dari LabVIEW di koneksi TCP yang SAMA, lalu meneruskannya ke dashboard di
-# TCP 5005 (format key=value).
+# TCP 6001 (format key=value).
 # =========================================================================
 BRIDGE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pid_bridge.json")
 
@@ -138,7 +138,7 @@ def recv_exact(sock, n):
 
 
 def forward_chart_to_dashboard(values: dict):
-    """Kirim data chart yang baru diterima dari LabVIEW ke dashboard (TCP 5005).
+    """Kirim data chart yang baru diterima dari LabVIEW ke dashboard (TCP 6001).
 
     Dashboard (HmiDataService) membaca baris teks "key=value\\n" — jadi kita
     kirim satu baris per field, titik sebagai desimal (repr float Python selalu
