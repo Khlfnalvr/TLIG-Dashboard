@@ -4,7 +4,7 @@
 ; ============================================================
 
 #define AppName      "TLIG Dashboard Server"
-#define AppVersion   "1.0.2"
+#define AppVersion   "1.0.3"
 #define AppPublisher "ICO Laboratory"
 #define AppExe       "TLIGDashboard.Server.exe"
 
@@ -20,7 +20,7 @@ DefaultDirName={autopf}\TLIGDashboard\Server
 DefaultGroupName={#AppName}
 AllowNoIcons=yes
 OutputDir=publish
-OutputBaseFilename=TLIGDashboard-Server-v1.0.1-Setup
+OutputBaseFilename=TLIGDashboard-Server-v1.0.3-Setup
 SetupIconFile=Assets\logo.ico
 UninstallDisplayIcon={app}\{#AppExe}
 UninstallDisplayName={#AppName}
@@ -29,7 +29,7 @@ SolidCompression=yes
 WizardStyle=modern
 MinVersion=10.0.17763
 PrivilegesRequired=admin
-VersionInfoVersion=1.0.1.0
+VersionInfoVersion=1.0.3.0
 VersionInfoProductName={#AppName}
 VersionInfoCompany={#AppPublisher}
 VersionInfoDescription=TLIG Dashboard Server — broadcasts camera + HMI and hosts the AI proxy

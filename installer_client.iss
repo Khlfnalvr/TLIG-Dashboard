@@ -4,7 +4,7 @@
 ; ============================================================
 
 #define AppName      "TLIG Dashboard Client"
-#define AppVersion   "1.0.2"
+#define AppVersion   "1.0.3"
 #define AppPublisher "ICO Laboratory"
 #define AppExe       "TLIGDashboard.Client.exe"
 
@@ -20,7 +20,7 @@ DefaultDirName={autopf}\TLIGDashboard\Client
 DefaultGroupName={#AppName}
 AllowNoIcons=yes
 OutputDir=publish
-OutputBaseFilename=TLIGDashboard-Client-v1.0.1-Setup
+OutputBaseFilename=TLIGDashboard-Client-v1.0.3-Setup
 SetupIconFile=Assets\logo.ico
 UninstallDisplayIcon={app}\{#AppExe}
 UninstallDisplayName={#AppName}
@@ -29,7 +29,7 @@ SolidCompression=yes
 WizardStyle=modern
 MinVersion=10.0.17763
 PrivilegesRequired=admin
-VersionInfoVersion=1.0.1.0
+VersionInfoVersion=1.0.3.0
 VersionInfoProductName={#AppName}
 VersionInfoCompany={#AppPublisher}
 VersionInfoDescription=TLIG Dashboard Client — receives camera + HMI and chats via the server AI proxy
