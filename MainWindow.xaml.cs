@@ -2076,6 +2076,7 @@ public sealed partial class MainWindow : Window
         var saved = AppSettingsService.Load();
         PlcHostBox.Text  = saved.PlcTcpHost;
         PlcPortBox.Value = saved.PlcTcpPort;
+        HmiDataPortBox.Value = saved.HmiDataPort;
 
         UpdateOpcStatusDot();
         SyncOpcConnectButton();
@@ -2185,6 +2186,25 @@ public sealed partial class MainWindow : Window
         s.PlcTcpHost = host;
         s.PlcTcpPort = port;
         AppSettingsService.Save(s);
+    }
+
+    // The chart-data listener port (LabVIEW / PIDtest.py -> dashboard). Saved on edit
+    // like the host/port above, and the listener is rebound immediately so the change
+    // takes effect without a restart. Must match DASHBOARD_PORT in PIDtest.py.
+    private void HmiDataPort_LostFocus(object sender, RoutedEventArgs e)
+    {
+        int port = double.IsNaN(HmiDataPortBox.Value) ? 0 : (int)HmiDataPortBox.Value;
+        if (port is <= 0 or > 65535) return;
+
+        var s = AppSettingsService.Load();
+        if (s.HmiDataPort == port) return;   // nothing changed
+        s.HmiDataPort = port;
+        AppSettingsService.Save(s);
+
+        // Rebind only if a listener is already up; otherwise the HMI view starts it
+        // on the new port when it loads.
+        if (HmiDataService.Instance.IsListening)
+            HmiDataService.Instance.Start(port);
     }
 
     private void UpdateOpcStatusDot()

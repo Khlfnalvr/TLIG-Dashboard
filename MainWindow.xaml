@@ -440,7 +440,7 @@
                                                  PlaceholderText="192.168.1.10"/>
                                     </StackPanel>
 
-                                    <!-- Port -->
+                                    <!-- Port: dashboard -> LabVIEW (control) -->
                                     <StackPanel Spacing="3">
                                         <TextBlock Text="{x:Bind Lang.Ui_PlcTcpPort, Mode=OneWay}"
                                                    FontSize="11" Opacity="0.65"/>
@@ -449,6 +449,18 @@
                                                    Minimum="1" Maximum="65535"
                                                    SpinButtonPlacementMode="Compact"
                                                    LostFocus="PlcEndpoint_LostFocus"
+                                                   HorizontalAlignment="Stretch"/>
+                                    </StackPanel>
+
+                                    <!-- Port: LabVIEW -> dashboard (chart data, HmiDataService) -->
+                                    <StackPanel Spacing="3">
+                                        <TextBlock Text="{x:Bind Lang.Ui_HmiDataPort, Mode=OneWay}"
+                                                   FontSize="11" Opacity="0.65"/>
+                                        <NumberBox x:Name="HmiDataPortBox"
+                                                   FontSize="12"
+                                                   Minimum="1" Maximum="65535"
+                                                   SpinButtonPlacementMode="Compact"
+                                                   LostFocus="HmiDataPort_LostFocus"
                                                    HorizontalAlignment="Stretch"/>
                                     </StackPanel>
 

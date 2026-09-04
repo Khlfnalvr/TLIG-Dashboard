@@ -107,6 +107,8 @@ public sealed class LocalizationManager : INotifyPropertyChanged
     public string Ui_PlcTcpHint       => T(nameof(Ui_PlcTcpHint));
     public string Ui_PlcTcpHost       => T(nameof(Ui_PlcTcpHost));
     public string Ui_PlcTcpPort       => T(nameof(Ui_PlcTcpPort));
+    public string Ui_HmiDataPort      => T(nameof(Ui_HmiDataPort));
+    public string Ui_HmiDataPortHint  => T(nameof(Ui_HmiDataPortHint));
 
     // ── Alert history ─────────────────────────────────────────────────────
     public string Ui_AlertHistory   => T(nameof(Ui_AlertHistory));
@@ -788,7 +790,9 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             [nameof(Ui_OpcUaConnection)]  = "PLC Connection (TCP)",
             [nameof(Ui_PlcTcpHint)]       = "Connects directly to the LabVIEW HMI over TCP; LabVIEW bridges reads/writes to the PLC. The PID bridge (RUN) also sends to this address — enter your LabVIEW PC's IP here; you don't need to press Connect.",
             [nameof(Ui_PlcTcpHost)]       = "Host / IP address (LabVIEW HMI)",
-            [nameof(Ui_PlcTcpPort)]       = "TCP Port",
+            [nameof(Ui_PlcTcpPort)]       = "TCP Port (control \u2192 LabVIEW)",
+            [nameof(Ui_HmiDataPort)]      = "TCP Port (data \u2190 LabVIEW)",
+            [nameof(Ui_HmiDataPortHint)]  = "Port the dashboard listens on for chart data sent by LabVIEW or PIDtest.py. Must match DASHBOARD_PORT in PIDtest.py.",
             ["OpcDa_ServerNotRunning"]       = "OPC DA server state: {0} (not running)",
             ["Ui_ServerOpcDaNotConnected"]   = "OPC DA: NOT CONNECTED",
             [nameof(Ui_AlertHistory)]   = "Alert History",
@@ -1407,7 +1411,9 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             [nameof(Ui_OpcUaConnection)]  = "Koneksi PLC (TCP)",
             [nameof(Ui_PlcTcpHint)]       = "Terhubung langsung ke HMI LabVIEW melalui TCP; LabVIEW meneruskan baca/tulis ke PLC. Jembatan PID (RUN) juga mengirim ke alamat ini — isi IP komputer LabVIEW di sini; tidak perlu menekan Connect.",
             [nameof(Ui_PlcTcpHost)]       = "Host / Alamat IP (HMI LabVIEW)",
-            [nameof(Ui_PlcTcpPort)]       = "Port TCP",
+            [nameof(Ui_PlcTcpPort)]       = "Port TCP (kontrol \u2192 LabVIEW)",
+            [nameof(Ui_HmiDataPort)]      = "Port TCP (data \u2190 LabVIEW)",
+            [nameof(Ui_HmiDataPortHint)]  = "Port tempat dashboard menunggu data chart dari LabVIEW atau PIDtest.py. Harus sama dengan DASHBOARD_PORT di PIDtest.py.",
             ["OpcDa_ServerNotRunning"]       = "Status server OPC DA: {0} (tidak berjalan)",
             ["Ui_ServerOpcDaNotConnected"]   = "OPC DA: TIDAK TERHUBUNG",
             [nameof(Ui_AlertHistory)]   = "Riwayat Alert",
