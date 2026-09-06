@@ -269,6 +269,17 @@ public sealed class HmiDataService
             ClientConnectedChanged?.Invoke(false);
     }
 
+    // Positional field names for the plain "DATA,<v1>,<v2>,..." line the LabVIEW VI
+    // sends DIRECTLY to this listener (its "Format Into String" node writes values in
+    // this wire order, with no labels). Order proven against the LabVIEW Front Panel.
+    private static readonly string[] DataLineFields =
+    [
+        "Flow Tube",
+        "PV",
+        "Flow Shell",
+        "Temp. Shell out",
+    ];
+
     private static List<HmiDatum> Parse(string text)
     {
         var list = new List<HmiDatum>();
@@ -278,6 +289,22 @@ public sealed class HmiDataService
             if (line.Length == 0)
                 continue;
 
+            // Positional format: "DATA,12.34,56.7,...\n" — no '=' signs at all, so it
+            // must be detected and split before the "Key=Value" path below (which would
+            // otherwise skip the whole line for lacking '='). Extra values beyond the
+            // named list show up as "LV[i]" so nothing LabVIEW sends is silently dropped.
+            if (line.StartsWith("DATA,", StringComparison.OrdinalIgnoreCase))
+            {
+                var parts = line[5..].Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                for (int i = 0; i < parts.Length; i++)
+                {
+                    var name = i < DataLineFields.Length ? DataLineFields[i] : $"LV[{i + 1}]";
+                    list.Add(new HmiDatum(name, parts[i]));
+                }
+                continue;
+            }
+
+            // Legacy "Key=Value" format (still accepted for any non-DATA line).
             int eq = line.IndexOf('=');
             if (eq <= 0)
                 continue;

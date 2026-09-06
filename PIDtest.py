@@ -1,108 +1,74 @@
-import socket
-import struct
-import math
-import time
+"""
+Jembatan PID: TLIG Dashboard -> LabVIEW  (HANYA port 6000)
+
+Script ini yang dijalankan OTOMATIS oleh tombol RUN di TLIG Dashboard.
+Berbeda dari "KODE PHYTON FIX BGT.py" (simulator), script ini SENGAJA
+tidak menyentuh port 6001 sama sekali, supaya bisa jalan BERSAMAAN dengan
+dashboard tanpa rebutan port.
+
+    Dashboard --pid_bridge.json--> script ini --TCP 6000--> LabVIEW
+    LabVIEW ----------TCP 6001-------------------------> Dashboard (langsung)
+
+Jadi arah data balik (LabVIEW -> dashboard) TIDAK lewat script ini. LabVIEW
+connect langsung ke listener milik dashboard. Itu sebabnya bagian
+data_server()/port 6001 dari simulator dibuang di sini.
+
+Port 6000 -- KONTROL (Python = CLIENT, LabVIEW = SERVER)
+    LabVIEW pakai TCP Listen di 6000, script ini yang menyambung masuk.
+    Mengirim 4 double big-endian = 32 byte, cocok dengan TCP Read 32 byte
+    di diagram LabVIEW  ->  SP, KC, KI, KD
+
+Nilai yang dikirim dibaca ULANG dari pid_bridge.json setiap siklus, jadi
+begitu kamu ubah Kp/Ki/Kd/Setpoint di dashboard, nilainya langsung ikut
+terkirim tanpa perlu restart apa pun.
+
+Bisa juga dijalankan manual untuk tes (tanpa dashboard): kalau
+pid_bridge.json belum ada, script pakai nilai default di bawah.
+
+Hentikan dengan Ctrl+C, atau lewat tombol STOP di dashboard (dashboard
+menulis run=false ke pid_bridge.json dan script keluar sendiri).
+"""
+
 import json
 import os
-import re
+import socket
+import struct
+import time
 
-# ── Target LabVIEW (default) ───────────────────────────────────────────────
-# Dipakai kalau dashboard belum menuliskan host/port ke file jembatan (mis.
-# saat script dites sendiri tanpa dashboard).
-#
-# Kalau LabVIEW ada di komputer LAIN, JANGAN edit di sini — cukup isi kolom
-# "Host / Alamat IP (HMI LabVIEW)" di dashboard. Nilainya mengalir lewat
-# pid_bridge.json dan langsung dipakai (lihat get_values / run_client), jadi
-# satu script yang sama jalan di semua laptop tanpa diubah-ubah.
-HOST_DEFAULT = "localhost"
+# ---------------------------------------------------------------- konfigurasi
+
+# Dipakai HANYA kalau pid_bridge.json belum ada / belum valid (mis. saat
+# script dites sendiri tanpa dashboard). Kalau LabVIEW ada di komputer lain,
+# JANGAN edit di sini -- cukup isi kolom "Host / Alamat IP (HMI LabVIEW)"
+# di dashboard; nilainya mengalir lewat pid_bridge.json.
+HOST_DEFAULT = "127.0.0.1"
 PORT_DEFAULT = 6000
-SEND_INTERVAL = 1.0
 
-# ── Tujuan meneruskan data chart ke dashboard (TCP 6001) ───────────────────
-# Dashboard men-LISTEN di TCP 6001 (HmiDataService) dan membaca baris teks
-# "key=value\n" (BUKAN JSON). PIDtest.py connect sebagai client lalu mengirim
-# data chart dalam format itu. Dashboard biasanya di komputer yang sama dengan
-# script (dashboard yang me-launch script), jadi localhost.
-DASHBOARD_HOST = "localhost"
-DASHBOARD_PORT = 6001
+SEND_INTERVAL = 1.0          # detik, jeda antar pengiriman parameter PID
+RECONNECT_DELAY = 2.0        # detik, jeda sebelum mencoba menyambung lagi
 
-# ── Balasan data chart dari LabVIEW ────────────────────────────────────────
-# 7 variabel yang tampil di tab "Chart" LabVIEW dan yang HARUS ikut tampil sama
-# persis di panel "LabVIEW Data" dashboard. Label di bawah = teks yang muncul di
-# dashboard, jadi sengaja dibuat SAMA dengan indikator LabVIEW.
-#
-# Ada DUA cara LabVIEW boleh mengirim balasan (parse_reply mengenali keduanya):
-#
-#   1) TEKS BERLABEL  (PALING andal — DISARANKAN)
-#      Setiap siklus, "Format Into String" lalu "TCP Write":
-#          Flow Tube=%.2f\nFlow Shell=%.2f\nSinyal mA=%.2f\nSinyal %%=%.2f\n
-#          PV Shell in=%.2f\nSet Point=%.2f\nPV Shell out=%.2f\n
-#      Label ikut terkirim, jadi URUTAN tidak perlu disepakati — dashboard
-#      meniru label & nilai apa adanya. Anti salah-petakan.
-#
-#   2) BINER  (kalau tetap pakai array double seperti packet PID)
-#      "Build Array" 7 DBL DALAM URUTAN PERSIS seperti CHART_FIELDS lalu kirim
-#      sebagai byte mentah big-endian (Type Cast ke string, ATAU Flatten To
-#      String dengan "prepend size?"=FALSE). = 7 x 8 = 56 byte. Kalau size ikut
-#      ter-prepend (4 byte I32) pun parser tetap otomatis membuangnya.
-#
-# Kalau daftar/urutan variabel berubah di LabVIEW, cukup sesuaikan CHART_FIELDS
-# ini (dan Build Array di LabVIEW) — nilai biner dipetakan menurut urutan ini.
-CHART_FIELDS = [
-    "Flow Tube",     # L/min
-    "Flow Shell",    # L/min
-    "Sinyal mA",     # mA
-    "Sinyal %",      # %
-    "PV Shell in",   # Celcius
-    "Set Point",     # Celcius
-    "PV Shell out",  # Celcius
-]
-CHART_STRUCT_FMT = ">" + "d" * len(CHART_FIELDS)
-CHART_RECV_SIZE = struct.calcsize(CHART_STRUCT_FMT)
+# Urutan nilai yang DIKIRIM ke LabVIEW. Sudah terbukti benar lewat Front Panel.
+# Kp di dashboard = KC di LabVIEW.
+FIELD_ORDER = ("SP", "KC", "KI", "KD")
 
-# ── Diagnosa balasan LabVIEW ───────────────────────────────────────────────
-# File log untuk MEMBUKTIKAN format kawat balasan LabVIEW. Setiap balasan yang
-# BERUBAH dicatat: hex mentah + SEMUA interpretasi (double/single big-endian &
-# teks). Bandingkan angka di log ini dengan angka di panel depan LabVIEW
-# (Flow Tube, Flow Shell, Sinyal mA, PV, dst.) untuk tahu urutan/isi asli yang
-# dikirim VI — lalu set CHART_FIELDS/urutan di atas agar dashboard = LabVIEW.
-# Aman dihapus kapan saja; dibuat ulang saat script jalan lagi.
-DIAG_LOG = os.path.join(os.path.dirname(os.path.abspath(__file__)), "labview_reply.log")
+# Nilai default kalau file jembatan belum ada / rusak.
+DEFAULT_SP = 40.0
+DEFAULT_KC = 25.0
+DEFAULT_KI = 30.0
+DEFAULT_KD = 45.0
 
-# =========================================================================
-# File "jembatan" dari TLIG Dashboard.
-#
-#   TLIG Dashboard --pid_bridge.json--> PIDtest.py --TCP--> LabVIEW
-#   TLIG Dashboard <---TCP 6001-------- PIDtest.py <--TCP-- LabVIEW  (data chart)
-#
-# Dashboard menulis Kp/Ki/Kd/Setpoint, flag run, DAN alamat host/port LabVIEW
-# ke file ini setiap kali diubah. Script membacanya ULANG tiap kali mau kirim,
-# jadi perubahan di dashboard (termasuk IP LabVIEW) langsung ikut terkirim
-# tanpa perlu restart. File berada di folder yang sama dengan script ini
-# (dashboard menaruhnya di sini berdasarkan PythonScriptPath).
-#
-# Alur balik: setelah kirim PID, script menunggu sebentar balasan data chart
-# dari LabVIEW di koneksi TCP yang SAMA, lalu meneruskannya ke dashboard di
-# TCP 6001 (format key=value).
-# =========================================================================
-BRIDGE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pid_bridge.json")
-
-# Nilai default dipakai kalau file jembatan belum ada / belum valid, supaya
-# script tetap bisa dijalankan sendiri (tanpa dashboard) untuk tes.
-DEFAULT_SP = 100
-DEFAULT_KC = 25
-DEFAULT_KI = 15
-DEFAULT_KD = 10
+# File "jembatan" yang ditulis dashboard. Letaknya SATU FOLDER dengan script
+# ini (dashboard menaruhnya di situ berdasarkan PythonScriptPath).
+BRIDGE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                           "pid_bridge.json")
 
 
 def get_values():
-    """Baca SP, PID, run, dan alamat LabVIEW dari file jembatan.
+    """Baca SP/KC/KI/KD, flag run, dan alamat LabVIEW dari file jembatan.
 
     Mengembalikan (sp, kc, ki, kd, run, host, port).
       - Kp di dashboard  -> KC di LabVIEW
-      - run == False      -> dashboard menekan STOP, script keluar dari loop.
-      - host/port         -> dari kolom "Host / Alamat IP (HMI LabVIEW)" di
-                             dashboard. Kalau belum diisi, pakai default.
+      - run == False     -> dashboard menekan STOP, script keluar dari loop.
 
     Kalau file belum ada / sedang ditulis / rusak, pakai nilai default dan
     tetap jalan (run=True) supaya tidak berhenti karena gangguan sesaat.
@@ -110,272 +76,94 @@ def get_values():
     try:
         with open(BRIDGE_FILE, "r", encoding="utf-8") as f:
             data = json.load(f)
+
         sp = float(data.get("sp", DEFAULT_SP))
-        kc = float(data.get("kp", DEFAULT_KC))   # Kp dashboard = KC LabVIEW
+        kc = float(data.get("kp", DEFAULT_KC))    # Kp dashboard = KC LabVIEW
         ki = float(data.get("ki", DEFAULT_KI))
         kd = float(data.get("kd", DEFAULT_KD))
         run = bool(data.get("run", True))
+
         host = str(data.get("host", HOST_DEFAULT)).strip() or HOST_DEFAULT
         port = int(data.get("port", PORT_DEFAULT))
         if port <= 0 or port > 65535:
             port = PORT_DEFAULT
+
         return sp, kc, ki, kd, run, host, port
+
     except (FileNotFoundError, json.JSONDecodeError, ValueError, OSError, TypeError):
-        return DEFAULT_SP, DEFAULT_KC, DEFAULT_KI, DEFAULT_KD, True, HOST_DEFAULT, PORT_DEFAULT
+        return (DEFAULT_SP, DEFAULT_KC, DEFAULT_KI, DEFAULT_KD,
+                True, HOST_DEFAULT, PORT_DEFAULT)
 
 
-def recv_exact(sock, n):
-    """Baca TEPAT n byte dari socket (TCP bisa memecah balasan jadi beberapa
-    bagian). Kembalikan bytes sepanjang n, atau None kalau koneksi ditutup
-    sebelum lengkap. socket.timeout dibiarkan naik ke pemanggil."""
-    buf = bytearray()
-    while len(buf) < n:
-        chunk = sock.recv(n - len(buf))
-        if not chunk:            # koneksi ditutup peer
-            return None
-        buf.extend(chunk)
-    return bytes(buf)
+def build_packet(sp, kc, ki, kd):
+    """Susun 4 double big-endian = 32 byte, sesuai TCP Read 32 byte di LabVIEW.
 
-
-def forward_chart_to_dashboard(values: dict):
-    """Kirim data chart yang baru diterima dari LabVIEW ke dashboard (TCP 6001).
-
-    Dashboard (HmiDataService) membaca baris teks "key=value\\n" — jadi kita
-    kirim satu baris per field, titik sebagai desimal (repr float Python selalu
-    pakai '.'). Kalau dashboard nanti diubah untuk mengharapkan format lain,
-    sesuaikan pembentukan `payload` di bawah.
+    Urutan HARUS sama dengan urutan Unflatten From String di LabVIEW:
+    SP -> KC -> KI -> KD.
     """
-    payload = "".join(f"{k}={v}\n" for k, v in values.items()).encode("utf-8")
-    try:
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.settimeout(2.0)
-            s.connect((DASHBOARD_HOST, DASHBOARD_PORT))
-            s.sendall(payload)
-        print(f"[FORWARD] -> dashboard {DASHBOARD_HOST}:{DASHBOARD_PORT} : {values}")
-    except (ConnectionRefusedError, OSError, socket.timeout) as e:
-        print(f"[ERROR] Gagal kirim ke dashboard {DASHBOARD_HOST}:{DASHBOARD_PORT} -> {e}")
-
-
-# Regex balasan LabVIEW:
-#   _KV_RE  : pasangan "Label = angka" (label boleh spasi, %, /, kurung, dsb;
-#             non-greedy supaya tidak melahap unit/teks setelah angka).
-#   _NUM_RE : angka polos (fallback kalau LabVIEW kirim angka tanpa label).
-_KV_RE = re.compile(r"([A-Za-z][\w %/().+\-]*?)\s*=\s*([-+]?\d*\.?\d+(?:[eE][-+]?\d+)?)")
-_NUM_RE = re.compile(r"[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?")
-
-
-def _looks_sane(vals) -> bool:
-    """True kalau semua nilai wajar untuk data proses. Dipakai untuk menolak
-    pembacaan biner yang salah-align (mis. karena ada/tidak-adanya prefiks
-    panjang) lalu mencoba tafsir lain.
-
-    Double yang salah-align hampir selalu menghasilkan nilai EKSTREM: sangat
-    besar (>1e9) ATAU sangat kecil/subnormal (mis. 1e-314). Nilai proses nyata
-    di sini (suhu, flow, mA, %, PID) berada di rentang wajar, jadi kita terima
-    hanya 0.0 atau |v| di [1e-9, 1e9]."""
-    return all(math.isfinite(v) and (v == 0.0 or 1e-9 <= abs(v) < 1e9)
-               for v in vals)
-
-
-def parse_reply(raw: bytes) -> dict:
-    """Ubah balasan mentah LabVIEW jadi {label: nilai}. Deteksi otomatis:
-
-      1) TEKS BERLABEL "Label=nilai"  -> diteruskan APA ADANYA (label asli
-         LabVIEW dipakai; URUTAN tak penting). Jalur paling andal & anti salah
-         petakan — ini yang disarankan dipakai di LabVIEW.
-      2) TEKS ANGKA POLOS ("1.36,1.37,…") -> dipetakan berurutan ke CHART_FIELDS.
-      3) BINER -> decode SEBANYAK nilai yang dikirim (double lalu single),
-         big-endian, apa adanya LALU setelah membuang prefiks panjang I32
-         4-byte; hasil ngawur ditolak (_looks_sane). Dipetakan berurutan ke
-         CHART_FIELDS sejauh tersedia; kelebihan diberi label "LV[i]".
-
-    Untuk jalur biner urutan DIANGGAP = urutan CHART_FIELDS, jadi Build Array di
-    LabVIEW harus dalam urutan itu. Jalur teks berlabel tidak butuh kesepakatan
-    urutan sama sekali.
-    """
-    if not raw:
-        return {}
-
-    printable = sum(1 for b in raw if b in (9, 10, 13) or 32 <= b <= 126)
-    if printable >= 0.8 * len(raw):                       # kelihatan teks
-        text = raw.decode("ascii", "ignore")
-        pairs = _KV_RE.findall(text)
-        if pairs:                                         # (1) teks berlabel
-            # Pertahankan STRING asli (mis. "60.00", "0.01") supaya format angka
-            # di dashboard sama persis dengan yang tampil di LabVIEW.
-            return {k.strip(): v for k, v in pairs}
-        nums = _NUM_RE.findall(text)
-        if nums:                                          # (2) angka polos → urut
-            return dict(zip(CHART_FIELDS, (float(x) for x in nums)))
-
-    # (3) Biner: decode SEBANYAK nilai yang benar-benar dikirim LabVIEW (bukan
-    #     dipaksa 7). Utamakan double lalu single; coba apa adanya lalu buang
-    #     prefiks panjang I32 4-byte. Tidak pernah kosong hanya karena jumlahnya
-    #     != len(CHART_FIELDS) — jadi dashboard tetap hidup & log tetap terekam
-    #     walau LabVIEW masih kirim 4 nilai (atau malah 13).
-    bodies = [raw, raw[4:]]                       # apa adanya, lalu tanpa prefiks
-    if len(raw) >= 8:
-        hdr = struct.unpack(">i", raw[:4])[0]     # I32 big-endian di depan
-        rest = len(raw) - 4
-        # Prefiks panjang LabVIEW = jumlah elemen (rest//8 double / rest//4 single)
-        # atau jumlah byte (rest). Kalau cocok, utamakan versi yang sudah dibuang.
-        if hdr in (rest, rest // 8, rest // 4) and hdr > 0:
-            bodies = [raw[4:], raw]
-    best = None
-    for ch in ("d", "f"):
-        size = struct.calcsize(">" + ch)
-        for body in bodies:
-            count = len(body) // size
-            if count == 0:
-                continue
-            vals = struct.unpack(f">{count}{ch}", body[:count * size])
-            if _looks_sane(vals):
-                best = list(vals)
-                break
-        if best is not None:
-            break
-    if not best:
-        return {}
-    # Petakan berurutan ke CHART_FIELDS sejauh tersedia; nilai ekstra (kalau
-    # LabVIEW kirim LEBIH banyak dari 7) tetap ditampilkan dgn label generik
-    # "LV[i]" supaya kelihatan di dashboard dan bisa dicocokkan dgn panel.
-    return {(CHART_FIELDS[i] if i < len(CHART_FIELDS) else f"LV[{i}]"): v
-            for i, v in enumerate(best)}
-
-
-def recv_reply(sock, first_timeout=2.0, drain_timeout=0.3, max_bytes=65536):
-    """Baca balasan LabVIEW SELENGKAP mungkin.
-
-    TCP adalah stream: satu balasan bisa terpecah jadi beberapa segmen, dan
-    satu `recv` bisa mengembalikan hanya sebagian. Kita tunggu segmen pertama
-    (timeout `first_timeout`), lalu terus membaca dengan timeout pendek sampai
-    LabVIEW berhenti mengirim. Ini penting supaya diagnosa melihat SELURUH
-    packet (bukan cuma 32 byte pertama), termasuk field yang selama ini
-    terlewat karena hanya 4 double pertama yang dibaca."""
-    sock.settimeout(first_timeout)
-    try:
-        first = sock.recv(4096)
-    except socket.timeout:
-        return b""
-    if not first:
-        return b""
-    buf = bytearray(first)
-    sock.settimeout(drain_timeout)
-    while len(buf) < max_bytes:
-        try:
-            chunk = sock.recv(4096)
-        except socket.timeout:
-            break
-        if not chunk:
-            break
-        buf.extend(chunk)
-    return bytes(buf)
-
-
-def decode_all_numbers(raw: bytes) -> dict:
-    """Semua cara masuk akal membaca `raw`, untuk diagnosa. Tidak memutuskan
-    apa-apa — hanya memaparkan agar kita bisa mencocokkan dengan panel LabVIEW."""
-    out = {}
-    printable = sum(1 for b in raw if b in (9, 10, 13) or 32 <= b <= 126)
-    out["printable_ratio"] = round(printable / max(1, len(raw)), 3)
-    out["as_text"] = raw.decode("ascii", "ignore")
-    n8 = len(raw) // 8
-    if n8:
-        out[f"doubles_BE(x{n8})"] = [round(x, 6) for x in struct.unpack(f">{n8}d", raw[:n8 * 8])]
-        out[f"doubles_LE(x{n8})"] = [round(x, 6) for x in struct.unpack(f"<{n8}d", raw[:n8 * 8])]
-    n4 = len(raw) // 4
-    if n4:
-        out[f"singles_BE(x{n4})"] = [round(x, 6) for x in struct.unpack(f">{n4}f", raw[:n4 * 4])]
-        out[f"singles_LE(x{n4})"] = [round(x, 6) for x in struct.unpack(f"<{n4}f", raw[:n4 * 4])]
-    return out
-
-
-_last_logged_hex = None
-
-
-def log_reply(raw: bytes, forwarded: dict):
-    """Catat balasan yang BERUBAH ke DIAG_LOG (hex + semua interpretasi).
-
-    De-dup: kalau bytes-nya sama dgn yang terakhir dicatat, dilewati supaya log
-    tidak membengkak saat nilai diam."""
-    global _last_logged_hex
-    hx = raw.hex(" ")
-    if hx == _last_logged_hex:
-        return
-    _last_logged_hex = hx
-    try:
-        with open(DIAG_LOG, "a", encoding="utf-8") as f:
-            f.write("=" * 72 + "\n")
-            f.write(f"waktu     : {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
-            f.write(f"panjang   : {len(raw)} byte\n")
-            f.write(f"hex       : {hx}\n")
-            for k, v in decode_all_numbers(raw).items():
-                f.write(f"{k:16s}: {v}\n")
-            f.write(f"diteruskan: {forwarded}\n")
-    except OSError:
-        pass
+    packet = struct.pack(">dddd", sp, kc, ki, kd)
+    assert len(packet) == 32, f"Panjang paket {len(packet)} != 32 byte!"
+    return packet
 
 
 def run_client():
-    print(f"[CLIENT] Baca parameter dari: {BRIDGE_FILE}")
-    print(f"[CLIENT] Target Dashboard: {DASHBOARD_HOST}:{DASHBOARD_PORT}")
+    print("=" * 66)
+    print(" Jembatan PID  --  HANYA port 6000 (kontrol -> LabVIEW)")
+    print(f"   Baca parameter dari : {BRIDGE_FILE}")
+    print("   Port 6001 TIDAK dipakai script ini -- LabVIEW kirim data")
+    print("   langsung ke dashboard, jadi tidak ada rebutan port.")
+    print("=" * 66)
+    print(" Tekan Ctrl+C untuk berhenti (atau tombol STOP di dashboard).\n")
 
     last_target = None
+
     while True:
         sp, kc, ki, kd, run, host, port = get_values()
 
         if not run:
-            print("[STOP] Perintah STOP dari dashboard. Client berhenti.")
-            break
+            print("[STOP] Perintah STOP dari dashboard. Script berhenti.")
+            return
 
         # Cetak target hanya saat berubah, supaya log tidak berisik.
         if (host, port) != last_target:
-            print(f"[CLIENT] Target LabVIEW: {host}:{port}")
+            print(f"[6000] Target LabVIEW: {host}:{port}")
             last_target = (host, port)
 
         try:
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client:
-                client.connect((host, port))
+            with socket.create_connection((host, port), timeout=5) as sock:
+                print(f"[6000] Tersambung ke LabVIEW di {host}:{port}")
 
-                # Urutan HARUS sama dgn urutan Unflatten di LabVIEW:
-                # SP -> KC -> KI -> KD
-                packet = struct.pack(">dddd", sp, kc, ki, kd)
-                assert len(packet) == 32
-                client.sendall(packet)
+                # Tetap di dalam satu koneksi selama LabVIEW masih hidup --
+                # buka-tutup socket tiap detik bikin LabVIEW sering re-accept.
+                while True:
+                    sp, kc, ki, kd, run, new_host, new_port = get_values()
 
-                print(
-                    f"[SEND] -> "
-                    f"SP={sp} KC={kc} KI={ki} KD={kd} "
-                    f"({len(packet)} byte)"
-                )
+                    if not run:
+                        print("[STOP] Perintah STOP dari dashboard. Script berhenti.")
+                        return
 
-                # Tunggu balasan data dari LabVIEW di koneksi yang SAMA (drain
-                # sampai lengkap), lalu deteksi format otomatis (teks / biner).
-                raw = recv_reply(client)
-                if not raw:
-                    print("[WARN] Tidak ada balasan dari LabVIEW (timeout).")
-                else:
-                    print(f"[RECV-RAW] {len(raw)} byte: {raw!r}")   # untuk verifikasi
-                    # Cetak SEMUA double big-endian agar mudah dibandingkan
-                    # langsung dengan angka di panel depan LabVIEW.
-                    n8 = len(raw) // 8
-                    if n8:
-                        alld = struct.unpack(f">{n8}d", raw[:n8 * 8])
-                        print(f"[RECV-ALL doubles BE x{n8}]: {[round(x, 5) for x in alld]}")
-                    values = parse_reply(raw)
-                    log_reply(raw, values)          # simpan bukti ke labview_reply.log
-                    if values:
-                        print(f"[RECV] -> {values}")
-                        forward_chart_to_dashboard(values)
-                    else:
-                        print("[WARN] Balasan tak bisa di-parse (lihat RAW di atas).")
+                    # Kalau user ganti IP/port LabVIEW di dashboard, putuskan
+                    # koneksi lama supaya loop luar menyambung ke target baru.
+                    if (new_host, new_port) != (host, port):
+                        print(f"[6000] Target berubah -> {new_host}:{new_port}. "
+                              f"Menyambung ulang...")
+                        break
 
-        except (ConnectionRefusedError, OSError) as e:
-            print(f"[ERROR] Gagal connect ke {host}:{port} -> {e}")
-            print("        Pastikan VI LabVIEW sudah di-Run dan TCP Listen aktif,")
-            print("        IP/port di dashboard benar, dan firewall mengizinkan port itu.")
+                    sock.sendall(build_packet(sp, kc, ki, kd))
+                    print(f"[6000] TX  SP={sp}  KC={kc}  KI={ki}  KD={kd}   (32 byte)")
 
-        time.sleep(SEND_INTERVAL)
+                    time.sleep(SEND_INTERVAL)
+
+        except (ConnectionRefusedError, socket.timeout, TimeoutError):
+            print(f"[6000] LabVIEW belum siap menerima koneksi di {host}:{port}. "
+                  f"Coba lagi {RECONNECT_DELAY:.0f} detik lagi...")
+            print("       Pastikan VI LabVIEW sudah di-Run dan TCP Listen aktif,")
+            print("       IP/port di dashboard benar, dan firewall mengizinkan port itu.")
+            time.sleep(RECONNECT_DELAY)
+
+        except OSError as exc:
+            print(f"[6000] Koneksi terputus ({exc}). Menyambung ulang...")
+            time.sleep(RECONNECT_DELAY)
 
 
 if __name__ == "__main__":
