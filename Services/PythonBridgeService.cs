@@ -25,7 +25,12 @@ namespace TLIGDashboard.Services;
 ///     is what actually starts the Python client.
 ///
 /// The JSON file is the single contract with the script:
-///     { "sp": 60, "kp": 1.5, "ki": 0.015, "kd": 8, "run": true, "host": "127.0.0.1", "port": 6000 }
+///     { "sp": 60, "kp": 1.5, "ki": 0.015, "kd": 8, "valve": 40, "send_valve": false,
+///       "run": true, "host": "127.0.0.1", "port": 6000 }
+/// "valve" is the manual valve opening (%) from the dashboard's Control card. It only
+/// goes on the wire when "send_valve" is true (<see cref="AppSettings.SendValveToLabView"/>),
+/// because that grows the packet from 4 doubles / 32 bytes to 5 doubles / 40 bytes and the
+/// VI must be reading 40 bytes before it is switched on — see that setting for why.
 /// "host"/"port" tell the script which LabVIEW to reach — taken from the dashboard's
 /// "Host / IP address (LabVIEW HMI)" setting, so another PC's IP is all it takes to
 /// drive a remote LabVIEW (no editing the Python script on each machine).
@@ -77,6 +82,10 @@ public sealed class PythonBridgeService : IDisposable
     // Last gains mirrored into the contract file, so a plain parameter change and a
     // RUN both write a complete, consistent file.
     private double _sp = 60, _kp = 1.5, _ki = 0.015, _kd = 8;
+    // Manual valve opening (%). Tracked separately from the gains: the Parameter page
+    // syncs gains without owning a valve control, so its 4-argument SyncParams must not
+    // reset the valve the Dashboard set.
+    private double _valve;
     private volatile bool _run;
 
     // Settings are read once, lazily — the interpreter and script path do not change
@@ -130,9 +139,10 @@ public sealed class PythonBridgeService : IDisposable
     /// Mirrors the current gains/setpoint into the contract file. Called on every
     /// parameter change in the HMI; the running script picks them up on its next send.
     /// </summary>
-    public void SyncParams(double kp, double ki, double kd, double sp)
+    public void SyncParams(double kp, double ki, double kd, double sp, double? valve = null)
     {
         _kp = kp; _ki = ki; _kd = kd; _sp = sp;
+        if (valve is { } v) _valve = v;   // null = caller has no valve control; keep the last one
         if (BuildInfo.IsClient) { ForwardToServer("sync"); return; }
         WriteParamsFile();
     }
@@ -140,13 +150,14 @@ public sealed class PythonBridgeService : IDisposable
     // ── Run / Stop ────────────────────────────────────────────────────────────
 
     /// <summary>Writes the given gains with run=true, then launches the script (no-op if already up).</summary>
-    public void Run(double kp, double ki, double kd, double sp)
+    public void Run(double kp, double ki, double kd, double sp, double? valve = null)
     {
-        // Re-read settings so a LabVIEW IP / script path the user just changed in the
-        // dashboard takes effect on this RUN without needing an app restart.
+        // Re-read settings so a LabVIEW IP / script path / valve switch the user just
+        // changed in the dashboard takes effect on this RUN without needing an app restart.
         _settings = null;
 
         _kp = kp; _ki = ki; _kd = kd; _sp = sp;
+        if (valve is { } v) _valve = v;
         _run = true;
         if (BuildInfo.IsClient) { ForwardToServer("run"); return; }
         WriteParamsFile();   // run=true must be on disk before the script starts reading
@@ -177,7 +188,7 @@ public sealed class PythonBridgeService : IDisposable
         var token = s.ServerToken;
 
         // Snapshot the current contract so the async post is not racing later edits.
-        double kp = _kp, ki = _ki, kd = _kd, sp = _sp;
+        double kp = _kp, ki = _ki, kd = _kd, sp = _sp, valve = _valve;
 
         if (string.IsNullOrWhiteSpace(AuthClient.NormalizeHost(host)) || string.IsNullOrWhiteSpace(token))
         {
@@ -193,7 +204,7 @@ public sealed class PythonBridgeService : IDisposable
 
         _ = Task.Run(async () =>
         {
-            bool ok = await PidRunClient.PostAsync(host, token, action, kp, ki, kd, sp);
+            bool ok = await PidRunClient.PostAsync(host, token, action, kp, ki, kd, sp, valve);
             switch (action)
             {
                 case "run":
@@ -231,6 +242,8 @@ public sealed class PythonBridgeService : IDisposable
             $"  \"kp\": {Num(_kp)},\n" +
             $"  \"ki\": {Num(_ki)},\n" +
             $"  \"kd\": {Num(_kd)},\n" +
+            $"  \"valve\": {Num(_valve)},\n" +
+            $"  \"send_valve\": {(Cfg.SendValveToLabView ? "true" : "false")},\n" +
             $"  \"run\": {(_run ? "true" : "false")},\n" +
             $"  \"host\": \"{Esc(LabViewHost)}\",\n" +
             $"  \"port\": {LabViewPort}\n" +
@@ -371,7 +384,8 @@ public static class PidRunClient
 {
     /// <summary>POSTs one command; returns true on a 2xx response, false on any error.</summary>
     public static async Task<bool> PostAsync(
-        string host, string token, string action, double kp, double ki, double kd, double sp)
+        string host, string token, string action, double kp, double ki, double kd, double sp,
+        double valve)
     {
         if (string.IsNullOrWhiteSpace(AuthClient.NormalizeHost(host)) || string.IsNullOrWhiteSpace(token))
             return false;
@@ -385,6 +399,7 @@ public static class PidRunClient
                 ["ki"] = ki,
                 ["kd"] = kd,
                 ["sp"] = sp,
+                ["valve"] = valve,
             };
 
             using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };

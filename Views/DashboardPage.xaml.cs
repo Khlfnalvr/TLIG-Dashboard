@@ -107,10 +107,13 @@ public sealed partial class DashboardPage : Page
         ApplyLearningPanelContent();
         App.Session.Changed += OnSessionChanged;
 
-        // Dua jalur kontrol ke LabVIEW aktif di kedua flavor (Server & Client):
-        //   1) Baris CSV langsung (Kp,Ki,Kd,Setpoint,Pump,Run) via SendControlLine() ->
-        //      HmiDataService (port 6001), untuk LabVIEW yang connect masuk ke dashboard.
-        //   2) PIDtest.py via PushPidInputs()/RUN -> App.PythonBridge (port 6000).
+        // Dua jalur kontrol ke LabVIEW di kedua flavor (Server & Client):
+        //   1) PIDtest.py via PushPidInputs()/RUN -> App.PythonBridge (port 6000). INI jalur
+        //      yang benar-benar sampai: Kp/Ki/Kd/Setpoint dan (kalau SendValveToLabView
+        //      aktif) Bukaan Valve.
+        //   2) Baris CSV (Kp,Ki,Kd,Setpoint,Pump,Run) via SendControlLine() ->
+        //      HmiDataService (port 6001). Hanya sampai KALAU VI memang TCP Read di 6001 —
+        //      VI yang sekarang cuma menulis "DATA," ke situ, jadi jangan andalkan jalur ini.
     }
 
     // Progress tracking in the bottom "Learning Analytic" panel is
@@ -168,9 +171,22 @@ public sealed partial class DashboardPage : Page
             DispatcherQueue.TryEnqueue(SendControlLine);   // sync the VI on (re)connect
     }
 
-    // Pump/Mode/Stop/Reset/E-Stop are LabVIEW-only (the PID Designer doesn't use them);
-    // the gain + setpoint boxes reach LabVIEW via PushPidInputs()/PullPidInputs().
-    private void CtlPump_ValueChanged(NumberBox sender, NumberBoxValueChangedEventArgs args) => SendControlLine();
+    // Mode/Stop/Reset/E-Stop are LabVIEW-only (the PID Designer doesn't use them); the gain,
+    // setpoint AND valve boxes reach LabVIEW via PushPidInputs()/PullPidInputs().
+    //
+    // The valve goes through PushPidInputs() — i.e. the pid_bridge.json → PIDtest.py → TCP
+    // 6000 path the gains already use — because the CSV line above only lands if the VI
+    // reads on 6001, and it does not: 6001 is the socket LabVIEW opens to PUSH its "DATA,"
+    // telemetry into the dashboard, and the VI never issues a TCP Read on it. Writing the
+    // valve there alone was why "Bukaan Valve" never reached the rig while Kp/Ki/Kd did.
+    // The _controlsReady guard is SendControlLine()'s: PushPidInputs() touches KpBox/CtlPump
+    // directly, and XAML fires this handler while the boxes are still being parsed.
+    private void CtlPump_ValueChanged(NumberBox sender, NumberBoxValueChangedEventArgs args)
+    {
+        if (!_controlsReady) return;
+        PushPidInputs();
+    }
+
     private void CtlMode_Checked(object sender, RoutedEventArgs e)                           => SendControlLine();
 
     private void CtlStop_Click(object sender, RoutedEventArgs e)  { _runState = 0; SendControlLine(); App.PythonBridge.Stop(); }
@@ -265,9 +281,13 @@ public sealed partial class DashboardPage : Page
         s.OuterKd  = KdBox.Value;
         s.Setpoint = CtlSetpointBox.Value;
         SendControlLine();   // the same gains/setpoint drive LabVIEW
-        // …and the same gains/setpoint mirror into PIDtest.py's contract file
+        // …and the same gains/setpoint/valve mirror into PIDtest.py's contract file
         // (the Control card drives the cascade's outer temperature PID).
-        App.PythonBridge.SyncParams(s.OuterKp, s.OuterKi, s.OuterKd, s.Setpoint);
+        // NaN = the box is cleared mid-edit; pass null so the bridge keeps the last good
+        // opening instead of coercing it to 0 and shutting the valve.
+        double valve = CtlPump.Value;
+        App.PythonBridge.SyncParams(s.OuterKp, s.OuterKi, s.OuterKd, s.Setpoint,
+                                    double.IsNaN(valve) ? null : (double?)valve);
     }
 
     private void PullPidInputs()
@@ -296,7 +316,9 @@ public sealed partial class DashboardPage : Page
         // RUN also launches the external Python client (PIDtest.py) with the current gains
         // (the Control card drives the cascade's outer temperature PID).
         var cs = App.CascadeSession;
-        App.PythonBridge.Run(cs.OuterKp, cs.OuterKi, cs.OuterKd, cs.Setpoint);
+        double valve = CtlPump.Value;
+        App.PythonBridge.Run(cs.OuterKp, cs.OuterKi, cs.OuterKd, cs.Setpoint,
+                             double.IsNaN(valve) ? null : (double?)valve);
 
         // One RUN drives the cascade session that both this panel and the Cascade page show.
         // Fires ResultChanged (-> RenderCascadeResult) / RunFailed on the way through.

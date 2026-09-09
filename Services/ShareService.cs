@@ -44,7 +44,7 @@ public static class ShareProtocol
     public const string ActivityPath           = "/activity";            // POST ActivityLog (client→server sync)
     public const string ChallengeSubmitPath    = "/challenge/submit";    // POST ChallengeSubmission (client→server)
     public const string PidSimPath             = "/sim/pid";             // POST {Kp, Ki, Kd, Setpoint}
-    public const string PidRunPath             = "/sim/pid/run";         // POST {action:"run"|"stop"|"sync", kp, ki, kd, sp} — drives the server's LabVIEW bridge
+    public const string PidRunPath             = "/sim/pid/run";         // POST {action:"run"|"stop"|"sync", kp, ki, kd, sp, valve} — drives the server's LabVIEW bridge
     public const string ChallengeSubmissionsPath = "/challenge/submissions"; // GET all submissions (staff only)
     public const string ChallengeGradePath     = "/challenge/grade";     // POST dosen grade (staff only)
     public const string StudentsPath           = "/students";            // GET student roster (staff only)
@@ -1216,13 +1216,16 @@ public sealed class ShareServer
             double ki  = (double?)node["ki"] ?? 0;
             double kd  = (double?)node["kd"] ?? 0;
             double sp  = (double?)node["sp"] ?? 0;
+            // Manual valve opening (%). Absent from an older Client's body — null then
+            // means "leave the valve as it is" rather than slamming it to 0.
+            double? valve = (double?)node["valve"];
 
             var bridge = PythonBridgeService.Instance;
             switch (action)
             {
-                case "run":  bridge.Run(kp, ki, kd, sp);        break;
-                case "stop": bridge.Stop();                     break;
-                case "sync": bridge.SyncParams(kp, ki, kd, sp); break;
+                case "run":  bridge.Run(kp, ki, kd, sp, valve);        break;
+                case "stop": bridge.Stop();                            break;
+                case "sync": bridge.SyncParams(kp, ki, kd, sp, valve); break;
                 default:
                     await WriteSimpleAsync(stream, "400 Bad Request", "application/json",
                         new JsonObject { ["error"] = $"Unknown action '{action}'" }.ToJsonString(), ct);
