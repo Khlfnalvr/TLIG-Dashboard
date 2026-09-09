@@ -347,6 +347,7 @@ public sealed partial class BroadcastSettingsPage : Page
         PlcHostBox.Text  = s.PlcTcpHost;
         PlcPortBox.Value = s.PlcTcpPort;
         HmiDataPortBox.Value = s.HmiDataPort;
+        SendValveCheck.IsChecked = s.SendValveToLabView;
         SyncOpcConnectButton();
     }
 
@@ -446,6 +447,24 @@ public sealed partial class BroadcastSettingsPage : Page
         // on the new port when it loads.
         if (HmiDataService.Instance.IsListening)
             HmiDataService.Instance.Start(port);
+    }
+
+    // The valve switch: adds the valve opening as the packet's 5th double. It changes the
+    // wire format, so the VI must already read 40 bytes (see AppSettings.SendValveToLabView).
+    // Saved on toggle like the ports above; the early return on "no change" also absorbs the
+    // event InitOpcSection's IsChecked assignment fires.
+    private void SendValve_Changed(object sender, RoutedEventArgs e)
+    {
+        bool on = SendValveCheck.IsChecked == true;
+
+        var s = AppSettingsService.Load();
+        if (s.SendValveToLabView == on) return;   // nothing changed
+        s.SendValveToLabView = on;
+        AppSettingsService.Save(s);
+
+        // Rewrite pid_bridge.json now so a PIDtest.py that is already running switches
+        // packet length on its next cycle, without waiting for the next RUN.
+        PythonBridgeService.Instance.ReloadSettings();
     }
 
     // ── AI API settings (server provider key; same as the flyout's quick config) ─

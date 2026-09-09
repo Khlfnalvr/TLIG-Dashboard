@@ -2077,6 +2077,12 @@ public sealed partial class MainWindow : Window
         PlcHostBox.Text  = saved.PlcTcpHost;
         PlcPortBox.Value = saved.PlcTcpPort;
         HmiDataPortBox.Value = saved.HmiDataPort;
+        // Only the PC wired to LabVIEW decides the packet layout. A Client forwards its
+        // valve to the server, which applies its OWN setting — the switch would do
+        // nothing here, so it is not offered.
+        SendValvePanel.Visibility = Services.BuildInfo.IsServer
+            ? Visibility.Visible : Visibility.Collapsed;
+        SendValveCheck.IsChecked  = saved.SendValveToLabView;
 
         UpdateOpcStatusDot();
         SyncOpcConnectButton();
@@ -2205,6 +2211,24 @@ public sealed partial class MainWindow : Window
         // on the new port when it loads.
         if (HmiDataService.Instance.IsListening)
             HmiDataService.Instance.Start(port);
+    }
+
+    // The valve switch: adds the valve opening as the packet's 5th double. It changes the
+    // wire format, so the VI must already read 40 bytes (see AppSettings.SendValveToLabView).
+    // Saved on toggle like the ports above; the early return on "no change" also absorbs the
+    // event InitOpcUaFlyout's IsChecked assignment fires.
+    private void SendValve_Changed(object sender, RoutedEventArgs e)
+    {
+        bool on = SendValveCheck.IsChecked == true;
+
+        var s = AppSettingsService.Load();
+        if (s.SendValveToLabView == on) return;   // nothing changed
+        s.SendValveToLabView = on;
+        AppSettingsService.Save(s);
+
+        // Rewrite pid_bridge.json now so a PIDtest.py that is already running switches
+        // packet length on its next cycle, without waiting for the next RUN.
+        PythonBridgeService.Instance.ReloadSettings();
     }
 
     private void UpdateOpcStatusDot()

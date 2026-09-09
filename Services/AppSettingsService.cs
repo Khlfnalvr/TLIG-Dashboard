@@ -52,16 +52,19 @@ public class AppSettings
     public string PythonExe               { get; set; } = "py";
     public string PythonScriptPath        { get; set; } = @"D:\PIDtest.py";
 
-    // Adds the manual valve opening (%) as a 5th value in the packet PIDtest.py sends
+    // Sends the manual valve opening (%) as a 5th value in the packet PIDtest.py writes
     // to LabVIEW on PlcTcpPort: SP, KC, KI, KD, VALVE = 5 big-endian doubles = 40 bytes
-    // (instead of the 4 doubles / 32 bytes sent without it).
+    // (against the 4 doubles / 32 bytes sent without it). This is the ONLY route the
+    // valve has — the 6001 socket is LabVIEW's own uplink and the VI never reads it.
     //
-    // OFF by default because it is the VI that decides how many bytes to read: a block
-    // diagram still wired to "TCP Read 32 bytes" would take 32 of the 40 bytes, leave 8
-    // in the buffer, and every following read would be shifted — corrupting the gains
-    // that work today. Turn this on ONLY after the VI reads 40 bytes and unflattens 5
-    // doubles, then wire the 5th to the valve control.
-    public bool   SendValveToLabView      { get; set; } = false;
+    // ON by default so the dashboard's valve control actually actuates. The matching
+    // VI side is two constants in the block diagram: "TCP Read" 32 -> 40, and the
+    // Unflatten From String type array 4 -> 5 elements; SP/KC/KI/KD keep indices 0..3,
+    // the valve is index 4. Until the VI reads 40 bytes it takes 32 of them and leaves
+    // 8 in the buffer, which shifts every following read and corrupts the gains — so
+    // clear this (PLC settings card: "Kirim Bukaan Valve ke LabVIEW") to fall straight
+    // back to the byte-identical 32-byte packet.
+    public bool   SendValveToLabView      { get; set; } = true;
 
     // ── Sharing: server side ──────────────────────────────────────────────
     // The server broadcasts its camera + HMI screen and proxies AI chat.

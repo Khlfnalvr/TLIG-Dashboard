@@ -147,6 +147,19 @@ public sealed class PythonBridgeService : IDisposable
         WriteParamsFile();
     }
 
+    /// <summary>
+    /// Drops the cached settings and rewrites the contract file, so a change made in the
+    /// PLC settings card (the valve switch, the LabVIEW host/port) reaches a PIDtest.py
+    /// that is already running on its next cycle instead of waiting for the next RUN.
+    /// No-op on the Client: the file lives on the Server, which owns the LabVIEW link.
+    /// </summary>
+    public void ReloadSettings()
+    {
+        _settings = null;
+        if (BuildInfo.IsClient) return;
+        WriteParamsFile();
+    }
+
     // ── Run / Stop ────────────────────────────────────────────────────────────
 
     /// <summary>Writes the given gains with run=true, then launches the script (no-op if already up).</summary>

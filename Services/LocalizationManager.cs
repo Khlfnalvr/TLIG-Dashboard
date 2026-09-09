@@ -109,6 +109,8 @@ public sealed class LocalizationManager : INotifyPropertyChanged
     public string Ui_PlcTcpPort       => T(nameof(Ui_PlcTcpPort));
     public string Ui_HmiDataPort      => T(nameof(Ui_HmiDataPort));
     public string Ui_HmiDataPortHint  => T(nameof(Ui_HmiDataPortHint));
+    public string Ui_SendValve        => T(nameof(Ui_SendValve));
+    public string Ui_SendValveHint    => T(nameof(Ui_SendValveHint));
 
     // ── Alert history ─────────────────────────────────────────────────────
     public string Ui_AlertHistory   => T(nameof(Ui_AlertHistory));
@@ -793,6 +795,8 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             [nameof(Ui_PlcTcpPort)]       = "TCP Port (control \u2192 LabVIEW)",
             [nameof(Ui_HmiDataPort)]      = "TCP Port (data \u2190 LabVIEW)",
             [nameof(Ui_HmiDataPortHint)]  = "Port the dashboard listens on for chart data sent by LabVIEW or PIDtest.py. Must match DASHBOARD_PORT in PIDtest.py.",
+            [nameof(Ui_SendValve)]        = "Send valve opening to LabVIEW (40-byte packet)",
+            [nameof(Ui_SendValveHint)]    = "Adds the valve opening as a 5th value: SP, KC, KI, KD, VALVE. The VI must read 40 bytes and unflatten 5 doubles. A VI still reading 32 bytes leaves 8 bytes in the buffer and every later read shifts, corrupting the gains - clear this to go back to the 32-byte packet.",
             ["OpcDa_ServerNotRunning"]       = "OPC DA server state: {0} (not running)",
             ["Ui_ServerOpcDaNotConnected"]   = "OPC DA: NOT CONNECTED",
             [nameof(Ui_AlertHistory)]   = "Alert History",
@@ -1414,6 +1418,8 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             [nameof(Ui_PlcTcpPort)]       = "Port TCP (kontrol \u2192 LabVIEW)",
             [nameof(Ui_HmiDataPort)]      = "Port TCP (data \u2190 LabVIEW)",
             [nameof(Ui_HmiDataPortHint)]  = "Port tempat dashboard menunggu data chart dari LabVIEW atau PIDtest.py. Harus sama dengan DASHBOARD_PORT di PIDtest.py.",
+            [nameof(Ui_SendValve)]        = "Kirim Bukaan Valve ke LabVIEW (paket 40 byte)",
+            [nameof(Ui_SendValveHint)]    = "Menambahkan bukaan valve sebagai nilai ke-5: SP, KC, KI, KD, VALVE. VI harus TCP Read 40 byte dan Unflatten 5 double. Kalau VI masih baca 32 byte, sisa 8 byte menumpuk dan semua pembacaan berikutnya bergeser sehingga gain rusak - matikan untuk kembali ke paket 32 byte.",
             ["OpcDa_ServerNotRunning"]       = "Status server OPC DA: {0} (tidak berjalan)",
             ["Ui_ServerOpcDaNotConnected"]   = "OPC DA: TIDAK TERHUBUNG",
             [nameof(Ui_AlertHistory)]   = "Riwayat Alert",
