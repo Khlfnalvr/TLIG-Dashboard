@@ -162,8 +162,11 @@ public sealed partial class ParameterPage : Page
         double sp = double.IsNaN(CtlSetpointBox.Value) ? 0 : CtlSetpointBox.Value;
 
         // Jalankan client Python (PIDtest.py) dengan parameter terbaru.
-        // Python yang meneruskan ke LabVIEW (port 6000, biner).
-        App.PythonBridge.Run(kp, ki, kd, sp);
+        // Python yang meneruskan ke LabVIEW (port 6000, biner 6 double / 48 byte).
+        // Bukaan valve tidak diteruskan: halaman ini tidak punya kontrolnya, jadi nilai
+        // yang sedang berlaku dipertahankan. CMD diisi RUN karena ini penekanan tombol
+        // yang disengaja, bukan sinkronisasi diam-diam.
+        App.PythonBridge.Run(kp, ki, kd, sp, cmd: PythonBridgeService.CmdRun);
 
         ActivityStore.Instance.LogSession(
             ActivityCategory.Simulation,
@@ -182,8 +185,17 @@ public sealed partial class ParameterPage : Page
 
     private void StopBtn_Click(object sender, RoutedEventArgs e)
     {
-        // Hentikan client Python (PIDtest.py).
-        App.PythonBridge.Stop();
+        // Latch CMD = STOP. Sengaja TIDAK memanggil PythonBridge.Stop(): mematikan proses
+        // akan memutus koneksi 6000, dan VI hanya menerima satu koneksi per Run sehingga
+        // harus di-Run ulang. Yang berhenti cukup aksi di dalam VI, lewat Case CMD-nya —
+        // aturan yang sama dengan tombol STOP di halaman Dashboard. Prosesnya dimatikan
+        // di satu tempat saja: handler Closed milik MainWindow.
+        App.PythonBridge.SyncParams(
+            double.IsNaN(KpBox.Value) ? 0 : KpBox.Value,
+            double.IsNaN(KiBox.Value) ? 0 : KiBox.Value,
+            double.IsNaN(KdBox.Value) ? 0 : KdBox.Value,
+            double.IsNaN(CtlSetpointBox.Value) ? 0 : CtlSetpointBox.Value,
+            cmd: PythonBridgeService.CmdStop);
 
         ActivityStore.Instance.LogSession(
             ActivityCategory.Simulation,
@@ -238,6 +250,8 @@ public sealed partial class ParameterPage : Page
         s.Setpoint = CtlSetpointBox.Value;
         // Mirror the same gains/setpoint into PIDtest.py's contract file — a running
         // script picks them up on its next send (this is the "auto-update" path).
+        // pump/cmd sengaja tidak diisi: ini sinkronisasi pasif, dan halaman ini tidak
+        // boleh diam-diam menimpa bukaan valve atau perintah tombol yang sedang aktif.
         App.PythonBridge.SyncParams(s.Kp, s.Ki, s.Kd, s.Setpoint);
     }
 

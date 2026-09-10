@@ -48,26 +48,13 @@ public class AppSettings
     //     Python launcher), which is the reliable way to start Python on Windows —
     //     a bare "python" often resolves to the Microsoft Store alias stub that does
     //     nothing. Falls back to "python" automatically if "py" is not installed.
-    //   • PythonScriptPath — the PIDtest.py this machine should run.
+    //   • PythonScriptPath — an explicit override for this machine. Empty by default so
+    //     the copy bundled next to the exe wins; a non-empty path is honoured whenever
+    //     the file actually exists there. It used to default to D:\PIDtest.py, which is
+    //     the "System Reserved" partition on the lab PC — unwritable, so the file could
+    //     never be there and RUN failed with "Atur PythonScriptPath di settings.json".
     public string PythonExe               { get; set; } = "py";
-    public string PythonScriptPath        { get; set; } = @"D:\PIDtest.py";
-
-    // Sends the manual valve opening (%) as a 5th value in the packet PIDtest.py writes
-    // to LabVIEW on PlcTcpPort: SP, KC, KI, KD, VALVE = 5 big-endian doubles = 40 bytes
-    // (against the 4 doubles / 32 bytes sent without it).
-    //
-    // OFF, because this is the SECOND route the valve has and the lab VI uses the first
-    // one: the dashboard also writes the valve as field 5 of the CRLF control line
-    // "Kp,Ki,Kd,Setpoint,Pump,Run" on HmiDataPort, and that line reaches the VI over the
-    // very socket LabVIEW opened for its own "DATA," telemetry (HmiDataService registers
-    // it and writes back down it). A VI with a TCP Read on that connection gets the valve
-    // without the 6000 packet changing shape at all.
-    //
-    // Only turn this on for a VI that has no such reader AND has been rewired to take
-    // 40 bytes: while its "TCP Read" is still 32 bytes it consumes 32 of the 40, leaves
-    // 8 in the buffer, and every following read shifts — corrupting the gains that work.
-    // The switch lives in the PLC settings card ("Kirim Bukaan Valve ke LabVIEW").
-    public bool   SendValveToLabView      { get; set; } = false;
+    public string PythonScriptPath        { get; set; } = "";
 
     // ── Sharing: server side ──────────────────────────────────────────────
     // The server broadcasts its camera + HMI screen and proxies AI chat.

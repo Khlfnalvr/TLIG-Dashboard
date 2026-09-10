@@ -464,17 +464,6 @@
                                                    HorizontalAlignment="Stretch"/>
                                     </StackPanel>
 
-                                    <!-- Valve opening as the packet's 5th double (needs the VI to read 40 bytes) -->
-                                    <StackPanel x:Name="SendValvePanel" Spacing="3">
-                                        <CheckBox x:Name="SendValveCheck"
-                                                  FontSize="12"
-                                                  Checked="SendValve_Changed"
-                                                  Unchecked="SendValve_Changed"
-                                                  Content="{x:Bind Lang.Ui_SendValve, Mode=OneWay}"/>
-                                        <TextBlock Text="{x:Bind Lang.Ui_SendValveHint, Mode=OneWay}"
-                                                   FontSize="11" Opacity="0.6" TextWrapping="Wrap"/>
-                                    </StackPanel>
-
                                     <!-- Connect / Disconnect -->
                                     <Button x:Name="OpcConnectBtn"
                                             FontSize="12"

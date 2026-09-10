@@ -107,13 +107,14 @@ public sealed partial class DashboardPage : Page
         ApplyLearningPanelContent();
         App.Session.Changed += OnSessionChanged;
 
-        // Dua jalur kontrol ke LabVIEW di kedua flavor (Server & Client):
-        //   1) PIDtest.py via PushPidInputs()/RUN -> App.PythonBridge (port 6000). INI jalur
-        //      yang benar-benar sampai: Kp/Ki/Kd/Setpoint dan (kalau SendValveToLabView
-        //      aktif) Bukaan Valve.
-        //   2) Baris CSV (Kp,Ki,Kd,Setpoint,Pump,Run) via SendControlLine() ->
-        //      HmiDataService (port 6001). Hanya sampai KALAU VI memang TCP Read di 6001 —
-        //      VI yang sekarang cuma menulis "DATA," ke situ, jadi jangan andalkan jalur ini.
+        // Kontrol ke LabVIEW hanya lewat SATU jalur yang terbukti hidup, di kedua flavor:
+        //   PushPidInputs()/RUN -> App.PythonBridge -> pid_bridge.json -> PIDtest.py
+        //   -> TCP 6000 -> LabVIEW, sebagai 6 double / 48 byte: SP, KC, KI, KD, PUMP, CMD.
+        //
+        // Baris CSV lewat SendControlLine() -> HmiDataService (port 6001) DITINGGALKAN:
+        // sudah dibuktikan tidak pernah sampai (klien tiruan yang menyamar jadi LabVIEW
+        // tersambung lalu diam total; TCP Read di sisi VI error 56). Kodenya dibiarkan
+        // karena tidak mengganggu, tapi jangan diandalkan dan jangan diperbaiki.
     }
 
     // Progress tracking in the bottom "Learning Analytic" panel is
@@ -142,7 +143,15 @@ public sealed partial class DashboardPage : Page
     // CtlSetpointBox, so editing them drives BOTH the PID simulator and LabVIEW — the send
     // is hooked into PushPidInputs()/PullPidInputs(). Decimals use invariant culture ('.'),
     // never the ',' of the Indonesian UI locale.
-    private int _runState;  // 6th CSV field: 1 = RUN, 0 = STOP / RESET / E-STOP
+    // The latched button code, sent as the 6th double (CMD) of the 48-byte packet and as
+    // the 6th CSV field. Latched, not momentary: the last button pressed keeps being sent
+    // every cycle and the VI does its own edge detection, so there is no timer and no
+    // auto-revert here. RUN = 1, STOP = 0, RESET = 2, E-STOP = 3.
+    private const int CmdStop  = PythonBridgeService.CmdStop,
+                      CmdRun   = PythonBridgeService.CmdRun,
+                      CmdReset = PythonBridgeService.CmdReset,
+                      CmdEStop = PythonBridgeService.CmdEStop;
+    private int _runState = CmdRun;
 
     private void SendControlLine()
     {
@@ -174,16 +183,12 @@ public sealed partial class DashboardPage : Page
     // Mode/Stop/Reset/E-Stop are LabVIEW-only (the PID Designer doesn't use them); the gain,
     // setpoint AND valve boxes reach LabVIEW via PushPidInputs()/PullPidInputs().
     //
-    // PushPidInputs() puts the valve on BOTH routes, and which one lands is decided by the
-    // VI, not here:
-    //   • the CRLF control line on HmiDataPort (field 5, "Kp,Ki,Kd,Setpoint,Pump,Run") —
-    //     SendControlLine() runs first inside PushPidInputs(). It travels down the socket
-    //     LabVIEW itself opened for its "DATA," telemetry, which HmiDataService registers
-    //     and writes back on, so a VI with a TCP Read there receives it with the 6000
-    //     packet left completely alone. This is the lab VI's route.
-    //   • the 5th double of the 6000 packet, only when SendValveToLabView is set.
-    // The _controlsReady guard is SendControlLine()'s: PushPidInputs() touches KpBox/CtlPump
-    // directly, and XAML fires this handler while the boxes are still being parsed.
+    // The valve reaches LabVIEW as PUMP, the 5th double of the 48-byte packet, by going
+    // through PushPidInputs() — the same route as the gains. It used to be written only to
+    // the 6001 CSV line, which never arrived; that is why "Bukaan Valve" did nothing while
+    // Kp/Ki/Kd worked. The _controlsReady guard is SendControlLine()'s: PushPidInputs()
+    // touches KpBox/CtlPump directly, and XAML fires this handler while the boxes are
+    // still being parsed.
     private void CtlPump_ValueChanged(NumberBox sender, NumberBoxValueChangedEventArgs args)
     {
         if (!_controlsReady) return;
@@ -192,9 +197,22 @@ public sealed partial class DashboardPage : Page
 
     private void CtlMode_Checked(object sender, RoutedEventArgs e)                           => SendControlLine();
 
-    private void CtlStop_Click(object sender, RoutedEventArgs e)  { _runState = 0; SendControlLine(); App.PythonBridge.Stop(); }
-    private void CtlReset_Click(object sender, RoutedEventArgs e) { _runState = 0; SendControlLine(); App.PythonBridge.Stop(); }
-    private void CtlEStop_Click(object sender, RoutedEventArgs e) { _runState = 0; SendControlLine(); App.PythonBridge.Stop(); }
+    // STOP / RESET / E-STOP only latch a new CMD — they deliberately do NOT stop the Python
+    // bridge. The link stays up, the packet keeps flowing every second, and the values the
+    // student already entered stay loaded; what halts is the action inside the VI, via its
+    // Case on CMD. Killing the process here would drop the 6000 connection, and the VI
+    // accepts only one connection per Run — it would need restarting, and the planned
+    // multi-client queue could never keep the VI alive. The process is stopped in exactly
+    // one place: MainWindow's Closed handler (App.PythonBridge.Dispose()).
+    private void CtlStop_Click(object sender, RoutedEventArgs e)  => LatchCommand(CmdStop);
+    private void CtlReset_Click(object sender, RoutedEventArgs e) => LatchCommand(CmdReset);
+    private void CtlEStop_Click(object sender, RoutedEventArgs e) => LatchCommand(CmdEStop);
+
+    private void LatchCommand(int cmd)
+    {
+        _runState = cmd;
+        PushPidInputs();   // sends the CSV line AND the 48-byte packet's CMD field
+    }
 
     private void OnSimulationTypeChanged(object? sender, Services.SimulationType type)
         => DispatcherQueue.TryEnqueue(() => ApplySimulationType(type));
@@ -284,13 +302,16 @@ public sealed partial class DashboardPage : Page
         s.OuterKd  = KdBox.Value;
         s.Setpoint = CtlSetpointBox.Value;
         SendControlLine();   // the same gains/setpoint drive LabVIEW
-        // …and the same gains/setpoint/valve mirror into PIDtest.py's contract file
-        // (the Control card drives the cascade's outer temperature PID).
+        // …and the same gains/setpoint/valve/command mirror into PIDtest.py's contract
+        // file, which becomes the 48-byte packet (the Control card drives the cascade's
+        // outer temperature PID).
         // NaN = the box is cleared mid-edit; pass null so the bridge keeps the last good
-        // opening instead of coercing it to 0 and shutting the valve.
-        double valve = CtlPump.Value;
+        // opening instead of coercing it to 0 and slamming the valve shut — the same guard
+        // SendControlLine() applies before it will emit a line.
+        double pump = CtlPump.Value;
         App.PythonBridge.SyncParams(s.OuterKp, s.OuterKi, s.OuterKd, s.Setpoint,
-                                    double.IsNaN(valve) ? null : (double?)valve);
+                                    double.IsNaN(pump) ? null : (double?)pump,
+                                    _runState);
     }
 
     private void PullPidInputs()
@@ -313,15 +334,16 @@ public sealed partial class DashboardPage : Page
 
     private async Task RunPidAsync()
     {
-        _runState = 1;      // RUN also starts LabVIEW (6th CSV field)
-        PushPidInputs();    // pushes gains/setpoint to the PID session AND to LabVIEW (Run=1)
+        _runState = CmdRun;   // latched until another button is pressed
+        PushPidInputs();      // pushes gains/setpoint/valve to the PID session AND to LabVIEW
 
         // RUN also launches the external Python client (PIDtest.py) with the current gains
         // (the Control card drives the cascade's outer temperature PID).
         var cs = App.CascadeSession;
-        double valve = CtlPump.Value;
+        double runPump = CtlPump.Value;
         App.PythonBridge.Run(cs.OuterKp, cs.OuterKi, cs.OuterKd, cs.Setpoint,
-                             double.IsNaN(valve) ? null : (double?)valve);
+                             double.IsNaN(runPump) ? null : (double?)runPump,
+                             CmdRun);
 
         // One RUN drives the cascade session that both this panel and the Cascade page show.
         // Fires ResultChanged (-> RenderCascadeResult) / RunFailed on the way through.

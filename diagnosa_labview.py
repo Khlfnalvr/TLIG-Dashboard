@@ -14,8 +14,8 @@ menyambung sembarangan justru merebut jatah PIDtest.py).
 
     python diagnosa_labview.py --probe
 
-Menambahkan uji sambung ke port 6000. Pakai HANYA kalau dashboard sedang
-STOP, dan JALANKAN ULANG VI sesudahnya karena jatah koneksinya terpakai.
+Menambahkan uji sambung ke port 6000. Pakai HANYA kalau PIDtest.py sedang
+tidak jalan, dan JALANKAN ULANG VI sesudahnya karena jatah koneksinya terpakai.
 
 PRIVASI: settings.json memuat API key dan token. Script ini hanya mencetak
 enam kunci yang berkaitan dengan LabVIEW, tidak pernah seluruh file.
@@ -33,7 +33,7 @@ import sys
 # ServerToken, AiProviderConfigs, ...) sengaja tidak pernah disentuh.
 KUNCI_AMAN = [
     "PlcTcpHost", "PlcTcpPort", "HmiDataPort",
-    "PythonExe", "PythonScriptPath", "SendValveToLabView",
+    "PythonExe", "PythonScriptPath",
 ]
 
 
@@ -64,10 +64,6 @@ def cek_settings():
         return {}
     for k in KUNCI_AMAN:
         baris(k, data.get(k, "(belum ada -> pakai default)"))
-    if data.get("SendValveToLabView") is False:
-        print("\n  CATATAN: SendValveToLabView = False, jadi bukaan valve memang")
-        print("  TIDAK dikirim. Centang 'Kirim Bukaan Valve ke LabVIEW' di kartu")
-        print("  PLC Connection kalau VI sudah siap membaca 40 byte.")
     return data
 
 
@@ -98,12 +94,14 @@ def cari_script(cfg):
         print(f"  -> gagal dibaca: {exc}")
         return dipakai
 
-    baru = "send_valve" in isi
-    baris("dukung bukaan valve", "YA (versi baru)" if baru else "TIDAK (versi lama)")
+    baru = ">dddddd" in isi
+    baris("paket", "48 byte / 6 double (versi baru)" if baru
+                   else "32 byte / 4 double (versi LAMA)")
     if not baru:
-        print("\n  -> INI PENYEBAB PALING SERING. File ini versi lama dan tidak")
-        print("     tahu soal bukaan valve sama sekali. Salin PIDtest.py yang baru")
-        print(f"     dari repo ke: {dipakai}")
+        print("\n  -> INI PENYEBAB PALING SERING. File ini versi lama: bukaan valve dan")
+        print("     tombol tidak ikut terkirim, dan kalau VI sudah TCP Read 48 byte, VI")
+        print("     akan menunggu selamanya. Salin PIDtest.py yang baru ke:")
+        print(f"     {dipakai}")
     return dipakai
 
 
@@ -121,11 +119,15 @@ def cek_bridge(script):
     except Exception as exc:
         print(f"  -> gagal dibaca: {exc}")
         return
-    for k in ("sp", "kp", "ki", "kd", "valve", "send_valve", "run", "host", "port"):
+    for k in ("sp", "kp", "ki", "kd", "pump", "cmd", "run", "host", "port"):
         baris(k, data.get(k, "(tidak ada)"))
-    if "valve" not in data:
-        print("\n  -> Tidak ada field 'valve'. Dashboard yang menulis file ini masih")
-        print("     versi lama. Ambil branch claude/amazing-davinci-ejvabl lalu build ulang.")
+    if "pump" not in data or "cmd" not in data:
+        print("\n  -> Field 'pump' / 'cmd' tidak ada. Dashboard yang menulis file ini")
+        print("     masih versi lama, jadi bukaan valve dan tombol tidak akan sampai.")
+        print("     Build ulang dashboard dari branch terbaru.")
+    else:
+        arti = {0: "STOP", 1: "RUN", 2: "RESET", 3: "E-STOP"}
+        baris("arti cmd", arti.get(int(data["cmd"]), "tidak dikenal"))
 
 
 def cek_log(script):

@@ -25,12 +25,19 @@ namespace TLIGDashboard.Services;
 ///     is what actually starts the Python client.
 ///
 /// The JSON file is the single contract with the script:
-///     { "sp": 60, "kp": 1.5, "ki": 0.015, "kd": 8, "valve": 40, "send_valve": true,
+///     { "sp": 60, "kp": 1.5, "ki": 0.015, "kd": 8, "pump": 40, "cmd": 1,
 ///       "run": true, "host": "127.0.0.1", "port": 6000 }
-/// "valve" is the manual valve opening (%) from the dashboard's Control card. It only
-/// goes on the wire when "send_valve" is true (<see cref="AppSettings.SendValveToLabView"/>),
-/// because that grows the packet from 4 doubles / 32 bytes to 5 doubles / 40 bytes and the
-/// VI must be reading 40 bytes before it is switched on — see that setting for why.
+/// "pump" is the valve opening (%) from the Control card; "cmd" is the latched button
+/// state (RUN 1, STOP 0, RESET 2, E-STOP 3). Both ride the same 6-double / 48-byte packet
+/// as the gains — SP, KC, KI, KD, PUMP, CMD — which is the one route to LabVIEW that is
+/// proven to work. The VI must be reading 48 bytes and unflattening 6 doubles: a VI still
+/// on 32 bytes reads shifted garbage that looks like plausible numbers, so the two sides
+/// are changed together, never one at a time.
+///
+/// "cmd" is a LATCH, not a pulse: the dashboard keeps resending the last button pressed
+/// and the VI does its own edge detection. STOP/RESET/E-STOP therefore never stop the
+/// Python process — the link stays up, values stay loaded, and only the VI's own Case
+/// acts on the code. The process ends when the dashboard closes.
 /// "host"/"port" tell the script which LabVIEW to reach — taken from the dashboard's
 /// "Host / IP address (LabVIEW HMI)" setting, so another PC's IP is all it takes to
 /// drive a remote LabVIEW (no editing the Python script on each machine).
@@ -50,6 +57,13 @@ public sealed class PythonBridgeService : IDisposable
 {
     public static PythonBridgeService Instance { get; } = new();
     private PythonBridgeService() { }
+
+    /// <summary>
+    /// Latched button codes carried in the packet's CMD field (6th double). LabVIEW turns
+    /// the double back into an integer and switches on it, so the numbers are part of the
+    /// wire contract — change them here and the VI's Case has to change with them.
+    /// </summary>
+    public const int CmdStop = 0, CmdRun = 1, CmdReset = 2, CmdEStop = 3;
 
     // ── Events ────────────────────────────────────────────────────────────────
     /// <summary>One line of the script's stdout/stderr.</summary>
@@ -82,10 +96,11 @@ public sealed class PythonBridgeService : IDisposable
     // Last gains mirrored into the contract file, so a plain parameter change and a
     // RUN both write a complete, consistent file.
     private double _sp = 60, _kp = 1.5, _ki = 0.015, _kd = 8;
-    // Manual valve opening (%). Tracked separately from the gains: the Parameter page
-    // syncs gains without owning a valve control, so its 4-argument SyncParams must not
-    // reset the valve the Dashboard set.
-    private double _valve;
+    // Valve opening (%) and the latched button code. Tracked separately from the gains:
+    // the Parameter page syncs gains without owning either control, so its 4-argument
+    // SyncParams must not silently clobber the valve or the command that is in force.
+    private double _pump;
+    private int    _cmd = 1;   // 1 = RUN, 0 = STOP, 2 = RESET, 3 = E-STOP
     private volatile bool _run;
 
     // Settings are read once, lazily — the interpreter and script path do not change
@@ -160,38 +175,31 @@ public sealed class PythonBridgeService : IDisposable
     /// Mirrors the current gains/setpoint into the contract file. Called on every
     /// parameter change in the HMI; the running script picks them up on its next send.
     /// </summary>
-    public void SyncParams(double kp, double ki, double kd, double sp, double? valve = null)
+    public void SyncParams(double kp, double ki, double kd, double sp,
+                           double? pump = null, int? cmd = null)
     {
         _kp = kp; _ki = ki; _kd = kd; _sp = sp;
-        if (valve is { } v) _valve = v;   // null = caller has no valve control; keep the last one
+        // null = this caller owns no valve box / no buttons (the Parameter page), so the
+        // value in force is kept rather than reset to a default.
+        if (pump is { } p) _pump = p;
+        if (cmd  is { } c) _cmd  = c;
         if (BuildInfo.IsClient) { ForwardToServer("sync"); return; }
-        WriteParamsFile();
-    }
-
-    /// <summary>
-    /// Drops the cached settings and rewrites the contract file, so a change made in the
-    /// PLC settings card (the valve switch, the LabVIEW host/port) reaches a PIDtest.py
-    /// that is already running on its next cycle instead of waiting for the next RUN.
-    /// No-op on the Client: the file lives on the Server, which owns the LabVIEW link.
-    /// </summary>
-    public void ReloadSettings()
-    {
-        _settings = null;
-        if (BuildInfo.IsClient) return;
         WriteParamsFile();
     }
 
     // ── Run / Stop ────────────────────────────────────────────────────────────
 
     /// <summary>Writes the given gains with run=true, then launches the script (no-op if already up).</summary>
-    public void Run(double kp, double ki, double kd, double sp, double? valve = null)
+    public void Run(double kp, double ki, double kd, double sp,
+                    double? pump = null, int? cmd = null)
     {
-        // Re-read settings so a LabVIEW IP / script path / valve switch the user just
-        // changed in the dashboard takes effect on this RUN without needing an app restart.
+        // Re-read settings so a LabVIEW IP / script path the user just changed in the
+        // dashboard takes effect on this RUN without needing an app restart.
         _settings = null;
 
         _kp = kp; _ki = ki; _kd = kd; _sp = sp;
-        if (valve is { } v) _valve = v;
+        if (pump is { } p) _pump = p;
+        if (cmd  is { } c) _cmd  = c;
         _run = true;
         if (BuildInfo.IsClient) { ForwardToServer("run"); return; }
         WriteParamsFile();   // run=true must be on disk before the script starts reading
@@ -222,7 +230,8 @@ public sealed class PythonBridgeService : IDisposable
         var token = s.ServerToken;
 
         // Snapshot the current contract so the async post is not racing later edits.
-        double kp = _kp, ki = _ki, kd = _kd, sp = _sp, valve = _valve;
+        double kp = _kp, ki = _ki, kd = _kd, sp = _sp, pump = _pump;
+        int    cmd = _cmd;
 
         if (string.IsNullOrWhiteSpace(AuthClient.NormalizeHost(host)) || string.IsNullOrWhiteSpace(token))
         {
@@ -238,7 +247,7 @@ public sealed class PythonBridgeService : IDisposable
 
         _ = Task.Run(async () =>
         {
-            bool ok = await PidRunClient.PostAsync(host, token, action, kp, ki, kd, sp, valve);
+            bool ok = await PidRunClient.PostAsync(host, token, action, kp, ki, kd, sp, pump, cmd);
             switch (action)
             {
                 case "run":
@@ -276,8 +285,8 @@ public sealed class PythonBridgeService : IDisposable
             $"  \"kp\": {Num(_kp)},\n" +
             $"  \"ki\": {Num(_ki)},\n" +
             $"  \"kd\": {Num(_kd)},\n" +
-            $"  \"valve\": {Num(_valve)},\n" +
-            $"  \"send_valve\": {(Cfg.SendValveToLabView ? "true" : "false")},\n" +
+            $"  \"pump\": {Num(_pump)},\n" +
+            $"  \"cmd\": {_cmd.ToString(CultureInfo.InvariantCulture)},\n" +
             $"  \"run\": {(_run ? "true" : "false")},\n" +
             $"  \"host\": \"{Esc(LabViewHost)}\",\n" +
             $"  \"port\": {LabViewPort}\n" +
@@ -333,9 +342,8 @@ public sealed class PythonBridgeService : IDisposable
                     $"=== RUN {DateTime.Now:yyyy-MM-dd HH:mm:ss} ==={Environment.NewLine}" +
                     $"script      : {script}{Environment.NewLine}" +
                     $"LabVIEW     : {LabViewHost}:{LabViewPort}{Environment.NewLine}" +
-                    $"send_valve  : {Cfg.SendValveToLabView} " +
-                    $"({(Cfg.SendValveToLabView ? "40 byte / 5 double, VI harus TCP Read 40"
-                                               : "32 byte / 4 double")}){Environment.NewLine}");
+                    $"paket       : 6 double / 48 byte (SP, KC, KI, KD, PUMP, CMD) -- " +
+                    $"VI harus TCP Read 48{Environment.NewLine}");
             }
             catch { }
 
@@ -433,7 +441,7 @@ public static class PidRunClient
     /// <summary>POSTs one command; returns true on a 2xx response, false on any error.</summary>
     public static async Task<bool> PostAsync(
         string host, string token, string action, double kp, double ki, double kd, double sp,
-        double valve)
+        double pump, int cmd)
     {
         if (string.IsNullOrWhiteSpace(AuthClient.NormalizeHost(host)) || string.IsNullOrWhiteSpace(token))
             return false;
@@ -447,7 +455,8 @@ public static class PidRunClient
                 ["ki"] = ki,
                 ["kd"] = kd,
                 ["sp"] = sp,
-                ["valve"] = valve,
+                ["pump"] = pump,
+                ["cmd"] = cmd,
             };
 
             using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
