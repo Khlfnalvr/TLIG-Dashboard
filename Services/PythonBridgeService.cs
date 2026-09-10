@@ -25,7 +25,7 @@ namespace TLIGDashboard.Services;
 ///     is what actually starts the Python client.
 ///
 /// The JSON file is the single contract with the script:
-///     { "sp": 60, "kp": 1.5, "ki": 0.015, "kd": 8, "valve": 40, "send_valve": false,
+///     { "sp": 60, "kp": 1.5, "ki": 0.015, "kd": 8, "valve": 40, "send_valve": true,
 ///       "run": true, "host": "127.0.0.1", "port": 6000 }
 /// "valve" is the manual valve opening (%) from the dashboard's Control card. It only
 /// goes on the wire when "send_valve" is true (<see cref="AppSettings.SendValveToLabView"/>),
@@ -121,6 +121,27 @@ public sealed class PythonBridgeService : IDisposable
     // the dashboard at another PC's IP is all it takes to reach a remote LabVIEW.
     private string LabViewHost => string.IsNullOrWhiteSpace(Cfg.PlcTcpHost) ? "127.0.0.1" : Cfg.PlcTcpHost.Trim();
     private int    LabViewPort => Cfg.PlcTcpPort is > 0 and <= 65535 ? Cfg.PlcTcpPort : 6000;
+
+    /// <summary>
+    /// The script's console log, beside the contract file. The child runs with no window
+    /// and nothing subscribes to <see cref="Output"/>, so without this there is no record
+    /// at all of what PIDtest.py actually sends — packet length and per-cycle values
+    /// included. Truncated on every RUN so it stays a picture of the current session.
+    /// </summary>
+    public string LogFilePath => Path.Combine(
+        Path.GetDirectoryName(ParamsFilePath) ?? AppSettingsService.FolderPath, "pid_bridge.log");
+
+    private readonly object _logLock = new();
+
+    private void AppendLog(string line)
+    {
+        try
+        {
+            lock (_logLock)
+                File.AppendAllText(LogFilePath, $"{DateTime.Now:HH:mm:ss}  {line}{Environment.NewLine}");
+        }
+        catch { /* diagnostics must never take the bridge down */ }
+    }
 
     /// <summary>The JSON contract file, next to the script so PIDtest.py finds it by __file__.</summary>
     private string ParamsFilePath
@@ -304,6 +325,20 @@ public sealed class PythonBridgeService : IDisposable
                 return;
             }
 
+            // Header first: it names the target and the packet layout, which is exactly
+            // what you need to see when LabVIEW receives nothing or receives nonsense.
+            try
+            {
+                File.WriteAllText(LogFilePath,
+                    $"=== RUN {DateTime.Now:yyyy-MM-dd HH:mm:ss} ==={Environment.NewLine}" +
+                    $"script      : {script}{Environment.NewLine}" +
+                    $"LabVIEW     : {LabViewHost}:{LabViewPort}{Environment.NewLine}" +
+                    $"send_valve  : {Cfg.SendValveToLabView} " +
+                    $"({(Cfg.SendValveToLabView ? "40 byte / 5 double, VI harus TCP Read 40"
+                                               : "32 byte / 4 double")}){Environment.NewLine}");
+            }
+            catch { }
+
             // Try the configured interpreter first, then the Windows "py" launcher — one of
             // them is almost always on PATH even when the other name isn't.
             foreach (var exe in Dedup(PythonExe, "py", "python"))
@@ -337,8 +372,8 @@ public sealed class PythonBridgeService : IDisposable
         psi.ArgumentList.Add(script);   // ArgumentList quotes paths with spaces correctly
 
         var proc = new Process { StartInfo = psi, EnableRaisingEvents = true };
-        proc.OutputDataReceived += (_, e) => { if (e.Data is not null) Output?.Invoke(e.Data); };
-        proc.ErrorDataReceived  += (_, e) => { if (e.Data is not null) Output?.Invoke(e.Data); };
+        proc.OutputDataReceived += (_, e) => { if (e.Data is not null) { Output?.Invoke(e.Data); AppendLog(e.Data); } };
+        proc.ErrorDataReceived  += (_, e) => { if (e.Data is not null) { Output?.Invoke(e.Data); AppendLog(e.Data); } };
         proc.Exited += (_, _) =>
         {
             RunningChanged?.Invoke(false);
