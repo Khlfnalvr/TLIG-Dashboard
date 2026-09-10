@@ -174,11 +174,14 @@ public sealed partial class DashboardPage : Page
     // Mode/Stop/Reset/E-Stop are LabVIEW-only (the PID Designer doesn't use them); the gain,
     // setpoint AND valve boxes reach LabVIEW via PushPidInputs()/PullPidInputs().
     //
-    // The valve goes through PushPidInputs() — i.e. the pid_bridge.json → PIDtest.py → TCP
-    // 6000 path the gains already use — because the CSV line above only lands if the VI
-    // reads on 6001, and it does not: 6001 is the socket LabVIEW opens to PUSH its "DATA,"
-    // telemetry into the dashboard, and the VI never issues a TCP Read on it. Writing the
-    // valve there alone was why "Bukaan Valve" never reached the rig while Kp/Ki/Kd did.
+    // PushPidInputs() puts the valve on BOTH routes, and which one lands is decided by the
+    // VI, not here:
+    //   • the CRLF control line on HmiDataPort (field 5, "Kp,Ki,Kd,Setpoint,Pump,Run") —
+    //     SendControlLine() runs first inside PushPidInputs(). It travels down the socket
+    //     LabVIEW itself opened for its "DATA," telemetry, which HmiDataService registers
+    //     and writes back on, so a VI with a TCP Read there receives it with the 6000
+    //     packet left completely alone. This is the lab VI's route.
+    //   • the 5th double of the 6000 packet, only when SendValveToLabView is set.
     // The _controlsReady guard is SendControlLine()'s: PushPidInputs() touches KpBox/CtlPump
     // directly, and XAML fires this handler while the boxes are still being parsed.
     private void CtlPump_ValueChanged(NumberBox sender, NumberBoxValueChangedEventArgs args)

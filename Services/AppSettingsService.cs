@@ -54,17 +54,20 @@ public class AppSettings
 
     // Sends the manual valve opening (%) as a 5th value in the packet PIDtest.py writes
     // to LabVIEW on PlcTcpPort: SP, KC, KI, KD, VALVE = 5 big-endian doubles = 40 bytes
-    // (against the 4 doubles / 32 bytes sent without it). This is the ONLY route the
-    // valve has — the 6001 socket is LabVIEW's own uplink and the VI never reads it.
+    // (against the 4 doubles / 32 bytes sent without it).
     //
-    // ON by default so the dashboard's valve control actually actuates. The matching
-    // VI side is two constants in the block diagram: "TCP Read" 32 -> 40, and the
-    // Unflatten From String type array 4 -> 5 elements; SP/KC/KI/KD keep indices 0..3,
-    // the valve is index 4. Until the VI reads 40 bytes it takes 32 of them and leaves
-    // 8 in the buffer, which shifts every following read and corrupts the gains — so
-    // clear this (PLC settings card: "Kirim Bukaan Valve ke LabVIEW") to fall straight
-    // back to the byte-identical 32-byte packet.
-    public bool   SendValveToLabView      { get; set; } = true;
+    // OFF, because this is the SECOND route the valve has and the lab VI uses the first
+    // one: the dashboard also writes the valve as field 5 of the CRLF control line
+    // "Kp,Ki,Kd,Setpoint,Pump,Run" on HmiDataPort, and that line reaches the VI over the
+    // very socket LabVIEW opened for its own "DATA," telemetry (HmiDataService registers
+    // it and writes back down it). A VI with a TCP Read on that connection gets the valve
+    // without the 6000 packet changing shape at all.
+    //
+    // Only turn this on for a VI that has no such reader AND has been rewired to take
+    // 40 bytes: while its "TCP Read" is still 32 bytes it consumes 32 of the 40, leaves
+    // 8 in the buffer, and every following read shifts — corrupting the gains that work.
+    // The switch lives in the PLC settings card ("Kirim Bukaan Valve ke LabVIEW").
+    public bool   SendValveToLabView      { get; set; } = false;
 
     // ── Sharing: server side ──────────────────────────────────────────────
     // The server broadcasts its camera + HMI screen and proxies AI chat.
