@@ -74,16 +74,19 @@ jobs:
           $dir = "${{ steps.out.outputs.dir }}"
           Write-Host "--- files in output root ---"
           Get-ChildItem -Path $dir -File | Select-Object Name, Length | Format-Table -AutoSize
-          $py = Join-Path $dir "PIDtest.py"
+          $py = Join-Path $dir 'PIDtest.py'
           if (-not (Test-Path $py)) {
-            throw "PIDtest.py is NOT in the build output ($dir). The <Content Include=\"PIDtest.py\"> item in TLIGDashboard.csproj is not taking effect."
+            throw "PIDtest.py is NOT in the build output at $dir - the Content item for it in TLIGDashboard.csproj is not taking effect."
           }
           $lines = (Get-Content $py).Count
           Write-Host "OK - PIDtest.py present ($lines lines)"
           if (-not (Select-String -Path $py -Pattern '>dddddd' -Quiet)) {
-            throw "PIDtest.py in the output is the OLD 32-byte version; it must be the 48-byte (6 double) one."
+            throw 'PIDtest.py in the output is the OLD 32-byte version; it must be the 48-byte (6 double) one.'
           }
-          Write-Host "OK - PIDtest.py is the 48-byte / 6-double version"
+          Write-Host 'OK - PIDtest.py is the 48-byte / 6-double version'
+        # NOTE: PowerShell has no backslash escape. An earlier version of this step
+        # used \" inside a double-quoted throw and died with a ParserError before it
+        # could check anything, which read exactly like a genuine missing file.
 
       - name: Upload Server build
         if: matrix.flavor == 'Server'
