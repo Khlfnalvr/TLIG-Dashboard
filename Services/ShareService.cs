@@ -44,7 +44,7 @@ public static class ShareProtocol
     public const string ActivityPath           = "/activity";            // POST ActivityLog (client→server sync)
     public const string ChallengeSubmitPath    = "/challenge/submit";    // POST ChallengeSubmission (client→server)
     public const string PidSimPath             = "/sim/pid";             // POST {Kp, Ki, Kd, Setpoint}
-    public const string PidRunPath             = "/sim/pid/run";         // POST {action:"run"|"stop"|"sync", kp, ki, kd, sp} — drives the server's LabVIEW bridge
+    public const string PidRunPath             = "/sim/pid/run";         // POST {action:"run"|"stop"|"sync", kp, ki, kd, sp, pump, cmd} — drives the server's LabVIEW bridge
     public const string ChallengeSubmissionsPath = "/challenge/submissions"; // GET all submissions (staff only)
     public const string ChallengeGradePath     = "/challenge/grade";     // POST dosen grade (staff only)
     public const string StudentsPath           = "/students";            // GET student roster (staff only)
@@ -1216,13 +1216,18 @@ public sealed class ShareServer
             double ki  = (double?)node["ki"] ?? 0;
             double kd  = (double?)node["kd"] ?? 0;
             double sp  = (double?)node["sp"] ?? 0;
+            // Valve opening (%) and the latched button code. Absent from an older Client's
+            // body — null then means "leave what is in force alone" rather than resetting
+            // the valve to 0 or overriding the command that is currently latched.
+            double? pump = (double?)node["pump"];
+            int?    cmd  = (int?)node["cmd"];
 
             var bridge = PythonBridgeService.Instance;
             switch (action)
             {
-                case "run":  bridge.Run(kp, ki, kd, sp);        break;
-                case "stop": bridge.Stop();                     break;
-                case "sync": bridge.SyncParams(kp, ki, kd, sp); break;
+                case "run":  bridge.Run(kp, ki, kd, sp, pump, cmd);        break;
+                case "stop": bridge.Stop();                                break;
+                case "sync": bridge.SyncParams(kp, ki, kd, sp, pump, cmd); break;
                 default:
                     await WriteSimpleAsync(stream, "400 Bad Request", "application/json",
                         new JsonObject { ["error"] = $"Unknown action '{action}'" }.ToJsonString(), ct);

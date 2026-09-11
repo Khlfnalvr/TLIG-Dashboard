@@ -1,0 +1,98 @@
+# Build TLIG Dashboard on a Windows runner.
+#
+# The project is WinUI 3 targeting net10.0-windows, so it cannot be compiled
+# anywhere but Windows — this is what lets a change be verified without waiting
+# for someone to open Visual Studio on the lab PC.
+#
+# Both flavors are built: Server and Client come from one codebase but differ by
+# compile constant, and several files carry #if CLIENT blocks, so a change can
+# break one flavor while the other still compiles.
+#
+# The Server job also publishes its whole output folder as a downloadable
+# artifact, so a lab PC with no .NET SDK can just unzip and run.
+#
+# Deliberately NOT run on every branch: it only fires for the claude/** working
+# branches and on manual dispatch, so it does not spend Actions minutes on
+# unrelated pushes. Windows runners bill at a higher rate than Linux ones.
+
+name: Build
+
+on:
+  push:
+    branches: [ 'claude/**' ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    strategy:
+      fail-fast: false        # report BOTH flavors, not just the first to fail
+      matrix:
+        flavor: [ Server, Client ]
+
+    name: ${{ matrix.flavor }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.x'
+
+      - name: Restore
+        run: dotnet restore TLIGDashboard.csproj -p:Flavor=${{ matrix.flavor }}
+
+      - name: Build
+        run: >
+          dotnet build TLIGDashboard.csproj
+          --no-restore
+          -c Release
+          -p:Flavor=${{ matrix.flavor }}
+          -warnaserror:NU1605
+
+      # Directory.Build.props puts the output under bin\<Flavor>\, NOT the usual
+      # bin\<Configuration>\ — a difference that has already sent someone hunting
+      # in the wrong folder. Resolve it once here instead of hardcoding the TFM.
+      - name: Locate output
+        id: out
+        shell: pwsh
+        run: |
+          $dir = Get-ChildItem -Path "bin/${{ matrix.flavor }}/Release" -Recurse -Filter "TLIGDashboard.${{ matrix.flavor }}.exe" |
+                 Select-Object -First 1 -ExpandProperty DirectoryName
+          if (-not $dir) { throw "Build output not found under bin/${{ matrix.flavor }}/Release" }
+          "dir=$dir" >> $env:GITHUB_OUTPUT
+          Write-Host "Output folder: $dir"
+
+      # PIDtest.py is reported missing from the output on the lab PC even though
+      # the csproj carries <Content Include="PIDtest.py"> with CopyToOutputDirectory.
+      # Assert it rather than assume it: if the item ever stops working, the job
+      # fails here instead of shipping an artifact that silently cannot RUN.
+      - name: Verify PIDtest.py reached the output
+        shell: pwsh
+        run: |
+          $dir = "${{ steps.out.outputs.dir }}"
+          Write-Host "--- files in output root ---"
+          Get-ChildItem -Path $dir -File | Select-Object Name, Length | Format-Table -AutoSize
+          $py = Join-Path $dir 'PIDtest.py'
+          if (-not (Test-Path $py)) {
+            throw "PIDtest.py is NOT in the build output at $dir - the Content item for it in TLIGDashboard.csproj is not taking effect."
+          }
+          $lines = (Get-Content $py).Count
+          Write-Host "OK - PIDtest.py present ($lines lines)"
+          if (-not (Select-String -Path $py -Pattern '>dddddd' -Quiet)) {
+            throw 'PIDtest.py in the output is the OLD 32-byte version; it must be the 48-byte (6 double) one.'
+          }
+          Write-Host 'OK - PIDtest.py is the 48-byte / 6-double version'
+        # NOTE: PowerShell has no backslash escape. An earlier version of this step
+        # used \" inside a double-quoted throw and died with a ParserError before it
+        # could check anything, which read exactly like a genuine missing file.
+
+      - name: Upload Server build
+        if: matrix.flavor == 'Server'
+        uses: actions/upload-artifact@v4
+        with:
+          name: TLIGDashboard-Server
+          path: ${{ steps.out.outputs.dir }}
+          if-no-files-found: error
+          retention-days: 30

@@ -25,7 +25,19 @@ namespace TLIGDashboard.Services;
 ///     is what actually starts the Python client.
 ///
 /// The JSON file is the single contract with the script:
-///     { "sp": 60, "kp": 1.5, "ki": 0.015, "kd": 8, "run": true, "host": "127.0.0.1", "port": 6000 }
+///     { "sp": 60, "kp": 1.5, "ki": 0.015, "kd": 8, "pump": 40, "cmd": 1,
+///       "run": true, "host": "127.0.0.1", "port": 6000 }
+/// "pump" is the valve opening (%) from the Control card; "cmd" is the latched button
+/// state (RUN 1, STOP 0, RESET 2, E-STOP 3). Both ride the same 6-double / 48-byte packet
+/// as the gains — SP, KC, KI, KD, PUMP, CMD — which is the one route to LabVIEW that is
+/// proven to work. The VI must be reading 48 bytes and unflattening 6 doubles: a VI still
+/// on 32 bytes reads shifted garbage that looks like plausible numbers, so the two sides
+/// are changed together, never one at a time.
+///
+/// "cmd" is a LATCH, not a pulse: the dashboard keeps resending the last button pressed
+/// and the VI does its own edge detection. STOP/RESET/E-STOP therefore never stop the
+/// Python process — the link stays up, values stay loaded, and only the VI's own Case
+/// acts on the code. The process ends when the dashboard closes.
 /// "host"/"port" tell the script which LabVIEW to reach — taken from the dashboard's
 /// "Host / IP address (LabVIEW HMI)" setting, so another PC's IP is all it takes to
 /// drive a remote LabVIEW (no editing the Python script on each machine).
@@ -45,6 +57,13 @@ public sealed class PythonBridgeService : IDisposable
 {
     public static PythonBridgeService Instance { get; } = new();
     private PythonBridgeService() { }
+
+    /// <summary>
+    /// Latched button codes carried in the packet's CMD field (6th double). LabVIEW turns
+    /// the double back into an integer and switches on it, so the numbers are part of the
+    /// wire contract — change them here and the VI's Case has to change with them.
+    /// </summary>
+    public const int CmdStop = 0, CmdRun = 1, CmdReset = 2, CmdEStop = 3;
 
     // ── Events ────────────────────────────────────────────────────────────────
     /// <summary>One line of the script's stdout/stderr.</summary>
@@ -77,6 +96,11 @@ public sealed class PythonBridgeService : IDisposable
     // Last gains mirrored into the contract file, so a plain parameter change and a
     // RUN both write a complete, consistent file.
     private double _sp = 60, _kp = 1.5, _ki = 0.015, _kd = 8;
+    // Valve opening (%) and the latched button code. Tracked separately from the gains:
+    // the Parameter page syncs gains without owning either control, so its 4-argument
+    // SyncParams must not silently clobber the valve or the command that is in force.
+    private double _pump;
+    private int    _cmd = 1;   // 1 = RUN, 0 = STOP, 2 = RESET, 3 = E-STOP
     private volatile bool _run;
 
     // Settings are read once, lazily — the interpreter and script path do not change
@@ -113,6 +137,27 @@ public sealed class PythonBridgeService : IDisposable
     private string LabViewHost => string.IsNullOrWhiteSpace(Cfg.PlcTcpHost) ? "127.0.0.1" : Cfg.PlcTcpHost.Trim();
     private int    LabViewPort => Cfg.PlcTcpPort is > 0 and <= 65535 ? Cfg.PlcTcpPort : 6000;
 
+    /// <summary>
+    /// The script's console log, beside the contract file. The child runs with no window
+    /// and nothing subscribes to <see cref="Output"/>, so without this there is no record
+    /// at all of what PIDtest.py actually sends — packet length and per-cycle values
+    /// included. Truncated on every RUN so it stays a picture of the current session.
+    /// </summary>
+    public string LogFilePath => Path.Combine(
+        Path.GetDirectoryName(ParamsFilePath) ?? AppSettingsService.FolderPath, "pid_bridge.log");
+
+    private readonly object _logLock = new();
+
+    private void AppendLog(string line)
+    {
+        try
+        {
+            lock (_logLock)
+                File.AppendAllText(LogFilePath, $"{DateTime.Now:HH:mm:ss}  {line}{Environment.NewLine}");
+        }
+        catch { /* diagnostics must never take the bridge down */ }
+    }
+
     /// <summary>The JSON contract file, next to the script so PIDtest.py finds it by __file__.</summary>
     private string ParamsFilePath
     {
@@ -130,9 +175,14 @@ public sealed class PythonBridgeService : IDisposable
     /// Mirrors the current gains/setpoint into the contract file. Called on every
     /// parameter change in the HMI; the running script picks them up on its next send.
     /// </summary>
-    public void SyncParams(double kp, double ki, double kd, double sp)
+    public void SyncParams(double kp, double ki, double kd, double sp,
+                           double? pump = null, int? cmd = null)
     {
         _kp = kp; _ki = ki; _kd = kd; _sp = sp;
+        // null = this caller owns no valve box / no buttons (the Parameter page), so the
+        // value in force is kept rather than reset to a default.
+        if (pump is { } p) _pump = p;
+        if (cmd  is { } c) _cmd  = c;
         if (BuildInfo.IsClient) { ForwardToServer("sync"); return; }
         WriteParamsFile();
     }
@@ -140,13 +190,16 @@ public sealed class PythonBridgeService : IDisposable
     // ── Run / Stop ────────────────────────────────────────────────────────────
 
     /// <summary>Writes the given gains with run=true, then launches the script (no-op if already up).</summary>
-    public void Run(double kp, double ki, double kd, double sp)
+    public void Run(double kp, double ki, double kd, double sp,
+                    double? pump = null, int? cmd = null)
     {
         // Re-read settings so a LabVIEW IP / script path the user just changed in the
         // dashboard takes effect on this RUN without needing an app restart.
         _settings = null;
 
         _kp = kp; _ki = ki; _kd = kd; _sp = sp;
+        if (pump is { } p) _pump = p;
+        if (cmd  is { } c) _cmd  = c;
         _run = true;
         if (BuildInfo.IsClient) { ForwardToServer("run"); return; }
         WriteParamsFile();   // run=true must be on disk before the script starts reading
@@ -177,7 +230,8 @@ public sealed class PythonBridgeService : IDisposable
         var token = s.ServerToken;
 
         // Snapshot the current contract so the async post is not racing later edits.
-        double kp = _kp, ki = _ki, kd = _kd, sp = _sp;
+        double kp = _kp, ki = _ki, kd = _kd, sp = _sp, pump = _pump;
+        int    cmd = _cmd;
 
         if (string.IsNullOrWhiteSpace(AuthClient.NormalizeHost(host)) || string.IsNullOrWhiteSpace(token))
         {
@@ -193,7 +247,7 @@ public sealed class PythonBridgeService : IDisposable
 
         _ = Task.Run(async () =>
         {
-            bool ok = await PidRunClient.PostAsync(host, token, action, kp, ki, kd, sp);
+            bool ok = await PidRunClient.PostAsync(host, token, action, kp, ki, kd, sp, pump, cmd);
             switch (action)
             {
                 case "run":
@@ -231,6 +285,8 @@ public sealed class PythonBridgeService : IDisposable
             $"  \"kp\": {Num(_kp)},\n" +
             $"  \"ki\": {Num(_ki)},\n" +
             $"  \"kd\": {Num(_kd)},\n" +
+            $"  \"pump\": {Num(_pump)},\n" +
+            $"  \"cmd\": {_cmd.ToString(CultureInfo.InvariantCulture)},\n" +
             $"  \"run\": {(_run ? "true" : "false")},\n" +
             $"  \"host\": \"{Esc(LabViewHost)}\",\n" +
             $"  \"port\": {LabViewPort}\n" +
@@ -278,6 +334,19 @@ public sealed class PythonBridgeService : IDisposable
                 return;
             }
 
+            // Header first: it names the target and the packet layout, which is exactly
+            // what you need to see when LabVIEW receives nothing or receives nonsense.
+            try
+            {
+                File.WriteAllText(LogFilePath,
+                    $"=== RUN {DateTime.Now:yyyy-MM-dd HH:mm:ss} ==={Environment.NewLine}" +
+                    $"script      : {script}{Environment.NewLine}" +
+                    $"LabVIEW     : {LabViewHost}:{LabViewPort}{Environment.NewLine}" +
+                    $"paket       : 6 double / 48 byte (SP, KC, KI, KD, PUMP, CMD) -- " +
+                    $"VI harus TCP Read 48{Environment.NewLine}");
+            }
+            catch { }
+
             // Try the configured interpreter first, then the Windows "py" launcher — one of
             // them is almost always on PATH even when the other name isn't.
             foreach (var exe in Dedup(PythonExe, "py", "python"))
@@ -311,8 +380,8 @@ public sealed class PythonBridgeService : IDisposable
         psi.ArgumentList.Add(script);   // ArgumentList quotes paths with spaces correctly
 
         var proc = new Process { StartInfo = psi, EnableRaisingEvents = true };
-        proc.OutputDataReceived += (_, e) => { if (e.Data is not null) Output?.Invoke(e.Data); };
-        proc.ErrorDataReceived  += (_, e) => { if (e.Data is not null) Output?.Invoke(e.Data); };
+        proc.OutputDataReceived += (_, e) => { if (e.Data is not null) { Output?.Invoke(e.Data); AppendLog(e.Data); } };
+        proc.ErrorDataReceived  += (_, e) => { if (e.Data is not null) { Output?.Invoke(e.Data); AppendLog(e.Data); } };
         proc.Exited += (_, _) =>
         {
             RunningChanged?.Invoke(false);
@@ -371,7 +440,8 @@ public static class PidRunClient
 {
     /// <summary>POSTs one command; returns true on a 2xx response, false on any error.</summary>
     public static async Task<bool> PostAsync(
-        string host, string token, string action, double kp, double ki, double kd, double sp)
+        string host, string token, string action, double kp, double ki, double kd, double sp,
+        double pump, int cmd)
     {
         if (string.IsNullOrWhiteSpace(AuthClient.NormalizeHost(host)) || string.IsNullOrWhiteSpace(token))
             return false;
@@ -385,6 +455,8 @@ public static class PidRunClient
                 ["ki"] = ki,
                 ["kd"] = kd,
                 ["sp"] = sp,
+                ["pump"] = pump,
+                ["cmd"] = cmd,
             };
 
             using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };

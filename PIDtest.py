@@ -15,12 +15,31 @@ data_server()/port 6001 dari simulator dibuang di sini.
 
 Port 6000 -- KONTROL (Python = CLIENT, LabVIEW = SERVER)
     LabVIEW pakai TCP Listen di 6000, script ini yang menyambung masuk.
-    Mengirim 4 double big-endian = 32 byte, cocok dengan TCP Read 32 byte
-    di diagram LabVIEW  ->  SP, KC, KI, KD
+    Mengirim 6 double big-endian = 48 byte, cocok dengan TCP Read 48 byte
+    di diagram LabVIEW:
+
+        SP, KC, KI, KD, PUMP, CMD
+
+      PUMP = bukaan valve (%) dari dashboard
+      CMD  = kode tombol: 1 = RUN, 0 = STOP, 2 = RESET, 3 = E-STOP
+
+    CMD dikirim sebagai double supaya paketnya seragam; di LabVIEW diubah
+    lewat "To Long Integer" sebelum masuk Case.
+
+    PENTING: Python dan LabVIEW harus SAMA-SAMA 48 byte. Kalau salah satu
+    masih 32, LabVIEW membaca potongan byte yang melenceng dan semua angka
+    jadi ngawur -- bukan error, tapi angka palsu yang kelihatan meyakinkan.
+
+    CMD bersifat LATCH, bukan sesaat: dashboard mengirim nilai terakhir
+    terus-menerus. STOP/RESET/E-STOP TIDAK menghentikan script ini dan
+    tidak memutus koneksi -- yang berhenti aksi di dalam VI lewat Case CMD.
+    Deteksi tepi (mis. supaya RESET tidak membersihkan grafik berulang)
+    adalah tugas sisi LabVIEW. Script baru keluar kalau dashboard ditutup
+    atau "run" di pid_bridge.json bernilai false.
 
 Nilai yang dikirim dibaca ULANG dari pid_bridge.json setiap siklus, jadi
-begitu kamu ubah Kp/Ki/Kd/Setpoint di dashboard, nilainya langsung ikut
-terkirim tanpa perlu restart apa pun.
+begitu kamu ubah Kp/Ki/Kd/Setpoint, bukaan valve, atau menekan tombol di
+dashboard, nilainya langsung ikut terkirim tanpa perlu restart apa pun.
 
 Bisa juga dijalankan manual untuk tes (tanpa dashboard): kalau
 pid_bridge.json belum ada, script pakai nilai default di bawah.
@@ -49,13 +68,19 @@ RECONNECT_DELAY = 2.0        # detik, jeda sebelum mencoba menyambung lagi
 
 # Urutan nilai yang DIKIRIM ke LabVIEW. Sudah terbukti benar lewat Front Panel.
 # Kp di dashboard = KC di LabVIEW.
-FIELD_ORDER = ("SP", "KC", "KI", "KD")
+FIELD_ORDER = ("SP", "KC", "KI", "KD", "PUMP", "CMD")
+PACKET_FMT = ">dddddd"
+PACKET_LEN = 48
 
 # Nilai default kalau file jembatan belum ada / rusak.
 DEFAULT_SP = 40.0
 DEFAULT_KC = 25.0
 DEFAULT_KI = 30.0
 DEFAULT_KD = 45.0
+# Dipakai juga kalau dashboard versi lama menulis file tanpa field ini, supaya
+# script tetap jalan: valve tertutup, dan perintahnya RUN.
+DEFAULT_PUMP = 0.0
+DEFAULT_CMD = 1.0
 
 # File "jembatan" yang ditulis dashboard. Letaknya SATU FOLDER dengan script
 # ini (dashboard menaruhnya di situ berdasarkan PythonScriptPath).
@@ -64,14 +89,18 @@ BRIDGE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)),
 
 
 def get_values():
-    """Baca SP/KC/KI/KD, flag run, dan alamat LabVIEW dari file jembatan.
+    """Baca SP/KC/KI/KD, bukaan valve, kode tombol, flag run, dan alamat LabVIEW.
 
-    Mengembalikan (sp, kc, ki, kd, run, host, port).
+    Mengembalikan (sp, kc, ki, kd, pump, cmd, run, host, port).
       - Kp di dashboard  -> KC di LabVIEW
-      - run == False     -> dashboard menekan STOP, script keluar dari loop.
+      - pump             -> bukaan valve (%), 0-100
+      - cmd              -> 1 RUN, 0 STOP, 2 RESET, 3 E-STOP (latch)
+      - run == False     -> dashboard ditutup, script keluar dari loop.
 
     Kalau file belum ada / sedang ditulis / rusak, pakai nilai default dan
     tetap jalan (run=True) supaya tidak berhenti karena gangguan sesaat.
+    Field pump/cmd yang belum ada juga jatuh ke default, jadi dashboard versi
+    lama tetap bisa dipakai dengan script ini.
     """
     try:
         with open(BRIDGE_FILE, "r", encoding="utf-8") as f:
@@ -81,6 +110,8 @@ def get_values():
         kc = float(data.get("kp", DEFAULT_KC))    # Kp dashboard = KC LabVIEW
         ki = float(data.get("ki", DEFAULT_KI))
         kd = float(data.get("kd", DEFAULT_KD))
+        pump = float(data.get("pump", DEFAULT_PUMP))
+        cmd = float(data.get("cmd", DEFAULT_CMD))
         run = bool(data.get("run", True))
 
         host = str(data.get("host", HOST_DEFAULT)).strip() or HOST_DEFAULT
@@ -88,27 +119,29 @@ def get_values():
         if port <= 0 or port > 65535:
             port = PORT_DEFAULT
 
-        return sp, kc, ki, kd, run, host, port
+        return sp, kc, ki, kd, pump, cmd, run, host, port
 
     except (FileNotFoundError, json.JSONDecodeError, ValueError, OSError, TypeError):
         return (DEFAULT_SP, DEFAULT_KC, DEFAULT_KI, DEFAULT_KD,
-                True, HOST_DEFAULT, PORT_DEFAULT)
+                DEFAULT_PUMP, DEFAULT_CMD, True, HOST_DEFAULT, PORT_DEFAULT)
 
 
-def build_packet(sp, kc, ki, kd):
-    """Susun 4 double big-endian = 32 byte, sesuai TCP Read 32 byte di LabVIEW.
+def build_packet(sp, kc, ki, kd, pump, cmd):
+    """Susun 6 double big-endian = 48 byte, sesuai TCP Read 48 byte di LabVIEW.
 
     Urutan HARUS sama dengan urutan Unflatten From String di LabVIEW:
-    SP -> KC -> KI -> KD.
+    SP -> KC -> KI -> KD -> PUMP -> CMD.
     """
-    packet = struct.pack(">dddd", sp, kc, ki, kd)
-    assert len(packet) == 32, f"Panjang paket {len(packet)} != 32 byte!"
+    packet = struct.pack(PACKET_FMT, sp, kc, ki, kd, pump, cmd)
+    assert len(packet) == PACKET_LEN, \
+        f"Panjang paket {len(packet)} != {PACKET_LEN} byte!"
     return packet
 
 
 def run_client():
     print("=" * 66)
     print(" Jembatan PID  --  HANYA port 6000 (kontrol -> LabVIEW)")
+    print(f"   Paket               : {PACKET_LEN} byte, {', '.join(FIELD_ORDER)}")
     print(f"   Baca parameter dari : {BRIDGE_FILE}")
     print("   Port 6001 TIDAK dipakai script ini -- LabVIEW kirim data")
     print("   langsung ke dashboard, jadi tidak ada rebutan port.")
@@ -118,7 +151,7 @@ def run_client():
     last_target = None
 
     while True:
-        sp, kc, ki, kd, run, host, port = get_values()
+        sp, kc, ki, kd, pump, cmd, run, host, port = get_values()
 
         if not run:
             print("[STOP] Perintah STOP dari dashboard. Script berhenti.")
@@ -136,7 +169,7 @@ def run_client():
                 # Tetap di dalam satu koneksi selama LabVIEW masih hidup --
                 # buka-tutup socket tiap detik bikin LabVIEW sering re-accept.
                 while True:
-                    sp, kc, ki, kd, run, new_host, new_port = get_values()
+                    sp, kc, ki, kd, pump, cmd, run, new_host, new_port = get_values()
 
                     if not run:
                         print("[STOP] Perintah STOP dari dashboard. Script berhenti.")
@@ -149,8 +182,9 @@ def run_client():
                               f"Menyambung ulang...")
                         break
 
-                    sock.sendall(build_packet(sp, kc, ki, kd))
-                    print(f"[6000] TX  SP={sp}  KC={kc}  KI={ki}  KD={kd}   (32 byte)")
+                    sock.sendall(build_packet(sp, kc, ki, kd, pump, cmd))
+                    print(f"[6000] TX  SP={sp}  KC={kc}  KI={ki}  KD={kd}  "
+                          f"PUMP={pump}  CMD={int(cmd)}   ({PACKET_LEN} byte)")
 
                     time.sleep(SEND_INTERVAL)
 

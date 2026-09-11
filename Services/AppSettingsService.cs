@@ -48,9 +48,13 @@ public class AppSettings
     //     Python launcher), which is the reliable way to start Python on Windows —
     //     a bare "python" often resolves to the Microsoft Store alias stub that does
     //     nothing. Falls back to "python" automatically if "py" is not installed.
-    //   • PythonScriptPath — the PIDtest.py this machine should run.
+    //   • PythonScriptPath — an explicit override for this machine. Empty by default so
+    //     the copy bundled next to the exe wins; a non-empty path is honoured whenever
+    //     the file actually exists there. It used to default to D:\PIDtest.py, which is
+    //     the "System Reserved" partition on the lab PC — unwritable, so the file could
+    //     never be there and RUN failed with "Atur PythonScriptPath di settings.json".
     public string PythonExe               { get; set; } = "py";
-    public string PythonScriptPath        { get; set; } = @"D:\PIDtest.py";
+    public string PythonScriptPath        { get; set; } = "";
 
     // ── Sharing: server side ──────────────────────────────────────────────
     // The server broadcasts its camera + HMI screen and proxies AI chat.
