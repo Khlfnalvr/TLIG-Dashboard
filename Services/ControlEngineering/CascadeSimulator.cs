@@ -10,8 +10,8 @@ namespace TLIGDashboard.Services.ControlEngineering;
 /// using the <b>lab-identified FOPDT plants</b> (open-loop step test, validated against
 /// experiment):
 /// <code>
-///   Gp1(s) = 0.6361 / (101.53 s + 1) · e^(-52.0866 s)   primary : temperature (shell out), input = flow
-///   Gp2(s) = 1.624  / (0.3645 s + 1) · e^(-3.089  s)    secondary: flow (tube),            input = valve
+///   Gp1(s) = 1.909090909 / (176.21 s + 1)              primary : temperature (shell out), input = flow
+///   Gp2(s) = 2.2          / (5.36 s + 1) · e^(-3.74 s)  secondary: flow (tube),            input = valve
 /// </code>
 ///
 /// <para><b>Structure</b></para>
@@ -19,34 +19,55 @@ namespace TLIGDashboard.Services.ControlEngineering;
 ///  Tsp ─►(+)─► [PID temperature, OUTER] ─► Fsp ─►(+)─► [PI flow, INNER] ─► valve u
 ///        ▲ −                                       ▲ −                          │
 ///        │  T                                      │  F        ┌────────────────┘
-///        │       Gp1 (τ=101.5s, θ=52s)   Gp2 (τ=0.36s, θ=3.1s) │   + disturbance
+///        │       Gp1 (τ=176.2s, θ=0)     Gp2 (τ=5.36s, θ=3.7s) │   + disturbance
 ///        └──────── temperature ◄── F ◄──── flow ◄──────────────┴───────────┘
 /// </code>
 ///
 /// The outer PID's output is the inner loop's setpoint. Both loops carry integral
-/// action → temperature reaches setpoint with zero steady-state error. Each plant
-/// carries a pure transport <b>dead time</b> (the e^(−θs) term), realised as a delay
-/// ring buffer on the plant input: the flow plant sees a delayed valve command, and the
-/// temperature plant sees a delayed flow.
+/// action → temperature reaches setpoint with zero steady-state error. A plant with a
+/// pure transport <b>dead time</b> (the e^(−θs) term) gets a delay ring buffer on its
+/// input, so the flow plant sees a delayed valve command. The latest identification puts
+/// θ1 at zero, so the temperature plant sees the flow of the current instant instead —
+/// <see cref="Theta1"/> = 0 selects that path (see <c>NoDelay</c>).
 ///
 /// <para><b>State</b> — <c>[T, F, IT, IF]</c>: temperature, flow, ∫e_T, ∫e_F.</para>
 /// The outer PID uses derivative-on-measurement (−Kd·dT/dt) to avoid derivative kick,
 /// and both integrators use conditional (clamping) anti-windup so the response stays
 /// well-behaved when the valve or flow setpoint saturates. Default gains were tuned by
-/// SIMC for these FOPDT plants (inner PI is necessarily gentle — the flow plant is
-/// delay-dominated, θ/τ ≈ 8.5).
+/// SIMC for these FOPDT plants and verified on this simulator. The flow plant is now
+/// lag-dominated (θ/τ ≈ 0.70, against ≈ 8.5 in the previous identification), so the inner
+/// PI no longer has to be gentle — it is what keeps the outer loop's effective delay small.
 /// </summary>
 public class CascadeSimulator
 {
     // ── Identified FOPDT plant constants ─────────────────────────────────────
     /// Primary (temperature) plant Gp1: gain, time constant (s), dead time (s). Input = flow.
-    public const double K1 = 0.6361, Tau1 = 101.53, Theta1 = 52.0866;
+    public const double K1 = 1.909090909, Tau1 = 176.21, Theta1 = 0.0;
     /// Secondary (flow) plant Gp2: gain, time constant (s), dead time (s). Input = valve.
-    public const double K2 = 1.624,  Tau2 = 0.3645, Theta2 = 3.089;
+    public const double K2 = 2.2,         Tau2 = 5.36,   Theta2 = 3.74;
 
     // ── Actuator / setpoint saturation ───────────────────────────────────────
     public const double FlowSpMin = 0.0, FlowSpMax = 300.0;   // outer output (inner SP)
     public const double ValveMin  = 0.0, ValveMax  = 100.0;   // inner output (valve %)
+
+    // ── Dead-time lookup ──────────────────────────────────────────────────────
+    /// <summary>
+    /// Stands in for "this plant has no dead time", so the derivative functions use the value
+    /// of the current instant instead of a past one. It cannot be read out of the history: the
+    /// derivative for step i is evaluated BEFORE sample i is appended, so a zero-step lookup
+    /// would run off the end of the buffer (or, in the pre-sized single-loop arrays, silently
+    /// read a zero that was never written). Only the state vector carries the current value.
+    /// </summary>
+    private const double NoDelay = double.NaN;
+
+    /// <summary>
+    /// The plant input from <paramref name="steps"/> samples ago — zero before the buffer has
+    /// filled, <see cref="NoDelay"/> when the plant carries no dead time at all.
+    /// </summary>
+    private static double Delayed(IReadOnlyList<double> history, int i, int steps) =>
+        steps <= 0 ? NoDelay
+                   : i - steps >= 0 ? history[i - steps]
+                                    : 0.0;
 
     // ── Adaptive-run settle detection (temperature loop) ─────────────────────
     // The run stops once the temperature has stopped moving AND has arrived at the
@@ -57,8 +78,8 @@ public class CascadeSimulator
     // (measured against that last sample) would be badly overstated. Same idea as
     // PidSimulator, scaled for the slow temperature plant (τ≈101 s + 52 s dead time).
     private const double MaxDuration         = 8000.0;  // hard cap on total simulated time (s)
-    private const double MinStepSeconds      = 80.0;    // > dead time θ1≈52 s, so the initial flat plateau isn't read as "settled"
-    private const double MinRecoverSeconds   = 120.0;   // after injection, wait past θ1 for the disturbance dip to appear
+    private const double MinStepSeconds      = 80.0;    // θ1 is 0 now, but a slow start is still nearly flat — don't read it as "settled"
+    private const double MinRecoverSeconds   = 120.0;   // after injection, long enough for the disturbance dip to develop
     private const double SettleTolFraction   = 1e-5;    // flat-window span + |dT/dt|, as a fraction of the setpoint
     private const double SettleBandFraction  = 0.005;   // |T − setpoint| must be within this fraction to count as settled
     private const double SettleWindowSeconds = 8.0;
@@ -120,8 +141,8 @@ public class CascadeSimulator
         {
             double t = i * dt;
             double d = (distStep >= 0 && i >= distStep) ? (double)input.Disturbance : 0.0;
-            double uDel = i - d2 >= 0 ? uHist[i - d2] : 0.0;
-            double fDel = i - d1 >= 0 ? fHist[i - d1] : 0.0;
+            double uDel = Delayed(uHist, i, d2);
+            double fDel = Delayed(fHist, i, d1);
 
             double[] k1 = Derivatives(s, input, d, uDel, fDel, out double fsp, out double u);
             time.Add(t); temp.Add(s[0]); flow.Add(s[1]); flowSp.Add(fsp); valve.Add(u);
@@ -180,9 +201,11 @@ public class CascadeSimulator
     {
         double T = s[0], F = s[1], IT = s[2], IF = s[3];
 
-        // Outer loop (temperature PID, derivative-on-measurement). Temp plant sees
-        // the DELAYED flow.
-        double dTdt = (K1 * fDel - T) / Tau1;
+        // Outer loop (temperature PID, derivative-on-measurement). The temp plant sees the
+        // DELAYED flow, or — with θ1 = 0, as the latest identification puts it — the flow of
+        // this very instant, which is the one the state vector is carrying.
+        double fIn = double.IsNaN(fDel) ? F : fDel;
+        double dTdt = (K1 * fIn - T) / Tau1;
         double eT = g.Setpoint - T;
         double outerRaw = g.OuterKp * eT + g.OuterKi * IT - g.OuterKd * dTdt;
         fsp = Clamp(outerRaw, FlowSpMin, FlowSpMax);
@@ -195,7 +218,8 @@ public class CascadeSimulator
         double dIF = AntiWindup(eF, innerRaw, ValveMin, ValveMax);
 
         // Flow plant sees the DELAYED valve command, plus any disturbance.
-        double dFdt = (K2 * uDel + dist - F) / Tau2;
+        double uIn = double.IsNaN(uDel) ? u : uDel;
+        double dFdt = (K2 * uIn + dist - F) / Tau2;
         return new[] { dTdt, dFdt, dIT, dIF };
     }
 
@@ -215,8 +239,8 @@ public class CascadeSimulator
         for (int i = 0; i < steps; i++)
         {
             double d = (distStep >= 0 && i >= distStep) ? (double)g.Disturbance : 0.0;
-            double uDel = i - d2 >= 0 ? uHist[i - d2] : 0.0;
-            double fDel = i - d1 >= 0 ? fHist[i - d1] : 0.0;
+            double uDel = Delayed(uHist, i, d2);
+            double fDel = Delayed(fHist, i, d1);
 
             double[] k1 = SingleDerivs(s, g, d, uDel, fDel, out double u);
             temp[i] = s[0];
@@ -236,12 +260,14 @@ public class CascadeSimulator
         double[] s, CascadeInput g, double dist, double uDel, double fDel, out double u)
     {
         double T = s[0], F = s[1], IT = s[2];
-        double dTdt = (K1 * fDel - T) / Tau1;
+        double fIn = double.IsNaN(fDel) ? F : fDel;
+        double dTdt = (K1 * fIn - T) / Tau1;
         double eT = g.Setpoint - T;
         double uRaw = g.OuterKp * eT + g.OuterKi * IT - g.OuterKd * dTdt;
         u = Clamp(uRaw, ValveMin, ValveMax);
         double dIT = AntiWindup(eT, uRaw, ValveMin, ValveMax);
-        double dFdt = (K2 * uDel + dist - F) / Tau2;
+        double uIn = double.IsNaN(uDel) ? u : uDel;
+        double dFdt = (K2 * uIn + dist - F) / Tau2;
         return new[] { dTdt, dFdt, dIT };
     }
 

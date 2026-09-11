@@ -40,10 +40,13 @@ public static class PidDiagnosisCalculator
     /// closed the gap and the remainder is integration noise.
     public const double SteadyErrorLimitPct = 2.0;
 
-    /// The identified plant Gp1 is slow: time constant 101.53 s plus 52.09 s of dead time,
-    /// so it settles in ~458 s open-loop (θ + 4τ). A closed loop still taking longer than
-    /// ~400 s is barely improving on doing nothing — a concrete, plant-derived anchor
-    /// rather than an arbitrary "feels slow" number. A well-tuned loop reaches ~350 s.
+    /// Both slow temperature plants in the app settle in several hundred seconds open-loop
+    /// (θ + 4τ): ~458 s for the single-loop designer's plant (<see cref="PidSimulator"/>, still
+    /// on the earlier identification) and ~705 s for the cascade's current Gp1
+    /// (<see cref="CascadeSimulator"/>). A closed loop still taking longer than ~400 s is
+    /// barely improving on doing nothing on either — a concrete, plant-derived anchor rather
+    /// than an arbitrary "feels slow" number, and the stricter of the two bars. A well-tuned
+    /// cascade on the current plant reaches ~95 s.
     public const double SlowSettlingSeconds = 400.0;
 
     /// <summary>

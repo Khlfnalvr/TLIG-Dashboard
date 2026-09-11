@@ -65,10 +65,10 @@ public class CascadeAdvisorService
             "The cascade controls a heat exchanger with two identified First-Order-Plus-Dead-Time " +
             "plants (from a lab open-loop step test). OUTER loop — temperature, whose input is flow: " +
             gp1 + $" (time constant ~{CascadeSimulator.Tau1:F0} s, dead time ~{CascadeSimulator.Theta1:F0} s) — " +
-            "slow and strongly lag/dead-time-dominant, so derivative action on temperature helps only " +
-            "a little and overshoot is driven mainly by Kp/Ki. INNER loop — flow, whose input is the " +
-            "valve: " + gp2 + $" (dead-time-dominated, theta/tau ~{CascadeSimulator.Theta2 / CascadeSimulator.Tau2:F1}), " +
-            "so the inner PI must stay gentle. The outer PID's output is the inner PI's setpoint. " +
+            "slow and lag-dominant with no dead time of its own, so derivative action on temperature " +
+            "buys nothing and only stretches settling; overshoot is driven by Kp/Ki. INNER loop — flow, " +
+            "whose input is the valve: " + gp2 + $" (lag-dominated, theta/tau ~{CascadeSimulator.Theta2 / CascadeSimulator.Tau2:F1}), " +
+            "so the inner PI can be reasonably tight. The outer PID's output is the inner PI's setpoint. " +
             "Cascade's golden rule: the inner loop must be several times faster than the outer and is " +
             "tuned first; the inner loop's speed is what lets cascade reject a flow disturbance long " +
             "before it reaches the temperature. Reason from these specific plants rather than from " +

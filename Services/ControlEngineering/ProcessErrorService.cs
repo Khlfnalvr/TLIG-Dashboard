@@ -182,8 +182,8 @@ public static class ProcessErrorService
             var m = sim.Metrics;
             sb.AppendLine();
             sb.AppendLine("B. Simulasi System Model (cascade RK4, run terakhir):");
-            sb.AppendLine($"   - Plant: Gp1 (suhu) = {N(CascadeSimulator.K1)} / ({N(CascadeSimulator.Tau1)}s + 1) · e^(-{N(CascadeSimulator.Theta1)}s); " +
-                          $"Gp2 (flow) = {N(CascadeSimulator.K2)} / ({N(CascadeSimulator.Tau2)}s + 1) · e^(-{N(CascadeSimulator.Theta2)}s)");
+            sb.AppendLine($"   - Plant: Gp1 (suhu) = {Fopdt(CascadeSimulator.K1, CascadeSimulator.Tau1, CascadeSimulator.Theta1)}; " +
+                          $"Gp2 (flow) = {Fopdt(CascadeSimulator.K2, CascadeSimulator.Tau2, CascadeSimulator.Theta2)}");
             sb.AppendLine($"   - Gain OUTER (PID suhu): Kp={N(sim.Input.OuterKp)}, Ki={N(sim.Input.OuterKi)}, Kd={N(sim.Input.OuterKd)}");
             sb.AppendLine($"   - Gain INNER (PI flow): Kp={N(sim.Input.InnerKp)}, Ki={N(sim.Input.InnerKi)}");
             sb.AppendLine($"   - Setpoint outer = {N(sim.Input.Setpoint)} {PrimaryUnit}");
@@ -300,11 +300,15 @@ public static class ProcessErrorService
         if (p.ScaleSuspect)
             sb.Append($"\n  → CATATAN: bedanya lebih dari 10x, jadi jangan sebut ini sebagai penyimpangan plant. " +
                       $"Dua sebab yang lebih mungkin: (a) satuan/skala \"{p.LiveKey}\" di VI tidak sama dengan {p.Unit} " +
-                      "yang dipakai simulasi, atau (b) konstanta plant di CascadeSimulator masih hasil identifikasi lama " +
-                      "sehingga kurva simulasinya berada di rentang yang berbeda. Sarankan pengguna mengecek keduanya.");
+                      "yang dipakai simulasi, atau (b) titik kerja rig saat ini berbeda dari kondisi saat plant " +
+                      "diidentifikasi. Sarankan pengguna mengecek keduanya.");
 
         return sb.ToString();
     }
+
+    /// <summary>FOPDT as text, dropping the dead-time factor when the plant has none (θ = 0).</summary>
+    private static string Fopdt(double k, double tau, double theta) =>
+        $"{N(k)} / ({N(tau)}s + 1)" + (theta > 0 ? $" · e^(-{N(theta)}s)" : "");
 
     private static string PercentSuffix(double? percent) =>
         percent is { } v ? $" ({N(v)} %)" : "";
