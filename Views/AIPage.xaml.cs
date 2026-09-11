@@ -159,6 +159,16 @@ public sealed partial class AIPage : Page
         // Reload settings fresh from disk on every send.
         ReloadSettings();
 
+        // Selipkan konteks proses untuk kiriman ini — data live LabVIEW/HMI (TCP 6001), hasil
+        // simulasi System Model, dan error di antara keduanya. Persis blok yang dipakai panel AI
+        // di Dashboard, supaya pertanyaan yang sama dijawab dengan data yang sama di kedua tempat
+        // (halaman ini adalah versi fullscreen dari panel itu). ReloadSettings di atas mereset
+        // system prompt tiap kirim, jadi konteks ini sekali-pakai — tidak menumpuk, tidak masuk
+        // riwayat maupun tampilan chat.
+        string liveContext = Services.ControlEngineering.ProcessErrorService.BuildChatContext();
+        if (!string.IsNullOrEmpty(liveContext))
+            _ai.SystemPrompt += "\n\n" + liveContext;
+
         if (string.IsNullOrEmpty(_ai.ApiKey))
         {
             AddErrorBubble(Lang.Ai_ErrorNoKey);
@@ -173,7 +183,10 @@ public sealed partial class AIPage : Page
 
         // A request that names a performance target ("gain untuk overshoot < 5%") is answered from
         // the verified simulator search, not the LLM (which can't compute this plant's overshoot).
-        var routed = Services.ControlEngineering.TuningChat.TryAnswerTargetRequest(text, (float)App.CascadeSession.Setpoint);
+        // A question about the simulation-vs-LabVIEW error is answered the same way, from the
+        // computed comparison — checked second so an ambiguous tuning phrasing still wins.
+        var routed = Services.ControlEngineering.TuningChat.TryAnswerTargetRequest(text, (float)App.CascadeSession.Setpoint)
+                  ?? Services.ControlEngineering.ProcessErrorService.TryAnswerErrorRequest(text);
         if (routed is not null)
         {
             var (rBorder, rBlock) = AddAiBubble(routed);

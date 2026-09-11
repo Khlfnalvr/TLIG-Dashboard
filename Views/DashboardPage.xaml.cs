@@ -1051,11 +1051,12 @@ public sealed partial class DashboardPage : Page
         // Re-point the shared AI service at the active provider/model (same as AIPage).
         AiConfigService.ApplyActive(_ai);
 
-        // Selipkan data live LabVIEW/HMI (TCP 6001) ke system prompt untuk kiriman ini,
-        // supaya jawaban AI memperhitungkan nilai proses yang sedang berjalan. ApplyActive
-        // di atas mereset system prompt tiap kirim, jadi data ini sekali-pakai — tidak
-        // menumpuk, tidak masuk riwayat maupun tampilan chat.
-        string liveContext = BuildLiveDataContext();
+        // Selipkan konteks proses ke system prompt untuk kiriman ini: data live LabVIEW/HMI
+        // (TCP 6001) + hasil simulasi System Model + error di antara keduanya, semuanya sudah
+        // dihitung di C# (lihat ProcessErrorService). ApplyActive di atas mereset system prompt
+        // tiap kirim, jadi konteks ini sekali-pakai — tidak menumpuk, tidak masuk riwayat
+        // maupun tampilan chat.
+        string liveContext = Services.ControlEngineering.ProcessErrorService.BuildChatContext();
         if (!string.IsNullOrEmpty(liveContext))
             _ai.SystemPrompt += "\n\n" + liveContext;
 
@@ -1072,7 +1073,10 @@ public sealed partial class DashboardPage : Page
 
         // A request that names a performance target ("gain untuk overshoot < 5%") is answered from
         // the verified simulator search, not the LLM (which can't compute this plant's overshoot).
-        var routed = Services.ControlEngineering.TuningChat.TryAnswerTargetRequest(text, (float)App.CascadeSession.Setpoint);
+        // A question about the simulation-vs-LabVIEW error is answered the same way, from the
+        // computed comparison — checked second so an ambiguous tuning phrasing still wins.
+        var routed = Services.ControlEngineering.TuningChat.TryAnswerTargetRequest(text, (float)App.CascadeSession.Setpoint)
+                  ?? Services.ControlEngineering.ProcessErrorService.TryAnswerErrorRequest(text);
         if (routed is not null)
         {
             var (rBorder, _) = AddChatBubble("ai", routed);
@@ -1128,18 +1132,6 @@ public sealed partial class DashboardPage : Page
 
         // Keep rendered count in sync with history
         _renderedCount = App.Ai.History.Count;
-    }
-
-    // Rangkum nilai live dari LabVIEW/HMI (HmiDataService, TCP 6001) menjadi satu baris
-    // konteks untuk AI chat. Kosong kalau belum ada data yang masuk. Dipanggil tiap kirim
-    // pesan, jadi AI selalu melihat pembacaan proses terbaru.
-    private static string BuildLiveDataContext()
-    {
-        var snap = Data.Snapshot();
-        if (snap.Count == 0) return "";
-        var pairs = string.Join(", ", snap.Select(d => $"{d.Key}={d.Value}"));
-        return "Data live dari LabVIEW/HMI (TCP 6001) saat ini — " + pairs +
-               ". Gunakan angka ini bila pengguna bertanya soal kondisi/pembacaan proses saat ini.";
     }
 
     // Returns the bubble Border and the streaming TextBlock so callers can replace content after streaming.
