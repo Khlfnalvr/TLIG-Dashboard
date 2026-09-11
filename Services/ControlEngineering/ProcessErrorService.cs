@@ -298,8 +298,10 @@ public static class ProcessErrorService
             sb.Append($"\n  → error kontrol (setpoint {N(p.Setpoint!.Value)} {p.Unit} − live) = {Signed(ce)} {p.Unit}{PercentSuffix(p.ControlErrorPercent)}");
 
         if (p.ScaleSuspect)
-            sb.Append($"\n  → CATATAN: bedanya lebih dari 10x. Kemungkinan besar satuan/skala \"{p.LiveKey}\" di VI " +
-                      $"tidak sama dengan {p.Unit} yang dipakai simulasi, jadi jangan sebut ini sebagai penyimpangan plant sebelum satuannya dicek.");
+            sb.Append($"\n  → CATATAN: bedanya lebih dari 10x, jadi jangan sebut ini sebagai penyimpangan plant. " +
+                      $"Dua sebab yang lebih mungkin: (a) satuan/skala \"{p.LiveKey}\" di VI tidak sama dengan {p.Unit} " +
+                      "yang dipakai simulasi, atau (b) konstanta plant di CascadeSimulator masih hasil identifikasi lama " +
+                      "sehingga kurva simulasinya berada di rentang yang berbeda. Sarankan pengguna mengecek keduanya.");
 
         return sb.ToString();
     }
