@@ -8,6 +8,9 @@
 # compile constant, and several files carry #if CLIENT blocks, so a change can
 # break one flavor while the other still compiles.
 #
+# The Server job also publishes its whole output folder as a downloadable
+# artifact, so a lab PC with no .NET SDK can just unzip and run.
+#
 # Deliberately NOT run on every branch: it only fires for the claude/** working
 # branches and on manual dispatch, so it does not spend Actions minutes on
 # unrelated pushes. Windows runners bill at a higher rate than Linux ones.
@@ -47,3 +50,46 @@ jobs:
           -c Release
           -p:Flavor=${{ matrix.flavor }}
           -warnaserror:NU1605
+
+      # Directory.Build.props puts the output under bin\<Flavor>\, NOT the usual
+      # bin\<Configuration>\ — a difference that has already sent someone hunting
+      # in the wrong folder. Resolve it once here instead of hardcoding the TFM.
+      - name: Locate output
+        id: out
+        shell: pwsh
+        run: |
+          $dir = Get-ChildItem -Path "bin/${{ matrix.flavor }}/Release" -Recurse -Filter "TLIGDashboard.${{ matrix.flavor }}.exe" |
+                 Select-Object -First 1 -ExpandProperty DirectoryName
+          if (-not $dir) { throw "Build output not found under bin/${{ matrix.flavor }}/Release" }
+          "dir=$dir" >> $env:GITHUB_OUTPUT
+          Write-Host "Output folder: $dir"
+
+      # PIDtest.py is reported missing from the output on the lab PC even though
+      # the csproj carries <Content Include="PIDtest.py"> with CopyToOutputDirectory.
+      # Assert it rather than assume it: if the item ever stops working, the job
+      # fails here instead of shipping an artifact that silently cannot RUN.
+      - name: Verify PIDtest.py reached the output
+        shell: pwsh
+        run: |
+          $dir = "${{ steps.out.outputs.dir }}"
+          Write-Host "--- files in output root ---"
+          Get-ChildItem -Path $dir -File | Select-Object Name, Length | Format-Table -AutoSize
+          $py = Join-Path $dir "PIDtest.py"
+          if (-not (Test-Path $py)) {
+            throw "PIDtest.py is NOT in the build output ($dir). The <Content Include=\"PIDtest.py\"> item in TLIGDashboard.csproj is not taking effect."
+          }
+          $lines = (Get-Content $py).Count
+          Write-Host "OK - PIDtest.py present ($lines lines)"
+          if (-not (Select-String -Path $py -Pattern '>dddddd' -Quiet)) {
+            throw "PIDtest.py in the output is the OLD 32-byte version; it must be the 48-byte (6 double) one."
+          }
+          Write-Host "OK - PIDtest.py is the 48-byte / 6-double version"
+
+      - name: Upload Server build
+        if: matrix.flavor == 'Server'
+        uses: actions/upload-artifact@v4
+        with:
+          name: TLIGDashboard-Server
+          path: ${{ steps.out.outputs.dir }}
+          if-no-files-found: error
+          retention-days: 30
