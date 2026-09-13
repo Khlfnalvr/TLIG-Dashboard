@@ -329,10 +329,13 @@ public sealed partial class DashboardPage : Page
     {
         var sim = result.Simulation;
         // Cascade runs adaptively (~thousands of samples); thin for the chart, metrics use the
-        // full arrays. The panel plots the temperature response vs the setpoint, same as the
-        // single-loop chart did — the full two-loop view lives on the Cascade page.
+        // full arrays. Same two-loop view as the Cascade page: temperature + flow on two
+        // y-axes, plus the single-loop baseline and disturbance marker.
         int stride = System.Math.Max(1, sim.Time.Length / 1500);
-        RespChart.Update(Sample(sim.Time, stride), Sample(sim.Temperature, stride), result.Input.Setpoint);
+        RespChart.Update(
+            Sample(sim.Time, stride), Sample(sim.Temperature, stride), Sample(sim.SingleLoopTemperature, stride),
+            Sample(sim.Flow, stride), Sample(sim.FlowSetpoint, stride),
+            result.Input.Setpoint, sim.DisturbanceTime);
 
         // result.Metrics is read off the exact RK4 curve above — always consistent with what's
         // plotted (the temperature step metrics of the outer loop).

@@ -182,8 +182,11 @@
                           Padding="10,8,10,10">
                 <StackPanel Spacing="8">
 
-                    <!-- Block Diagram -->
-                    <Border Style="{StaticResource DashCardStyle}" Height="124">
+                    <!-- Block Diagram — XAML-native cascade figure (same structure as
+                         cascade-block-diagram.png on the Cascade page): outer temperature PID
+                         whose output is the inner flow PI setpoint, with both feedback loops.
+                         Viewbox + fixed-size Canvas so it scales to the narrow left panel. -->
+                    <Border Style="{StaticResource DashCardStyle}" Height="280">
                         <Grid RowSpacing="8">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto"/>
@@ -193,49 +196,97 @@
                                        Text="{x:Bind Lang.Panel_DiagramBlok, Mode=OneWay}"
                                        Style="{StaticResource DashCardTitleStyle}"/>
                             <Border Grid.Row="1"
-                                    Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}"
+                                    Background="White"
                                     CornerRadius="5"
-                                    Padding="10">
-                                <!-- Cascade structure (mirrors the Cascade page, which is this panel's
-                                     extended screen): Tsp -> PID(suhu) -> PI(aliran) -> valve -> Gp2(aliran) -> Gp1(suhu). -->
-                                <Grid ColumnSpacing="4" VerticalAlignment="Center">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="Auto"/>
-                                        <ColumnDefinition Width="1.35*"/>
-                                        <ColumnDefinition Width="Auto"/>
-                                        <ColumnDefinition Width="1.15*"/>
-                                        <ColumnDefinition Width="Auto"/>
-                                        <ColumnDefinition Width="0.85*"/>
-                                        <ColumnDefinition Width="Auto"/>
-                                        <ColumnDefinition Width="1.1*"/>
-                                        <ColumnDefinition Width="Auto"/>
-                                        <ColumnDefinition Width="1.05*"/>
-                                    </Grid.ColumnDefinitions>
-                                    <Border Grid.Column="0" Style="{StaticResource DashInputBoxStyle}" MinHeight="32" HorizontalAlignment="Stretch">
-                                        <TextBlock Text="Temp SP" Style="{StaticResource DashTinyLabelStyle}" TextAlignment="Center" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                    </Border>
-                                    <TextBlock Grid.Column="1" Text=">" Opacity="0.55" VerticalAlignment="Center"/>
-                                    <Border Grid.Column="2" Style="{StaticResource DashInputBoxStyle}" MinHeight="32" HorizontalAlignment="Stretch">
-                                        <TextBlock Text="PID · Suhu" Style="{StaticResource DashTinyLabelStyle}" FontWeight="SemiBold" TextAlignment="Center" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                    </Border>
-                                    <TextBlock Grid.Column="3" Text=">" Opacity="0.55" VerticalAlignment="Center"/>
-                                    <Border Grid.Column="4" Style="{StaticResource DashInputBoxStyle}" MinHeight="32" HorizontalAlignment="Stretch">
-                                        <TextBlock Text="PI · Aliran" Style="{StaticResource DashTinyLabelStyle}" FontWeight="SemiBold" TextAlignment="Center" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                    </Border>
-                                    <TextBlock Grid.Column="5" Text=">" Opacity="0.55" VerticalAlignment="Center"/>
-                                    <Border Grid.Column="6" Style="{StaticResource DashInputBoxStyle}" MinHeight="32" HorizontalAlignment="Stretch">
-                                        <TextBlock Text="Valve" Style="{StaticResource DashTinyLabelStyle}" TextAlignment="Center" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                    </Border>
-                                    <TextBlock Grid.Column="7" Text=">" Opacity="0.55" VerticalAlignment="Center"/>
-                                    <Border Grid.Column="8" Style="{StaticResource DashInputBoxStyle}" MinHeight="32" HorizontalAlignment="Stretch">
-                                        <TextBlock Text="Plant Aliran" Style="{StaticResource DashTinyLabelStyle}" TextAlignment="Center" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                    </Border>
-                                    <TextBlock Grid.Column="9" Text=">" Opacity="0.55" VerticalAlignment="Center"/>
-                                    <Border Grid.Column="10" Style="{StaticResource DashInputBoxStyle}" MinHeight="32" HorizontalAlignment="Stretch">
-                                        <TextBlock Text="Plant Suhu" Style="{StaticResource DashTinyLabelStyle}" TextAlignment="Center" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                    </Border>
-                                </Grid>
+                                    Padding="6">
+                                <Viewbox Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                    <Canvas Width="470" Height="285">
+                                        <!-- Loop frames -->
+                                        <TextBlock Canvas.Left="32" Canvas.Top="2" FontSize="9" FontWeight="SemiBold" Foreground="#15803D" Text="LOOP PRIMER (TEMPERATUR – PID)"/>
+                                        <Rectangle Canvas.Left="28" Canvas.Top="16" Width="148" Height="86" Stroke="#15803D" StrokeThickness="1.2" StrokeDashArray="5,3" Fill="Transparent" RadiusX="6" RadiusY="6"/>
+                                        <TextBlock Canvas.Left="188" Canvas.Top="2" FontSize="9" FontWeight="SemiBold" Foreground="#B45309" Text="LOOP SEKUNDER (FLOW – PI)"/>
+                                        <Rectangle Canvas.Left="182" Canvas.Top="16" Width="196" Height="196" Stroke="#B45309" StrokeThickness="1.2" StrokeDashArray="5,3" Fill="Transparent" RadiusX="6" RadiusY="6"/>
+
+                                        <!-- Forward-path arrows -->
+                                        <Line X1="24" Y1="80" X2="38" Y2="80" Stroke="Black" StrokeThickness="1.2"/>
+                                        <Polygon Points="30,77 38,80 30,83" Fill="Black"/>
+                                        <Line X1="64" Y1="80" X2="76" Y2="80" Stroke="Black" StrokeThickness="1.2"/>
+                                        <Polygon Points="68,77 76,80 68,83" Fill="Black"/>
+                                        <Line X1="154" Y1="80" X2="166" Y2="80" Stroke="Black" StrokeThickness="1.2"/>
+                                        <Polygon Points="158,77 166,80 158,83" Fill="Black"/>
+                                        <Line X1="192" Y1="80" X2="204" Y2="80" Stroke="Black" StrokeThickness="1.2"/>
+                                        <Polygon Points="196,77 204,80 196,83" Fill="Black"/>
+                                        <Line X1="268" Y1="80" X2="280" Y2="80" Stroke="Black" StrokeThickness="1.2"/>
+                                        <Polygon Points="272,77 280,80 272,83" Fill="Black"/>
+                                        <Line X1="346" Y1="80" X2="372" Y2="80" Stroke="Black" StrokeThickness="1.2"/>
+                                        <Polygon Points="364,77 372,80 364,83" Fill="Black"/>
+                                        <Line X1="444" Y1="80" X2="460" Y2="80" Stroke="Black" StrokeThickness="1.2"/>
+
+                                        <!-- Flow feedback (q -> Flow Tx -> sum2) -->
+                                        <Line X1="358" Y1="82" X2="358" Y2="172" Stroke="Black" StrokeThickness="1.2"/>
+                                        <Line X1="358" Y1="172" X2="302" Y2="172" Stroke="Black" StrokeThickness="1.2"/>
+                                        <Polygon Points="310,169 302,172 310,175" Fill="Black"/>
+                                        <Line X1="212" Y1="172" X2="175" Y2="172" Stroke="Black" StrokeThickness="1.2"/>
+                                        <Line X1="175" Y1="172" X2="175" Y2="95" Stroke="Black" StrokeThickness="1.2"/>
+                                        <Polygon Points="172,95 178,95 175,87" Fill="Black"/>
+
+                                        <!-- Temperature feedback (T -> Temp Tx -> sum1) -->
+                                        <Line X1="444" Y1="82" X2="444" Y2="252" Stroke="Black" StrokeThickness="1.2"/>
+                                        <Line X1="444" Y1="252" X2="296" Y2="252" Stroke="Black" StrokeThickness="1.2"/>
+                                        <Polygon Points="304,249 296,252 304,255" Fill="Black"/>
+                                        <Line X1="186" Y1="252" X2="51" Y2="252" Stroke="Black" StrokeThickness="1.2"/>
+                                        <Line X1="51" Y1="252" X2="51" Y2="95" Stroke="Black" StrokeThickness="1.2"/>
+                                        <Polygon Points="48,95 54,95 51,87" Fill="Black"/>
+
+                                        <!-- Nodes -->
+                                        <Ellipse Canvas.Left="356" Canvas.Top="78" Width="4" Height="4" Fill="Black"/>
+                                        <Ellipse Canvas.Left="442" Canvas.Top="78" Width="4" Height="4" Fill="Black"/>
+
+                                        <!-- Summing junctions -->
+                                        <Ellipse Canvas.Left="38" Canvas.Top="67" Width="26" Height="26" Stroke="Black" StrokeThickness="1.4" Fill="White"/>
+                                        <TextBlock Canvas.Left="47" Canvas.Top="67" FontSize="8" Foreground="Black" Text="+"/>
+                                        <TextBlock Canvas.Left="48" Canvas.Top="79" FontSize="8" Foreground="Black" Text="−"/>
+                                        <Ellipse Canvas.Left="166" Canvas.Top="67" Width="26" Height="26" Stroke="Black" StrokeThickness="1.4" Fill="White"/>
+                                        <TextBlock Canvas.Left="175" Canvas.Top="67" FontSize="8" Foreground="Black" Text="+"/>
+                                        <TextBlock Canvas.Left="176" Canvas.Top="79" FontSize="8" Foreground="Black" Text="−"/>
+
+                                        <!-- Controller / plant blocks -->
+                                        <Rectangle Canvas.Left="76" Canvas.Top="62" Width="78" Height="36" Stroke="#15803D" StrokeThickness="1.2" Fill="#D1FAE5" RadiusX="4" RadiusY="4"/>
+                                        <TextBlock Canvas.Left="76" Canvas.Top="65" Width="78" TextAlignment="Center" FontSize="9" FontWeight="SemiBold" Foreground="Black" Text="PID"/>
+                                        <TextBlock Canvas.Left="76" Canvas.Top="78" Width="78" TextAlignment="Center" FontSize="8" Foreground="Black" Text="Temperatur"/>
+                                        <Rectangle Canvas.Left="204" Canvas.Top="62" Width="64" Height="36" Stroke="#B45309" StrokeThickness="1.2" Fill="#FEF3C7" RadiusX="4" RadiusY="4"/>
+                                        <TextBlock Canvas.Left="204" Canvas.Top="65" Width="64" TextAlignment="Center" FontSize="9" FontWeight="SemiBold" Foreground="Black" Text="PI"/>
+                                        <TextBlock Canvas.Left="204" Canvas.Top="78" Width="64" TextAlignment="Center" FontSize="8" Foreground="Black" Text="Flow"/>
+                                        <Rectangle Canvas.Left="280" Canvas.Top="62" Width="66" Height="36" Stroke="Black" StrokeThickness="1.2" Fill="White" RadiusX="4" RadiusY="4"/>
+                                        <TextBlock Canvas.Left="280" Canvas.Top="66" Width="66" TextAlignment="Center" FontSize="8" Foreground="Black" Text="Control"/>
+                                        <TextBlock Canvas.Left="280" Canvas.Top="77" Width="66" TextAlignment="Center" FontSize="8" Foreground="Black" Text="Valve"/>
+                                        <Rectangle Canvas.Left="372" Canvas.Top="62" Width="72" Height="36" Stroke="Black" StrokeThickness="1.2" Fill="White" RadiusX="4" RadiusY="4"/>
+                                        <TextBlock Canvas.Left="372" Canvas.Top="66" Width="72" TextAlignment="Center" FontSize="8" Foreground="Black" Text="Plant"/>
+                                        <TextBlock Canvas.Left="372" Canvas.Top="77" Width="72" TextAlignment="Center" FontSize="7" Foreground="Black" Text="(Heat Exch.)"/>
+                                        <Rectangle Canvas.Left="212" Canvas.Top="157" Width="90" Height="30" Stroke="Black" StrokeThickness="1.2" Fill="White" RadiusX="4" RadiusY="4"/>
+                                        <TextBlock Canvas.Left="212" Canvas.Top="159" Width="90" TextAlignment="Center" FontSize="7.5" Foreground="Black" Text="Flow Transmitter"/>
+                                        <TextBlock Canvas.Left="212" Canvas.Top="170" Width="90" TextAlignment="Center" FontSize="7" Foreground="Black" Text="GM2(s)"/>
+                                        <Rectangle Canvas.Left="186" Canvas.Top="237" Width="110" Height="30" Stroke="Black" StrokeThickness="1.2" Fill="White" RadiusX="4" RadiusY="4"/>
+                                        <TextBlock Canvas.Left="186" Canvas.Top="239" Width="110" TextAlignment="Center" FontSize="7.5" Foreground="Black" Text="Temperature Transmitter"/>
+                                        <TextBlock Canvas.Left="186" Canvas.Top="250" Width="110" TextAlignment="Center" FontSize="7" Foreground="Black" Text="GM1(s)"/>
+
+                                        <!-- Signal labels -->
+                                        <TextBlock Canvas.Left="2" Canvas.Top="70" FontSize="10" FontWeight="SemiBold" Foreground="Black" Text="SP"/>
+                                        <TextBlock Canvas.Left="14" Canvas.Top="70" FontSize="7" Foreground="Black" Text="T"/>
+                                        <TextBlock Canvas.Left="66" Canvas.Top="58" FontSize="8" Foreground="Black" FontStyle="Italic" Text="eT"/>
+                                        <TextBlock Canvas.Left="140" Canvas.Top="56" FontSize="7" Foreground="Black" Text="MV_FSP"/>
+                                        <TextBlock Canvas.Left="142" Canvas.Top="100" FontSize="7" Foreground="Black" Text="GC1(s)"/>
+                                        <TextBlock Canvas.Left="194" Canvas.Top="58" FontSize="8" Foreground="Black" FontStyle="Italic" Text="eF"/>
+                                        <TextBlock Canvas.Left="268" Canvas.Top="58" FontSize="8" Foreground="Black" FontStyle="Italic" Text="u"/>
+                                        <TextBlock Canvas.Left="220" Canvas.Top="100" FontSize="7" Foreground="Black" Text="GC2(s)"/>
+                                        <TextBlock Canvas.Left="304" Canvas.Top="100" FontSize="7" Foreground="Black" Text="GV(s)"/>
+                                        <TextBlock Canvas.Left="352" Canvas.Top="58" FontSize="9" FontWeight="SemiBold" Foreground="Black" Text="q"/>
+                                        <TextBlock Canvas.Left="398" Canvas.Top="100" FontSize="7" Foreground="Black" Text="GP(s)"/>
+                                        <TextBlock Canvas.Left="450" Canvas.Top="58" FontSize="10" FontWeight="SemiBold" Foreground="Black" Text="T"/>
+                                        <TextBlock Canvas.Left="216" Canvas.Top="189" FontSize="7.5" Foreground="Black" Text="PVF (Flow)"/>
+                                        <TextBlock Canvas.Left="196" Canvas.Top="269" FontSize="7.5" Foreground="Black" Text="PVT (Temperatur)"/>
+                                    </Canvas>
+                                </Viewbox>
                             </Border>
                         </Grid>
                     </Border>
@@ -293,12 +344,10 @@
                         </StackPanel>
                     </Border>
 
-                    <!-- System Response — the left panel is already inside a ScrollViewer
-                         (see Grid.Row="1" above), so a taller card here just means users
-                         scroll a bit further; it doesn't break the layout. 142px was only
-                         enough for the placeholder label — a real Chart.js line chart with
-                         axis titles needs more room or it renders squeezed/clipped. -->
-                    <Border Style="{StaticResource DashCardStyle}" Height="300">
+                    <!-- System Response — same two-loop view as the Cascade page (this panel's
+                         extended screen): temperature + flow on two y-axes, plus the
+                         single-loop baseline and disturbance marker. -->
+                    <Border Style="{StaticResource DashCardStyle}" Height="340">
                         <Grid RowSpacing="8">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto"/>
@@ -311,7 +360,7 @@
                                     x:Name="ResponSistemChart"
                                     Style="{StaticResource DashInputBoxStyle}"
                                     Padding="2">
-                                <controls:PidResponseChart x:Name="RespChart"/>
+                                <controls:CascadeResponseChart x:Name="RespChart"/>
                             </Border>
                         </Grid>
                     </Border>
