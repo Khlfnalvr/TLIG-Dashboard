@@ -29,7 +29,7 @@ public sealed class PidAdvisorResult
 /// </summary>
 public class PidAdvisorService
 {
-    private readonly Services.AiService _aiService;
+    private readonly string _requestedLanguage;
 
     /// <param name="language">
     /// "id" / "en"; empty falls back to this process's own setting. Passed explicitly
@@ -38,16 +38,11 @@ public class PidAdvisorService
     /// </param>
     public PidAdvisorService(string language = "")
     {
-        _aiService = new Services.AiService();
-        Services.AiConfigService.ApplyActive(_aiService);
+        _requestedLanguage = language;
+    }
 
-        // The prompt never named a language, so models defaulted to replying in English —
-        // the language of the prompt itself — regardless of the app's setting. State it
-        // explicitly, and follow the app rather than hard-coding: the review sits next to
-        // localized UI text, so the two should not disagree.
-        string lang = string.IsNullOrWhiteSpace(language)
-            ? Services.LocalizationManager.Instance.CurrentLanguage
-            : language;
+    private static string BuildSystemPrompt(string lang)
+    {
         // The plant is fixed and known, but the LLM was never told it — so it fell back on
         // generic PID intuition that misfires on a strongly lag-dominant plant (e.g. it
         // would advise lowering Kp to cut overshoot when, from an integral-dominated start,
@@ -57,7 +52,9 @@ public class PidAdvisorService
         string plantRule =
             "The plant under control is fixed and known: " + PidSimulator.PlantTransferFunction + ", " +
             $"with a steady-state (DC) gain of about {dcGain:F1} and a dominant time constant of about " +
-            $"{tau:F1} s — it is strongly lag-dominant and slow in open loop. Writing the plant as " +
+            $"{tau:F1} s — it is strongly lag-dominant and slow in open loop. The controller output drives " +
+            $"a valve saturated at {PidSimulator.OutputMin:F0}–{PidSimulator.OutputMax:F0}% with conditional-integration " +
+            "anti-windup, so integral-heavy tunings dwell at the limit instead of winding up. Writing the plant as " +
             "B/(s^2 + A1*s + A0) and using an ideal PID on the error under unity feedback, the closed-loop " +
             "transfer function is B(Kp*s + Ki) / (s^3 + (A1 + B*Kd)*s^2 + (A0 + B*Kp)*s + B*Ki). It carries a " +
             "zero at s = -Ki/Kp: when Kp is small the loop is integral-dominated, that slow zero sits among the " +
@@ -65,16 +62,7 @@ public class PidAdvisorService
             "mode. Reason from this specific plant and its closed-loop form rather than from generic tuning " +
             "rules of thumb, which are unreliable here. ";
 
-        bool indonesian = lang == "id";
-        string languageRule = indonesian
-            ? "Write your review in Indonesian (Bahasa Indonesia), using standard control " +
-              "engineering terminology. Keep the established English terms (overshoot, rise " +
-              "time, settling time, steady-state error, setpoint, gain) rather than " +
-              "translating them, as that is how they appear in the course material and in " +
-              "the surrounding UI."
-            : "Write your review in English.";
-
-        _aiService.SystemPrompt =
+        return
             "You are a Senior Professor of Control Systems Engineering reviewing a student's " +
             "PID tuning attempt. You will be given the setpoint (reference value), the current " +
             "Kp, Ki, Kd, and the resulting Overshoot (%), Rise Time (s), Settling Time (s), and " +
@@ -88,7 +76,7 @@ public class PidAdvisorService
             "gains of your own — the recommended gains are what the student will be offered, and " +
             "any numbers you invent would contradict them. When earlier attempts are shown, take " +
             "them into account and note what did or did not help. " +
-            languageRule + " " +
+            AdvisorCore.LanguageRule(lang) + " " +
             "Reply with the review prose only — no JSON, no code blocks, no gain values on their " +
             "own line.";
     }
@@ -107,7 +95,9 @@ public class PidAdvisorService
         PidPrediction gains, PidMetricsPrediction metrics, float setpoint = 1f,
         IReadOnlyList<PidAttempt>? history = null,
         PidPrediction? recommended = null, PidMetricsPrediction? recommendedMetrics = null,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        bool stable = true, string diagnosis = "Ideal",
+        double iae = 0, double ise = 0, double itae = 0)
     {
         string task = recommended is not null
             ? "A better tuning has already been found for this plant by simulating candidate gains " +
@@ -128,13 +118,18 @@ public class PidAdvisorService
             FormatHistory(history) +
             $"Current gains: Kp = {gains.Kp:F3}, Ki = {gains.Ki:F3}, Kd = {gains.Kd:F3}.\n" +
             $"Simulated response: Overshoot = {metrics.Overshoot:F2}%, Rise Time = {metrics.RiseTime:F3}s, " +
-            $"Settling Time = {metrics.SettlingTime:F2}s, Steady-State Error = {metrics.SteadyStateError:F3}.\n\n" +
+            $"Settling Time = {metrics.SettlingTime:F2}s, Steady-State Error = {metrics.SteadyStateError:F3}" +
+            (stable ? "" : " (the response never settled at the setpoint — the loop is oscillating or far too slow)") + ".\n" +
+            $"Diagnosis: {diagnosis}.\n" +
+            $"Error performance indices over the step (integrals of the tracking error, lower is better): " +
+            $"IAE = {iae:F0}, ISE = {ise:F0}, ITAE = {itae:F0}.\n\n" +
             task;
 
         string raw;
         try
         {
-            raw = await _aiService.StreamChatAsync(prompt, _ => { }, ct);
+            string lang = AdvisorCore.ResolveLanguage(_requestedLanguage);
+            raw = await AdvisorCore.GetReviewAsync(BuildSystemPrompt(lang), prompt, ct);
         }
         catch (Exception ex)
         {

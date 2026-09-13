@@ -58,7 +58,7 @@ public static class CascadeDesignService
 
         // The LLM now only explains the recommended gains; it no longer picks numbers.
         var advisor = await new CascadeAdvisorService().ReviewAsync(
-            input, metrics, history, recommendation?.gains, recommendation?.metrics, ct);
+            input, metrics, history, recommendation?.gains, recommendation?.metrics, ct, diagnosis);
 
         return new CascadeDesignResult
         {

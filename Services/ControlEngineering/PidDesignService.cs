@@ -171,10 +171,13 @@ public static class PidDesignService
             // the first run off the caller's thread.
             var recommendation = await Task.Run(() => PidRecommender.Recommend(metrics, stable), ct);
 
+            var (iae, ise, itae) = PidSimulator.ComputePerformanceIndices(simResult.Time, simResult.Amplitude, input.Setpoint);
+
             // The LLM now only explains the recommended gains; it no longer picks numbers.
             var advisor = await new PidAdvisorService(input.Language).ReviewAsync(
                 pred, metrics, input.Setpoint, input.History,
-                recommendation?.gains, recommendation?.metrics, ct);
+                recommendation?.gains, recommendation?.metrics, ct,
+                stable, diagnosis, iae, ise, itae);
 
             return new PidDesignResult
             {

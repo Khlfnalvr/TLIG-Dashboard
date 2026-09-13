@@ -1125,6 +1125,7 @@ public sealed partial class DashboardPage : Page
             // Safety net: simulate any Kp/Ki/Kd the LLM proposed and append the real result.
             var note = Services.ControlEngineering.TuningChat.VerifyGainsNote(aiBubble.Text, (float)App.CascadeSession.Setpoint);
             string finalText = note is null ? aiBubble.Text : aiBubble.Text + note;
+            if (note is not null) App.Ai.AmendLastAssistantEntry(note);
             aiBubbleBorder.Child = MarkdownRenderer.Render(finalText, 12, ActualTheme == ElementTheme.Dark);
         }
 

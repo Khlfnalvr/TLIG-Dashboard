@@ -61,13 +61,10 @@ public sealed class PidSessionService
     {
         if (IsRunning) return null;
 
-        // NumberBox yields NaN when cleared; a zero setpoint would flatline the response
-        // and divide the steady-state-error metric by zero — normalize here, once, so
-        // every view can read back the value actually simulated.
-        if (double.IsNaN(Setpoint) || Setpoint <= 0) Setpoint = 1.0;
-        if (double.IsNaN(Kp)) Kp = 0;
-        if (double.IsNaN(Ki)) Ki = 0;
-        if (double.IsNaN(Kd)) Kd = 0;
+        if (!double.IsFinite(Setpoint) || Setpoint <= 0) Setpoint = 1.0;
+        Kp = GainValidator.Sanitize(Kp);
+        Ki = GainValidator.Sanitize(Ki);
+        Kd = GainValidator.Sanitize(Kd);
 
         SetRunning(true);
         try
@@ -127,10 +124,13 @@ public sealed class PidSessionService
     {
         if (PendingRecommendation is not { } rec) return Task.FromResult<PidDesignResult?>(null);
 
+        var (ok, _) = GainValidator.ValidateSingle(rec.Kp, rec.Ki, rec.Kd);
+        ClearRecommendation();
+        if (!ok) return Task.FromResult<PidDesignResult?>(null);
+
         Kp = rec.Kp;
         Ki = rec.Ki;
         Kd = rec.Kd;
-        ClearRecommendation();
         return RunAsync(ct);
     }
 

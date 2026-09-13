@@ -254,6 +254,7 @@ public sealed partial class AIPage : Page
             // guessed tuning can't pass unchecked.
             var note = Services.ControlEngineering.TuningChat.VerifyGainsNote(aiBubble.Text, (float)App.CascadeSession.Setpoint);
             string finalText = note is null ? aiBubble.Text : aiBubble.Text + note;
+            if (note is not null) _ai.AmendLastAssistantEntry(note);
             aiBubbleBorder.Child = MarkdownRenderer.Render(finalText, 13, ActualTheme == ElementTheme.Dark);
         }
 

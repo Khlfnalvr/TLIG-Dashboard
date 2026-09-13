@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using TLIGDashboard.Models.ControlEngineering;
 
 namespace TLIGDashboard.Services.ControlEngineering;
@@ -66,8 +68,10 @@ public static class CascadeRecommender
     // The whole evaluated grid (every candidate + its simulated metrics) cached per setpoint, so the
     // canonical pick and any number of target queries all filter the same data without re-simulating.
     // The grid is mildly setpoint-dependent (valve/flow saturation makes the cascade non-linear).
-    private static readonly object _lock = new();
-    private static readonly Dictionary<int, List<(CascadeRecommendation gains, CascadeMetrics metrics)>> _gridCache = new();
+    // Bounded (a handful of setpoints) so the cache can't grow without limit.
+    private const int MaxCachedGrids = 8;
+    private static readonly ConcurrentDictionary<int, List<(CascadeRecommendation gains, CascadeMetrics metrics)>> _gridCache = new();
+    private static readonly ConcurrentQueue<int> _gridOrder = new();
 
     /// <summary>
     /// Gains to recommend for a temperature response with the given metrics, or null when the current
@@ -167,43 +171,58 @@ public static class CascadeRecommender
         return v;
     }
 
-    // Simulates every grid point once and caches the result per setpoint.
+    // Simulates every grid point once and caches the result per setpoint. The sweep runs in
+    // parallel (CascadeSimulator keeps no mutable state, so concurrent Simulate calls are safe)
+    // and outside any lock, so a first-time search never blocks other readers.
     private static List<(CascadeRecommendation gains, CascadeMetrics metrics)> EvaluateGrid(float setpoint)
     {
         int key = (int)Math.Round(Math.Max(1f, setpoint));
-        lock (_lock)
+        if (_gridCache.TryGetValue(key, out var cached)) return cached;
+
+        var combos = new List<(double kp, double ki, double kd)>(KpGrid.Length * KiGrid.Length * KdGrid.Length);
+        foreach (double kp in KpGrid)
+        foreach (double ki in KiGrid)
+        foreach (double kd in KdGrid)
+            combos.Add((kp, ki, kd));
+
+        var results = new (CascadeRecommendation gains, CascadeMetrics metrics)[combos.Count];
+        Parallel.For(0, combos.Count, i =>
         {
-            if (_gridCache.TryGetValue(key, out var cached)) return cached;
+            var (kp, ki, kd) = combos[i];
+            results[i] = EvaluateCandidate(key, kp, ki, kd);
+        });
 
-            var list = new List<(CascadeRecommendation, CascadeMetrics)>(KpGrid.Length * KiGrid.Length * KdGrid.Length);
-            foreach (double kp in KpGrid)
-            foreach (double ki in KiGrid)
-            foreach (double kd in KdGrid)
+        var list = results.ToList();
+        _gridCache[key] = list;
+        _gridOrder.Enqueue(key);
+        while (_gridOrder.Count > MaxCachedGrids && _gridOrder.TryDequeue(out int oldest))
+            _gridCache.TryRemove(oldest, out _);
+        return list;
+    }
+
+    private static (CascadeRecommendation gains, CascadeMetrics metrics) EvaluateCandidate(
+        int setpoint, double kp, double ki, double kd)
+    {
+        var input = new CascadeInput
+        {
+            OuterKp = (float)kp, OuterKi = (float)ki, OuterKd = (float)kd,
+            InnerKp = InnerKpFixed, InnerKi = InnerKiFixed,
+            Setpoint = setpoint, Disturbance = 0f,
+        };
+        var sim = _sim.Simulate(input, duration: SearchDuration, dt: SearchDt, withComparison: false);
+        var (rise, os, settle, ssePct) = PidSimulator.ComputeStepMetrics(sim.Time, sim.Temperature, setpoint);
+        bool stable = PidSimulator.IsResponseStable(sim.Temperature, setpoint);
+
+        return (
+            new CascadeRecommendation
             {
-                var input = new CascadeInput
-                {
-                    OuterKp = (float)kp, OuterKi = (float)ki, OuterKd = (float)kd,
-                    InnerKp = InnerKpFixed, InnerKi = InnerKiFixed,
-                    Setpoint = key, Disturbance = 0f,
-                };
-                var sim = _sim.Simulate(input, duration: SearchDuration, dt: SearchDt, withComparison: false);
-                var (rise, os, settle, ssePct) = PidSimulator.ComputeStepMetrics(sim.Time, sim.Temperature, key);
-                bool stable = PidSimulator.IsResponseStable(sim.Temperature, key);
-
-                list.Add((
-                    new CascadeRecommendation
-                    {
-                        OuterKp = (float)kp, OuterKi = (float)ki, OuterKd = (float)kd,
-                        InnerKp = InnerKpFixed, InnerKi = InnerKiFixed,
-                    },
-                    new CascadeMetrics
-                    {
-                        Overshoot = (float)os, RiseTime = (float)rise, SettlingTime = (float)settle,
-                        SteadyStateError = (float)(ssePct / 100.0), Stable = stable,
-                    }));
-            }
-            _gridCache[key] = list;
-            return list;
-        }
+                OuterKp = (float)kp, OuterKi = (float)ki, OuterKd = (float)kd,
+                InnerKp = InnerKpFixed, InnerKi = InnerKiFixed,
+            },
+            new CascadeMetrics
+            {
+                Overshoot = (float)os, RiseTime = (float)rise, SettlingTime = (float)settle,
+                SteadyStateError = (float)(ssePct / 100.0), Stable = stable,
+            });
     }
 }

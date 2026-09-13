@@ -75,8 +75,9 @@ public class CascadeSimulator
     // setpoint. The setpoint-proximity test is essential — both loops carry integral action,
     // so the true steady state IS the setpoint; without it a sluggish response creeping to
     // target (tiny Ki) can look "flat" while still far below the setpoint, and overshoot
-    // (measured against that last sample) would be badly overstated. Same idea as
-    // PidSimulator, scaled for the slow temperature plant (τ≈101 s + 52 s dead time).
+    // (measured against that last sample) would be badly overstated. Same rule now also
+    // implemented in PidSimulator; here scaled for the slow temperature plant
+    // (Gp1 τ≈176 s, Gp2 τ≈5.4 s + 3.7 s dead time).
     private const double MaxDuration         = 8000.0;  // hard cap on total simulated time (s)
     private const double MinStepSeconds      = 80.0;    // θ1 is 0 now, but a slow start is still nearly flat — don't read it as "settled"
     private const double MinRecoverSeconds   = 120.0;   // after injection, long enough for the disturbance dip to develop
@@ -128,8 +129,9 @@ public class CascadeSimulator
         var uHist = new List<double>(cap);   // valve command  → flow plant (delay d2)
         var fHist = new List<double>(cap);   // flow           → temp plant (delay d1)
 
-        // State: [T, F, IT, IF]
-        double[] s = { 0, 0, 0, 0 };
+        // State scalars: T, F, IT, IF (kept as locals, not an array, so the RK4
+        // sub-steps allocate nothing per step).
+        double sT = 0, sF = 0, sIT = 0, sIF = 0;
 
         // Disturbance injection step: preset for a fixed-length run, discovered at the step's
         // settle for an adaptive one. phase 0 = settling the step, 1 = settling the recovery.
@@ -144,16 +146,17 @@ public class CascadeSimulator
             double uDel = Delayed(uHist, i, d2);
             double fDel = Delayed(fHist, i, d1);
 
-            double[] k1 = Derivatives(s, input, d, uDel, fDel, out double fsp, out double u);
-            time.Add(t); temp.Add(s[0]); flow.Add(s[1]); flowSp.Add(fsp); valve.Add(u);
-            uHist.Add(u);      // valve command issued now
-            fHist.Add(s[1]);   // flow measured now
+            Derivatives(sT, sF, sIT, sIF, input, d, uDel, fDel,
+                out double a1T, out double a1F, out double a1IT, out double a1IF, out double fsp, out double u);
+            time.Add(t); temp.Add(sT); flow.Add(sF); flowSp.Add(fsp); valve.Add(u);
+            uHist.Add(u);    // valve command issued now
+            fHist.Add(sF);   // flow measured now
 
             // Settle check (adaptive only): the temperature window is flat, dT/dt ≈ 0, and
             // T has actually reached the setpoint band (see SettleBandFraction).
             bool settled = adaptive && i >= window && i % checkEvery == 0
                            && Math.Abs(temp[^1] - input.Setpoint) < settleBand
-                           && IsWindowFlat(temp, window, tol) && Math.Abs(k1[0]) < tol;
+                           && IsWindowFlat(temp, window, tol) && Math.Abs(a1T) < tol;
             if (phase == 0 && i >= minStep && settled)
             {
                 stepSettled = true;                                    // reached setpoint → stable
@@ -167,12 +170,17 @@ public class CascadeSimulator
             if (i + 1 >= maxSteps) break;
 
             // uDel/fDel are fixed past values, held constant across the sub-steps.
-            double[] k2 = Derivatives(Add(s, k1, 0.5 * dt), input, d, uDel, fDel, out _, out _);
-            double[] k3 = Derivatives(Add(s, k2, 0.5 * dt), input, d, uDel, fDel, out _, out _);
-            double[] k4 = Derivatives(Add(s, k3, dt),       input, d, uDel, fDel, out _, out _);
+            Derivatives(sT + 0.5 * dt * a1T, sF + 0.5 * dt * a1F, sIT + 0.5 * dt * a1IT, sIF + 0.5 * dt * a1IF,
+                input, d, uDel, fDel, out double a2T, out double a2F, out double a2IT, out double a2IF, out _, out _);
+            Derivatives(sT + 0.5 * dt * a2T, sF + 0.5 * dt * a2F, sIT + 0.5 * dt * a2IT, sIF + 0.5 * dt * a2IF,
+                input, d, uDel, fDel, out double a3T, out double a3F, out double a3IT, out double a3IF, out _, out _);
+            Derivatives(sT + dt * a3T, sF + dt * a3F, sIT + dt * a3IT, sIF + dt * a3IF,
+                input, d, uDel, fDel, out double a4T, out double a4F, out double a4IT, out double a4IF, out _, out _);
 
-            for (int j = 0; j < 4; j++)
-                s[j] += dt / 6.0 * (k1[j] + 2 * k2[j] + 2 * k3[j] + k4[j]);
+            sT  += dt / 6.0 * (a1T + 2 * a2T + 2 * a3T + a4T);
+            sF  += dt / 6.0 * (a1F + 2 * a2F + 2 * a3F + a4F);
+            sIT += dt / 6.0 * (a1IT + 2 * a2IT + 2 * a3IT + a4IT);
+            sIF += dt / 6.0 * (a1IF + 2 * a2IF + 2 * a3IF + a4IF);
         }
 
         double distTime = distStep >= 0 ? distStep * dt : -1;
@@ -196,31 +204,29 @@ public class CascadeSimulator
     // s' for the full cascade. uDel = delayed valve (into flow plant), fDel = delayed
     // flow (into temp plant). Also reports the (saturated) inner setpoint and valve
     // command for plotting.
-    private static double[] Derivatives(
-        double[] s, CascadeInput g, double dist, double uDel, double fDel, out double fsp, out double u)
+    private static void Derivatives(
+        double T, double F, double IT, double IF, CascadeInput g, double dist, double uDel, double fDel,
+        out double dTdt, out double dFdt, out double dIT, out double dIF, out double fsp, out double u)
     {
-        double T = s[0], F = s[1], IT = s[2], IF = s[3];
-
         // Outer loop (temperature PID, derivative-on-measurement). The temp plant sees the
         // DELAYED flow, or — with θ1 = 0, as the latest identification puts it — the flow of
         // this very instant, which is the one the state vector is carrying.
         double fIn = double.IsNaN(fDel) ? F : fDel;
-        double dTdt = (K1 * fIn - T) / Tau1;
+        dTdt = (K1 * fIn - T) / Tau1;
         double eT = g.Setpoint - T;
         double outerRaw = g.OuterKp * eT + g.OuterKi * IT - g.OuterKd * dTdt;
         fsp = Clamp(outerRaw, FlowSpMin, FlowSpMax);
-        double dIT = AntiWindup(eT, outerRaw, FlowSpMin, FlowSpMax);
+        dIT = AntiWindup(eT, outerRaw, FlowSpMin, FlowSpMax);
 
         // Inner loop (flow PI).
         double eF = fsp - F;
         double innerRaw = g.InnerKp * eF + g.InnerKi * IF;
         u = Clamp(innerRaw, ValveMin, ValveMax);
-        double dIF = AntiWindup(eF, innerRaw, ValveMin, ValveMax);
+        dIF = AntiWindup(eF, innerRaw, ValveMin, ValveMax);
 
         // Flow plant sees the DELAYED valve command, plus any disturbance.
         double uIn = double.IsNaN(uDel) ? u : uDel;
-        double dFdt = (K2 * uIn + dist - F) / Tau2;
-        return new[] { dTdt, dFdt, dIT, dIF };
+        dFdt = (K2 * uIn + dist - F) / Tau2;
     }
 
     // Single-loop baseline: one temperature PID drives the valve directly (no inner
@@ -234,7 +240,7 @@ public class CascadeSimulator
         double[] temp = new double[steps];
         double[] uHist = new double[steps];
         double[] fHist = new double[steps];
-        double[] s = { 0, 0, 0 };
+        double sT = 0, sF = 0, sIT = 0;
 
         for (int i = 0; i < steps; i++)
         {
@@ -242,33 +248,33 @@ public class CascadeSimulator
             double uDel = Delayed(uHist, i, d2);
             double fDel = Delayed(fHist, i, d1);
 
-            double[] k1 = SingleDerivs(s, g, d, uDel, fDel, out double u);
-            temp[i] = s[0];
+            SingleDerivs(sT, sF, sIT, g, d, uDel, fDel, out double a1T, out double a1F, out double a1IT, out double u);
+            temp[i] = sT;
             uHist[i] = u;
-            fHist[i] = s[1];
+            fHist[i] = sF;
 
-            double[] k2 = SingleDerivs(Add(s, k1, 0.5 * dt), g, d, uDel, fDel, out _);
-            double[] k3 = SingleDerivs(Add(s, k2, 0.5 * dt), g, d, uDel, fDel, out _);
-            double[] k4 = SingleDerivs(Add(s, k3, dt),       g, d, uDel, fDel, out _);
-            for (int j = 0; j < 3; j++)
-                s[j] += dt / 6.0 * (k1[j] + 2 * k2[j] + 2 * k3[j] + k4[j]);
+            SingleDerivs(sT + 0.5 * dt * a1T, sF + 0.5 * dt * a1F, sIT + 0.5 * dt * a1IT, g, d, uDel, fDel, out double a2T, out double a2F, out double a2IT, out _);
+            SingleDerivs(sT + 0.5 * dt * a2T, sF + 0.5 * dt * a2F, sIT + 0.5 * dt * a2IT, g, d, uDel, fDel, out double a3T, out double a3F, out double a3IT, out _);
+            SingleDerivs(sT + dt * a3T, sF + dt * a3F, sIT + dt * a3IT, g, d, uDel, fDel, out double a4T, out double a4F, out double a4IT, out _);
+            sT  += dt / 6.0 * (a1T + 2 * a2T + 2 * a3T + a4T);
+            sF  += dt / 6.0 * (a1F + 2 * a2F + 2 * a3F + a4F);
+            sIT += dt / 6.0 * (a1IT + 2 * a2IT + 2 * a3IT + a4IT);
         }
         return temp;
     }
 
-    private static double[] SingleDerivs(
-        double[] s, CascadeInput g, double dist, double uDel, double fDel, out double u)
+    private static void SingleDerivs(
+        double T, double F, double IT, CascadeInput g, double dist, double uDel, double fDel,
+        out double dTdt, out double dFdt, out double dIT, out double u)
     {
-        double T = s[0], F = s[1], IT = s[2];
         double fIn = double.IsNaN(fDel) ? F : fDel;
-        double dTdt = (K1 * fIn - T) / Tau1;
+        dTdt = (K1 * fIn - T) / Tau1;
         double eT = g.Setpoint - T;
         double uRaw = g.OuterKp * eT + g.OuterKi * IT - g.OuterKd * dTdt;
         u = Clamp(uRaw, ValveMin, ValveMax);
-        double dIT = AntiWindup(eT, uRaw, ValveMin, ValveMax);
+        dIT = AntiWindup(eT, uRaw, ValveMin, ValveMax);
         double uIn = double.IsNaN(uDel) ? u : uDel;
-        double dFdt = (K2 * uIn + dist - F) / Tau2;
-        return new[] { dTdt, dFdt, dIT };
+        dFdt = (K2 * uIn + dist - F) / Tau2;
     }
 
     // Conditional-integration anti-windup: stop integrating when the output is
@@ -281,13 +287,6 @@ public class CascadeSimulator
     }
 
     private static double Clamp(double x, double lo, double hi) => Math.Max(lo, Math.Min(hi, x));
-
-    private static double[] Add(double[] s, double[] k, double f)
-    {
-        var r = new double[s.Length];
-        for (int i = 0; i < s.Length; i++) r[i] = s[i] + f * k[i];
-        return r;
-    }
 
     /// <summary>True if the last <paramref name="window"/> samples span less than <paramref name="tol"/>.</summary>
     private static bool IsWindowFlat(List<double> values, int window, double tol)
@@ -317,8 +316,8 @@ public class CascadeSimulator
             ? Math.Max(1, IndexAtOrAfter(r.Time, distTime))
             : r.Time.Length;
 
-        double[] tPre = r.Time[..cut];
-        double[] yPre = r.Temperature[..cut];
+        double[] tPre = cut < r.Time.Length ? r.Time[..cut] : r.Time;
+        double[] yPre = cut < r.Temperature.Length ? r.Temperature[..cut] : r.Temperature;
         var (rise, over, settle, sse) = PidSimulator.ComputeStepMetrics(tPre, yPre, sp);
         var (iae, ise, itae) = PidSimulator.ComputePerformanceIndices(tPre, yPre, sp);
 
@@ -331,7 +330,7 @@ public class CascadeSimulator
         double flowPeak = 0, flowSettled = 0;
         if (cut > 0)
         {
-            flowPeak = r.Flow[..cut].Max();
+            flowPeak = cut < r.Flow.Length ? r.Flow[..cut].Max() : r.Flow.Max();
             flowSettled = r.Flow[cut - 1];
         }
 
@@ -359,9 +358,10 @@ public class CascadeSimulator
 
     private static int IndexAtOrAfter(double[] time, double target)
     {
-        for (int i = 0; i < time.Length; i++)
-            if (time[i] >= target) return i;
-        return time.Length;
+        int idx = Array.BinarySearch(time, target);
+        if (idx >= 0) return idx;
+        int insert = ~idx;
+        return insert <= time.Length ? insert : time.Length;
     }
 
     private static float MaxDeviationAfter(double[] time, double[] y, double sp, double after)

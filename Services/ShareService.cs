@@ -1143,12 +1143,16 @@ public sealed class ShareServer
             var recommendation = await Task.Run(
                 () => TLIGDashboard.Services.ControlEngineering.PidRecommender.Recommend(metrics, stable), ct);
 
+            var (iae, ise, itae) = TLIGDashboard.Services.ControlEngineering.PidSimulator
+                .ComputePerformanceIndices(simResult.Time, simResult.Amplitude, input.Setpoint);
+
             // input.Language is the *student's* UI language — replying in this server's
             // language would hand them a review they may not read. The LLM now only explains
             // the recommended gains; it no longer picks numbers.
             var advisor = await new TLIGDashboard.Services.ControlEngineering.PidAdvisorService(input.Language)
                 .ReviewAsync(finalPid, metrics, input.Setpoint, input.History,
-                    recommendation?.gains, recommendation?.metrics, ct);
+                    recommendation?.gains, recommendation?.metrics, ct,
+                    stable, diagnosis, iae, ise, itae);
 
             var response = new JsonObject
             {

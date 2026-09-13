@@ -18,6 +18,8 @@ public sealed class ProcessErrorPair
     public required string Unit      { get; init; }
     public required double Live      { get; init; }
 
+    public string? Note { get; init; }
+
     /// <summary>Value the simulated curve ended the run at.</summary>
     public required double Simulated { get; init; }
 
@@ -142,6 +144,8 @@ public static class ProcessErrorService
                     Unit      = SecondaryUnit,
                     Live      = s.Value,
                     Simulated = fSim,
+                    Note      = IsTubeFlow(s.Key) ? null
+                        : $"Key live \"{s.Key}\" bukan titik ukur tube yang dimodelkan Gp2 — angkanya sebanding tapi bukan pasangan yang sama.",
                     // No Setpoint: the inner loop's is the outer PID's output, a simulated
                     // quantity that moves all run. Calling the gap to it a "control error"
                     // would just restate the model error under a wrong name.
@@ -297,6 +301,9 @@ public static class ProcessErrorService
         if (p.ControlError is { } ce)
             sb.Append($"\n  → error kontrol (setpoint {N(p.Setpoint!.Value)} {p.Unit} − live) = {Signed(ce)} {p.Unit}{PercentSuffix(p.ControlErrorPercent)}");
 
+        if (!string.IsNullOrEmpty(p.Note))
+            sb.Append($"\n  → CATATAN: {p.Note}");
+
         if (p.ScaleSuspect)
             sb.Append($"\n  → CATATAN: bedanya lebih dari 10x, jadi jangan sebut ini sebagai penyimpangan plant. " +
                       $"Dua sebab yang lebih mungkin: (a) satuan/skala \"{p.LiveKey}\" di VI tidak sama dengan {p.Unit} " +
@@ -325,6 +332,9 @@ public static class ProcessErrorService
     }
 
     private static double? Last(double[] values) => values.Length > 0 ? values[^1] : null;
+
+    private static bool IsTubeFlow(string key) =>
+        string.Equals(key, SecondaryKeys[0], StringComparison.OrdinalIgnoreCase);
 
     /// <summary>First candidate key present in the snapshot whose value parses as a number.</summary>
     private static (string Key, double Value)? FindLive(IReadOnlyList<HmiDatum> live, string[] candidates)

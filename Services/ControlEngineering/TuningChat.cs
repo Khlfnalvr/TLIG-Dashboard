@@ -86,7 +86,7 @@ public static class TuningChat
             sb.AppendLine($"**Tidak ada tuning yang memenuhi {targetStr}** di rentang pencarian.");
             sb.AppendLine();
             sb.AppendLine($"Paling mendekati: OUTER Kp = {g.OuterKp:0.###}, Ki = {g.OuterKi:0.###}, Kd = {g.OuterKd:0.###} → overshoot {m.Overshoot:0.0}%, settling {m.SettlingTime:0}s.");
-            sb.Append("Coba longgarkan targetnya — plant ini punya dead time ~52 s, jadi settling yang sangat kecil memang tak tercapai.");
+            sb.Append("Coba longgarkan targetnya — loop suhu plant ini lag-dominan (Gp1 τ≈176 s, tanpa dead time) dan loop flow punya dead time ~3,7 s, jadi settling yang sangat kecil memang tak tercapai.");
         }
         return sb.ToString();
     }
@@ -109,24 +109,81 @@ public static class TuningChat
     /// </summary>
     public static string? VerifyGainsNote(string reply, float setpoint)
     {
-        if (ParseGains(reply) is not (float kp, float ki, float kd)) return null;
+        if (ParseOuterGains(reply) is not (float kp, float ki, float kd)) return null;
+
+        var (ok, reason) = GainValidator.ValidateOuter(kp, ki, kd);
+        if (!ok)
+        {
+            var sbInvalid = new StringBuilder();
+            sbInvalid.AppendLine();
+            sbInvalid.AppendLine("---");
+            sbInvalid.Append($"⚠️ **Verifikasi simulasi:** gain OUTER Kp={kp:0.###}, Ki={ki:0.###}, Kd={kd:0.###} **tidak valid** — {reason} Gain tidak disimulasikan dan jangan dipakai.");
+            return sbInvalid.ToString();
+        }
+
         var m = CascadeRecommender.SimulateOuter(setpoint, kp, ki, kd);
 
         var sb = new StringBuilder();
         sb.AppendLine();
         sb.AppendLine("---");
         if (!m.Stable)
-            sb.Append($"⚠️ **Verifikasi simulasi:** gain Kp={kp:0.###}, Ki={ki:0.###}, Kd={kd:0.###} membuat suhu **tidak settle** (osilasi / terlalu lambat) pada plant ini — jangan dipakai.");
+            sb.Append($"⚠️ **Verifikasi simulasi:** gain OUTER Kp={kp:0.###}, Ki={ki:0.###}, Kd={kd:0.###} membuat suhu **tidak settle** (osilasi / terlalu lambat) pada plant ini — jangan dipakai.");
         else
-            sb.Append($"✅ **Verifikasi simulasi** (plant Gp1/Gp2, setpoint {setpoint:F0}°C, inner PI SIMC): Kp={kp:0.###}, Ki={ki:0.###}, Kd={kd:0.###} → overshoot **{m.Overshoot:0.0}%**, settling **{m.SettlingTime:0}s**, rise {m.RiseTime:0.0}s.");
+            sb.Append($"✅ **Verifikasi simulasi** (plant Gp1/Gp2, setpoint {setpoint:F0}°C, inner PI SIMC): OUTER Kp={kp:0.###}, Ki={ki:0.###}, Kd={kd:0.###} → overshoot **{m.Overshoot:0.0}%**, settling **{m.SettlingTime:0}s**, rise {m.RiseTime:0.0}s.");
+
+        if (ParseInnerGains(reply) is (float ikp, float iki))
+        {
+            var (iok, ireason) = GainValidator.ValidateInner(ikp, iki);
+            var (simcKp, simcKi) = CascadeRecommender.InnerPi;
+            if (!iok)
+                sb.Append($" Catatan: gain INNER Kp={ikp:0.###}, Ki={iki:0.###} **tidak valid** — {ireason}");
+            else if (Math.Abs(ikp - simcKp) > 1e-6 || Math.Abs(iki - simcKi) > 1e-6)
+                sb.Append(" Catatan: angka di atas memakai INNER PI SIMC; nilai INNER dari balasan tidak ikut disimulasikan — tekan RUN di page Cascade untuk hasil full 5 gain.");
+        }
         return sb.ToString();
     }
 
-    private static (float kp, float ki, float kd)? ParseGains(string text)
+    private static readonly string[] OuterLabels = ["outer", "luar", "primer", "primary", "suhu", "temperature", "temperatur"];
+    private static readonly string[] InnerLabels = ["inner", "dalam", "sekunder", "secondary", "flow", "aliran"];
+
+    private static (float kp, float ki, float kd)? ParseOuterGains(string text)
+    {
+        int outerIdx = LastLabelIndex(text, OuterLabels);
+        if (outerIdx >= 0)
+        {
+            int innerIdx = LastLabelIndex(text, InnerLabels);
+            string region = innerIdx > outerIdx ? text.Substring(outerIdx, innerIdx - outerIdx) : text.Substring(outerIdx);
+            if (ParseTriple(region) is { } t) return t;
+        }
+        return ParseTriple(text);
+    }
+
+    private static (float kp, float ki)? ParseInnerGains(string text)
+    {
+        int innerIdx = LastLabelIndex(text, InnerLabels);
+        if (innerIdx < 0) return null;
+        string region = text.Substring(innerIdx);
+        if (FindGain(region, "kp") is float kp && FindGain(region, "ki") is float ki)
+            return (kp, ki);
+        return null;
+    }
+
+    private static (float kp, float ki, float kd)? ParseTriple(string text)
     {
         if (FindGain(text, "kp") is float kp && FindGain(text, "ki") is float ki && FindGain(text, "kd") is float kd)
             return (kp, ki, kd);
         return null;
+    }
+
+    private static int LastLabelIndex(string text, string[] labels)
+    {
+        int best = -1;
+        foreach (var label in labels)
+        {
+            int idx = text.LastIndexOf(label, StringComparison.OrdinalIgnoreCase);
+            if (idx > best) best = idx;
+        }
+        return best;
     }
 
     private static float? FindGain(string text, string name)

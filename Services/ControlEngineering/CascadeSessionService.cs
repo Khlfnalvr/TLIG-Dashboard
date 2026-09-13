@@ -97,12 +97,16 @@ public sealed class CascadeSessionService
     {
         if (PendingRecommendation is not { } rec) return Task.FromResult<CascadeDesignResult?>(null);
 
+        var (outerOk, _) = GainValidator.ValidateOuter(rec.OuterKp, rec.OuterKi, rec.OuterKd);
+        var (innerOk, _) = GainValidator.ValidateInner(rec.InnerKp, rec.InnerKi);
+        ClearRecommendation();
+        if (!outerOk || !innerOk) return Task.FromResult<CascadeDesignResult?>(null);
+
         OuterKp = rec.OuterKp;
         OuterKi = rec.OuterKi;
         OuterKd = rec.OuterKd;
         InnerKp = rec.InnerKp;
         InnerKi = rec.InnerKi;
-        ClearRecommendation();
         return RunAsync(ct);
     }
 
@@ -124,16 +128,15 @@ public sealed class CascadeSessionService
         Disturbance = (float)Disturbance,
     };
 
-    // NumberBox yields NaN when cleared — normalise so every view reads back what ran.
     private void NormalizeInputs()
     {
-        if (double.IsNaN(Setpoint) || Setpoint <= 0) Setpoint = 60;
-        if (double.IsNaN(OuterKp)) OuterKp = 0;
-        if (double.IsNaN(OuterKi)) OuterKi = 0;
-        if (double.IsNaN(OuterKd)) OuterKd = 0;
-        if (double.IsNaN(InnerKp)) InnerKp = 0;
-        if (double.IsNaN(InnerKi)) InnerKi = 0;
-        if (double.IsNaN(Disturbance)) Disturbance = 0;
+        if (!double.IsFinite(Setpoint) || Setpoint <= 0) Setpoint = 60;
+        OuterKp = GainValidator.Sanitize(OuterKp);
+        OuterKi = GainValidator.Sanitize(OuterKi);
+        OuterKd = GainValidator.Sanitize(OuterKd);
+        InnerKp = GainValidator.Sanitize(InnerKp);
+        InnerKi = GainValidator.Sanitize(InnerKi);
+        if (!double.IsFinite(Disturbance)) Disturbance = 0;
     }
 
     private void SetRunning(bool running)

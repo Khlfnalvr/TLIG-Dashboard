@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
@@ -44,6 +46,9 @@ public sealed class AiService
 
     private const string AnthropicVersion = "2023-06-01";
 
+    private const int MaxSendAttempts = 3;
+    private const int MaxSentHistory = 40;
+
     // ── History ───────────────────────────────────────────────────────────────
     public IReadOnlyList<ChatMessage> History => _history;
     private readonly List<ChatMessage> _history = new();
@@ -53,6 +58,13 @@ public sealed class AiService
     /// PID Designer's advisor exchange) fold context into a shared AiService instance
     /// so a later StreamChatAsync call carries it forward as prior conversation.
     public void AddHistoryEntry(string role, string content) => _history.Add(new ChatMessage(role, content));
+
+    public void AmendLastAssistantEntry(string suffix)
+    {
+        if (string.IsNullOrEmpty(suffix)) return;
+        if (_history.Count > 0 && _history[^1].Role == "assistant")
+            _history[^1] = _history[^1] with { Content = _history[^1].Content + suffix };
+    }
 
     // ── HTTP ──────────────────────────────────────────────────────────────────
     // One connection pool shared by every AiService. These are not all long-lived —
@@ -94,9 +106,35 @@ public sealed class AiService
         if (string.IsNullOrWhiteSpace(Model))
             throw new InvalidOperationException("Nama model belum diset.");
 
+        int historyMark = _history.Count;
         _history.Add(new ChatMessage("user", userMessage));
 
-        var body    = BuildBody();
+        try
+        {
+            var body = BuildBody();
+
+            // ── Send with retry, read headers first ──────────────────────────
+            using var response = await SendWithRetryAsync(body, ct).ConfigureAwait(false);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var errJson = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+                throw new HttpRequestException(
+                    $"HTTP {(int)response.StatusCode} {response.ReasonPhrase}\n{ParseError(errJson)}");
+            }
+
+            return await ReadStreamAsync(response, userMessage, onToken, ct).ConfigureAwait(false);
+        }
+        catch
+        {
+            if (_history.Count > historyMark)
+                _history.RemoveRange(historyMark, _history.Count - historyMark);
+            throw;
+        }
+    }
+
+    private HttpRequestMessage CreateRequest(string body)
+    {
         var request = new HttpRequestMessage(HttpMethod.Post, Endpoint())
         {
             Content = new StringContent(body, Encoding.UTF8, "application/json")
@@ -119,17 +157,51 @@ public sealed class AiService
             if (!string.IsNullOrWhiteSpace(ProviderId))
                 request.Headers.TryAddWithoutValidation("X-Ai-Provider", ProviderId);
         }
+        return request;
+    }
 
-        // ── Send, read headers first ─────────────────────────────────────────
-        var response = await _http.SendAsync(
-            request, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
-
-        if (!response.IsSuccessStatusCode)
+    private async Task<HttpResponseMessage> SendWithRetryAsync(string body, CancellationToken ct)
+    {
+        for (int attempt = 0; ; attempt++)
         {
-            var errJson = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
-            throw new HttpRequestException(
-                $"HTTP {(int)response.StatusCode} {response.ReasonPhrase}\n{ParseError(errJson)}");
+            using var request = CreateRequest(body);
+            HttpResponseMessage? response = null;
+            bool sent = false;
+            try
+            {
+                response = await _http.SendAsync(
+                    request, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
+                sent = true;
+            }
+            catch (HttpRequestException ex) when (attempt + 1 < MaxSendAttempts)
+            {
+                Debug.WriteLine($"[AiService] send attempt {attempt + 1} failed ({ex.Message}), retrying");
+            }
+
+            if (!sent)
+            {
+                await Task.Delay(RetryDelay(attempt), ct).ConfigureAwait(false);
+                continue;
+            }
+
+            if (!IsTransientFailure(response!.StatusCode) || attempt + 1 >= MaxSendAttempts)
+                return response;
+
+            Debug.WriteLine($"[AiService] HTTP {(int)response.StatusCode}, retrying (attempt {attempt + 2})");
+            response.Dispose();
+            await Task.Delay(RetryDelay(attempt), ct).ConfigureAwait(false);
         }
+    }
+
+    private static bool IsTransientFailure(HttpStatusCode status) =>
+        (int)status == 429 || ((int)status >= 500 && (int)status <= 599);
+
+    private static TimeSpan RetryDelay(int attempt) =>
+        TimeSpan.FromSeconds(1 << Math.Min(attempt, 3));
+
+    private async Task<string> ReadStreamAsync(
+        HttpResponseMessage response, string userMessage, Action<string> onToken, CancellationToken ct)
+    {
 
         // ── Read SSE stream line-by-line ─────────────────────────────────────
         await using var stream = await response.Content
@@ -183,12 +255,17 @@ public sealed class AiService
     // the Release publish runs with reflection-based JSON serialization disabled
     // (trim-friendly default), which throws NotSupportedException for anonymous types.
 
+    private IEnumerable<ChatMessage> RecentHistory() =>
+        _history.Count <= MaxSentHistory
+            ? _history
+            : _history.GetRange(_history.Count - MaxSentHistory, MaxSentHistory);
+
     private string BuildOpenAiBody()
     {
         var msgs = new JsonArray();
         if (!string.IsNullOrWhiteSpace(SystemPrompt))
             msgs.Add((JsonNode)new JsonObject { ["role"] = "system", ["content"] = SystemPrompt });
-        foreach (var m in _history)
+        foreach (var m in RecentHistory())
             msgs.Add((JsonNode)new JsonObject { ["role"] = m.Role, ["content"] = m.Content });
 
         return new JsonObject
@@ -205,7 +282,7 @@ public sealed class AiService
     {
         // Anthropic carries the system prompt as a top-level field, not a message.
         var msgs = new JsonArray();
-        foreach (var m in _history)
+        foreach (var m in RecentHistory())
             msgs.Add((JsonNode)new JsonObject { ["role"] = m.Role, ["content"] = m.Content });
 
         return new JsonObject
@@ -224,7 +301,7 @@ public sealed class AiService
     private string BuildGeminiBody()
     {
         var contents = new JsonArray();
-        foreach (var m in _history)
+        foreach (var m in RecentHistory())
             contents.Add(new JsonObject
             {
                 ["role"]  = m.Role == "assistant" ? "model" : "user",
@@ -262,7 +339,10 @@ public sealed class AiService
             if (delta.TryGetProperty("content", out var c))
                 return c.GetString();
         }
-        catch { }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"[AiService] OpenAI token parse failed: {ex.Message}");
+        }
         return null;
     }
 
@@ -278,7 +358,10 @@ public sealed class AiService
                 delta.TryGetProperty("text", out var text))
                 return text.GetString();
         }
-        catch { }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"[AiService] Anthropic token parse failed: {ex.Message}");
+        }
         return null;
     }
 
@@ -293,7 +376,10 @@ public sealed class AiService
             if (parts.GetArrayLength() > 0 && parts[0].TryGetProperty("text", out var t))
                 return t.GetString();
         }
-        catch { }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"[AiService] Gemini token parse failed: {ex.Message}");
+        }
         return null;
     }
 
@@ -306,7 +392,10 @@ public sealed class AiService
                 e.TryGetProperty("message", out var m))
                 return m.GetString() ?? json;
         }
-        catch { }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"[AiService] error-body parse failed: {ex.Message}");
+        }
         return json.Length > 400 ? json[..400] + "…" : json;
     }
 }
