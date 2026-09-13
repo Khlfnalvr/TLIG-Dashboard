@@ -66,6 +66,10 @@ public sealed class AiService
             _history[^1] = _history[^1] with { Content = _history[^1].Content + suffix };
     }
 
+    public AiTokenUsage? LastUsage { get; private set; }
+
+    public event Action<AiTokenUsage>? UsageChanged;
+
     // ── HTTP ──────────────────────────────────────────────────────────────────
     // One connection pool shared by every AiService. These are not all long-lived —
     // the PID advisor builds one per RUN — and an HttpClient per instance leaks its
@@ -107,6 +111,8 @@ public sealed class AiService
             throw new InvalidOperationException("Nama model belum diset.");
 
         int historyMark = _history.Count;
+        int requestChars = (SystemPrompt?.Length ?? 0) + userMessage.Length;
+        foreach (var m in _history) requestChars += m.Content?.Length ?? 0;
         _history.Add(new ChatMessage("user", userMessage));
 
         try
@@ -123,7 +129,16 @@ public sealed class AiService
                     $"HTTP {(int)response.StatusCode} {response.ReasonPhrase}\n{ParseError(errJson)}");
             }
 
-            return await ReadStreamAsync(response, userMessage, onToken, ct).ConfigureAwait(false);
+            var (reply, usedPrompt, usedCompletion) =
+                await ReadStreamAsync(response, userMessage, onToken, ct).ConfigureAwait(false);
+
+            AiTokenUsage usage = usedPrompt.HasValue || usedCompletion.HasValue
+                ? new AiTokenUsage(usedPrompt ?? 0, usedCompletion ?? 0, IsEstimated: false)
+                : new AiTokenUsage(requestChars / 4, reply.Length / 4, IsEstimated: true);
+            LastUsage = usage;
+            UsageChanged?.Invoke(usage);
+
+            return reply;
         }
         catch
         {
@@ -199,16 +214,16 @@ public sealed class AiService
     private static TimeSpan RetryDelay(int attempt) =>
         TimeSpan.FromSeconds(1 << Math.Min(attempt, 3));
 
-    private async Task<string> ReadStreamAsync(
+    private async Task<(string Reply, int? UsedPrompt, int? UsedCompletion)> ReadStreamAsync(
         HttpResponseMessage response, string userMessage, Action<string> onToken, CancellationToken ct)
     {
-
         // ── Read SSE stream line-by-line ─────────────────────────────────────
         await using var stream = await response.Content
             .ReadAsStreamAsync(ct).ConfigureAwait(false);
         using var reader = new StreamReader(stream);
 
         var full = new StringBuilder();
+        int? usedPrompt = null, usedCompletion = null;
 
         string? line;
         while ((line = await reader.ReadLineAsync(ct).ConfigureAwait(false)) != null
@@ -219,6 +234,8 @@ public sealed class AiService
 
             var data = line[6..].Trim();
             if (data == "[DONE]") break;           // OpenAI sentinel (Anthropic/Gemini end on stream close)
+
+            CaptureUsage(data, ref usedPrompt, ref usedCompletion);
 
             var token = ExtractToken(data);
             if (string.IsNullOrEmpty(token)) continue;
@@ -239,7 +256,46 @@ public sealed class AiService
                 metadata: new() { ["model"] = Model, ["replyChars"] = reply.Length.ToString() });
         }
 
-        return reply;
+        return (reply, usedPrompt, usedCompletion);
+    }
+
+    private void CaptureUsage(string data, ref int? prompt, ref int? completion)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(data);
+            var root = doc.RootElement;
+            if (IsAnthropic)
+            {
+                string? type = root.TryGetProperty("type", out var t) ? t.GetString() : null;
+                if (type == "message_start" &&
+                    root.TryGetProperty("message", out var msg) &&
+                    msg.TryGetProperty("usage", out var u) &&
+                    u.TryGetProperty("input_tokens", out var it))
+                    prompt = it.GetInt32();
+                else if (type == "message_delta" &&
+                    root.TryGetProperty("usage", out var du) &&
+                    du.TryGetProperty("output_tokens", out var ot))
+                    completion = ot.GetInt32();
+            }
+            else if (IsGemini)
+            {
+                if (root.TryGetProperty("usageMetadata", out var um))
+                {
+                    if (um.TryGetProperty("promptTokenCount", out var pt)) prompt = pt.GetInt32();
+                    if (um.TryGetProperty("candidatesTokenCount", out var cc)) completion = cc.GetInt32();
+                }
+            }
+            else if (root.TryGetProperty("usage", out var ou))
+            {
+                if (ou.TryGetProperty("prompt_tokens", out var pt)) prompt = pt.GetInt32();
+                if (ou.TryGetProperty("completion_tokens", out var cc)) completion = cc.GetInt32();
+            }
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"[AiService] usage parse failed: {ex.Message}");
+        }
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
@@ -274,7 +330,8 @@ public sealed class AiService
             ["messages"]    = msgs,
             ["stream"]      = true,
             ["max_tokens"]  = 4096,
-            ["temperature"] = 0.7
+            ["temperature"] = 0.7,
+            ["stream_options"] = new JsonObject { ["include_usage"] = true }
         }.ToJsonString();
     }
 
@@ -401,3 +458,8 @@ public sealed class AiService
 }
 
 public record ChatMessage(string Role, string Content);
+
+public sealed record AiTokenUsage(int PromptTokens, int CompletionTokens, bool IsEstimated)
+{
+    public int Total => PromptTokens + CompletionTokens;
+}

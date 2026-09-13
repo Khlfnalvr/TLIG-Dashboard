@@ -133,7 +133,7 @@ public sealed partial class CascadeResponseChart : UserControl
                             animation: false, parsing: false, normalized: true,
                             interaction: { mode: 'nearest', axis: 'x', intersect: false },
                             plugins: {
-                                legend: { display: true, labels: { boxWidth: 18, font: { size: 10 } } },
+                                legend: { display: true, position: 'bottom', labels: { boxWidth: 18, font: { size: 10 } } },
                                 zoom: zoomCfg
                             },
                             scales: {

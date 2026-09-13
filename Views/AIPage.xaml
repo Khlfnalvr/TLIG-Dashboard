@@ -8,6 +8,7 @@
     <Grid x:Name="RootGrid" SizeChanged="RootGrid_SizeChanged">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>  <!-- provider / model picker -->
+            <RowDefinition Height="Auto"/>  <!-- chat session -->
             <RowDefinition Height="*"/>     <!-- chat history -->
             <RowDefinition Height="Auto"/>  <!-- quick suggestions -->
             <RowDefinition Height="Auto"/>  <!-- input bar -->
@@ -22,9 +23,18 @@
             <controls:AiModelPicker x:Name="ModelPicker"/>
         </Border>
 
+        <!-- ── Chat session (shared control) ────────────────────────── -->
+        <Border Grid.Row="1"
+                BorderThickness="0,0,0,1"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                Background="{ThemeResource LayerFillColorDefaultBrush}"
+                Padding="20,6,20,6">
+            <controls:ChatSessionBar x:Name="SessionBar"/>
+        </Border>
+
         <!-- ── Chat history ─────────────────────────────────────────── -->
         <ScrollViewer x:Name="ChatScroll"
-                      Grid.Row="1"
+                      Grid.Row="2"
                       VerticalScrollBarVisibility="Auto"
                       HorizontalScrollBarVisibility="Disabled"
                       Padding="20,14,20,14">
@@ -34,7 +44,7 @@
         </ScrollViewer>
 
         <!-- ── Quick Suggestions (above input) ───────────────────────── -->
-        <Border Grid.Row="2"
+        <Border Grid.Row="3"
                 BorderThickness="0,1,0,0"
                 BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                 Background="{ThemeResource LayerFillColorDefaultBrush}"
@@ -85,7 +95,7 @@
         </Border>
 
         <!-- ── Input bar ─────────────────────────────────────────────── -->
-        <Border Grid.Row="3"
+        <Border Grid.Row="4"
                 BorderThickness="0,1,0,0"
                 BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                 Background="{ThemeResource LayerFillColorDefaultBrush}"

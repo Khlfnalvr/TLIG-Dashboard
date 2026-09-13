@@ -107,6 +107,9 @@ public sealed partial class DashboardPage : Page
         ApplyLearningPanelContent();
         App.Session.Changed += OnSessionChanged;
 
+        ChatSessionService.Instance.ContentChanged += OnChatSessionContentChanged;
+        _ = ChatSessionService.Instance.EnsureLoadedAsync();
+
         // Dua jalur kontrol ke LabVIEW aktif di kedua flavor (Server & Client):
         //   1) Baris CSV langsung (Kp,Ki,Kd,Setpoint,Pump,Run) via SendControlLine() ->
         //      HmiDataService (port 6001), untuk LabVIEW yang connect masuk ke dashboard.
@@ -121,6 +124,13 @@ public sealed partial class DashboardPage : Page
 
     private void OnSessionChanged()
         => DispatcherQueue.TryEnqueue(ApplyLearningPanelContent);
+
+    private void OnChatSessionContentChanged()
+        => DispatcherQueue.TryEnqueue(() =>
+        {
+            ClearChatPanel();
+            SyncBubblesWithHistory();
+        });
 
     private void ApplyLearningPanelContent()
     {
@@ -418,6 +428,7 @@ public sealed partial class DashboardPage : Page
             $"Diagnosis: {PidDiagnosisCalculator.Describe(result.Diagnosis, m.PrimaryStepMetrics())}");
         App.Ai.AddHistoryEntry("assistant", result.AdvisorExplanation);
         _renderedCount = App.Ai.History.Count;
+        ChatSessionService.Instance.SaveActive();
     }
 
     // "Ya (Terapkan)" — fills Kp/Ki/Kd with the Advisor's recommendation and
@@ -1087,6 +1098,7 @@ public sealed partial class DashboardPage : Page
             App.Ai.AddHistoryEntry("user", text);
             App.Ai.AddHistoryEntry("assistant", routed);
             _renderedCount        = App.Ai.History.Count;
+            ChatSessionService.Instance.SaveActive();
             ChatSendBtn.IsEnabled = true;
             ScrollChat();
             return;
@@ -1136,6 +1148,7 @@ public sealed partial class DashboardPage : Page
 
         // Keep rendered count in sync with history
         _renderedCount = App.Ai.History.Count;
+        ChatSessionService.Instance.SaveActive();
     }
 
     // Returns the bubble Border and the streaming TextBlock so callers can replace content after streaming.
