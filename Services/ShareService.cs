@@ -548,6 +548,7 @@ public sealed class ShareServer
     private static async Task RelayAnthropicAsOpenAiAsync(Stream upstream, NetworkStream stream, CancellationToken ct)
     {
         using var reader = new StreamReader(upstream);
+        int promptTokens = 0, completionTokens = 0;
         string? line;
         while ((line = await reader.ReadLineAsync(ct)) != null)
         {
@@ -559,7 +560,11 @@ public sealed class ShareServer
             try
             {
                 var node = JsonNode.Parse(data);
-                if ((string?)node?["type"] == "content_block_delta")
+                if ((string?)node?["type"] == "message_start")
+                    promptTokens = (int?)node?["message"]?["usage"]?["input_tokens"] ?? promptTokens;
+                else if ((string?)node?["type"] == "message_delta")
+                    completionTokens = (int?)node?["usage"]?["output_tokens"] ?? completionTokens;
+                else if ((string?)node?["type"] == "content_block_delta")
                     text = (string?)node?["delta"]?["text"];
             }
             catch { }
@@ -572,6 +577,7 @@ public sealed class ShareServer
 
             await WriteSseChunkAsync(stream, $"data: {chunk}\n\n", ct);
         }
+        await WriteUsageChunkAsync(stream, promptTokens, completionTokens, ct);
         await WriteSseChunkAsync(stream, "data: [DONE]\n\n", ct);
     }
 
@@ -583,6 +589,7 @@ public sealed class ShareServer
     private static async Task RelayGeminiAsOpenAiAsync(Stream upstream, NetworkStream stream, CancellationToken ct)
     {
         using var reader = new StreamReader(upstream);
+        int promptTokens = 0, completionTokens = 0;
         string? line;
         while ((line = await reader.ReadLineAsync(ct)) != null)
         {
@@ -595,6 +602,8 @@ public sealed class ShareServer
             {
                 var node = JsonNode.Parse(data);
                 text = (string?)node?["candidates"]?[0]?["content"]?["parts"]?[0]?["text"];
+                promptTokens = (int?)node?["usageMetadata"]?["promptTokenCount"] ?? promptTokens;
+                completionTokens = (int?)node?["usageMetadata"]?["candidatesTokenCount"] ?? completionTokens;
             }
             catch { }
 
@@ -610,7 +619,24 @@ public sealed class ShareServer
 
             await WriteSseChunkAsync(stream, $"data: {chunk}\n\n", ct);
         }
+        await WriteUsageChunkAsync(stream, promptTokens, completionTokens, ct);
         await WriteSseChunkAsync(stream, "data: [DONE]\n\n", ct);
+    }
+
+    private static async Task WriteUsageChunkAsync(NetworkStream stream, int promptTokens, int completionTokens, CancellationToken ct)
+    {
+        if (promptTokens <= 0 && completionTokens <= 0) return;
+        var chunk = new JsonObject
+        {
+            ["choices"] = new JsonArray(),
+            ["usage"] = new JsonObject
+            {
+                ["prompt_tokens"] = promptTokens,
+                ["completion_tokens"] = completionTokens,
+                ["total_tokens"] = promptTokens + completionTokens,
+            }
+        }.ToJsonString();
+        await WriteSseChunkAsync(stream, $"data: {chunk}\n\n", ct);
     }
 
     private static async Task WriteSseChunkAsync(NetworkStream stream, string text, CancellationToken ct)
@@ -1143,12 +1169,16 @@ public sealed class ShareServer
             var recommendation = await Task.Run(
                 () => TLIGDashboard.Services.ControlEngineering.PidRecommender.Recommend(metrics, stable), ct);
 
+            var (iae, ise, itae) = TLIGDashboard.Services.ControlEngineering.PidSimulator
+                .ComputePerformanceIndices(simResult.Time, simResult.Amplitude, input.Setpoint);
+
             // input.Language is the *student's* UI language — replying in this server's
             // language would hand them a review they may not read. The LLM now only explains
             // the recommended gains; it no longer picks numbers.
             var advisor = await new TLIGDashboard.Services.ControlEngineering.PidAdvisorService(input.Language)
                 .ReviewAsync(finalPid, metrics, input.Setpoint, input.History,
-                    recommendation?.gains, recommendation?.metrics, ct);
+                    recommendation?.gains, recommendation?.metrics, ct,
+                    stable, diagnosis, iae, ise, itae);
 
             var response = new JsonObject
             {

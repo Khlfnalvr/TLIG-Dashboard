@@ -107,6 +107,9 @@ public sealed partial class DashboardPage : Page
         ApplyLearningPanelContent();
         App.Session.Changed += OnSessionChanged;
 
+        ChatSessionService.Instance.ContentChanged += OnChatSessionContentChanged;
+        _ = ChatSessionService.Instance.EnsureLoadedAsync();
+
         // Kontrol ke LabVIEW hanya lewat SATU jalur yang terbukti hidup, di kedua flavor:
         //   PushPidInputs()/RUN -> App.PythonBridge -> pid_bridge.json -> PIDtest.py
         //   -> TCP 6000 -> LabVIEW, sebagai 6 double / 48 byte: SP, KC, KI, KD, PUMP, CMD.
@@ -125,6 +128,13 @@ public sealed partial class DashboardPage : Page
 
     private void OnSessionChanged()
         => DispatcherQueue.TryEnqueue(ApplyLearningPanelContent);
+
+    private void OnChatSessionContentChanged()
+        => DispatcherQueue.TryEnqueue(() =>
+        {
+            ClearChatPanel();
+            SyncBubblesWithHistory();
+        });
 
     private void ApplyLearningPanelContent()
     {
@@ -376,10 +386,13 @@ public sealed partial class DashboardPage : Page
     {
         var sim = result.Simulation;
         // Cascade runs adaptively (~thousands of samples); thin for the chart, metrics use the
-        // full arrays. The panel plots the temperature response vs the setpoint, same as the
-        // single-loop chart did — the full two-loop view lives on the Cascade page.
+        // full arrays. Same two-loop view as the Cascade page: temperature + flow on two
+        // y-axes, plus the single-loop baseline and disturbance marker.
         int stride = System.Math.Max(1, sim.Time.Length / 1500);
-        RespChart.Update(Sample(sim.Time, stride), Sample(sim.Temperature, stride), result.Input.Setpoint);
+        RespChart.Update(
+            Sample(sim.Time, stride), Sample(sim.Temperature, stride), Sample(sim.SingleLoopTemperature, stride),
+            Sample(sim.Flow, stride), Sample(sim.FlowSetpoint, stride),
+            result.Input.Setpoint, sim.DisturbanceTime);
 
         // result.Metrics is read off the exact RK4 curve above — always consistent with what's
         // plotted (the temperature step metrics of the outer loop).
@@ -462,6 +475,7 @@ public sealed partial class DashboardPage : Page
             $"Diagnosis: {PidDiagnosisCalculator.Describe(result.Diagnosis, m.PrimaryStepMetrics())}");
         App.Ai.AddHistoryEntry("assistant", result.AdvisorExplanation);
         _renderedCount = App.Ai.History.Count;
+        ChatSessionService.Instance.SaveActive();
     }
 
     // "Ya (Terapkan)" — fills Kp/Ki/Kd with the Advisor's recommendation and
@@ -1131,6 +1145,7 @@ public sealed partial class DashboardPage : Page
             App.Ai.AddHistoryEntry("user", text);
             App.Ai.AddHistoryEntry("assistant", routed);
             _renderedCount        = App.Ai.History.Count;
+            ChatSessionService.Instance.SaveActive();
             ChatSendBtn.IsEnabled = true;
             ScrollChat();
             return;
@@ -1169,6 +1184,7 @@ public sealed partial class DashboardPage : Page
             // Safety net: simulate any Kp/Ki/Kd the LLM proposed and append the real result.
             var note = Services.ControlEngineering.TuningChat.VerifyGainsNote(aiBubble.Text, (float)App.CascadeSession.Setpoint);
             string finalText = note is null ? aiBubble.Text : aiBubble.Text + note;
+            if (note is not null) App.Ai.AmendLastAssistantEntry(note);
             aiBubbleBorder.Child = MarkdownRenderer.Render(finalText, 12, ActualTheme == ElementTheme.Dark);
         }
 
@@ -1179,6 +1195,7 @@ public sealed partial class DashboardPage : Page
 
         // Keep rendered count in sync with history
         _renderedCount = App.Ai.History.Count;
+        ChatSessionService.Instance.SaveActive();
     }
 
     // Returns the bubble Border and the streaming TextBlock so callers can replace content after streaming.

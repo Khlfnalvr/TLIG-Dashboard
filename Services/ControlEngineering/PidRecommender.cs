@@ -13,17 +13,19 @@ namespace TLIGDashboard.Services.ControlEngineering;
 /// whose numbers were never simulated before being shown (a student who applied them saw
 /// overshoot go <i>up</i>, from 72.7% to 76.6%).
 ///
-/// <para>The plant is linear, so overshoot %, settling time and steady-state error % are all
-/// independent of the setpoint (a larger step just scales the whole response). The feasible set
-/// and the canonical pick are therefore identical for every setpoint, so the search runs once
-/// and is cached.</para>
+    /// <para>The plant is linear within the valve range, so overshoot %, settling time and
+    /// steady-state error % are all independent of the setpoint for tunings that don't
+    /// saturate (a larger step just scales the whole response). The feasible set
+    /// and the canonical pick are therefore identical for every setpoint, so the search runs once
+    /// and is cached.</para>
 /// </summary>
 public static class PidRecommender
 {
     // A grid of tidy values — clean numbers read better on the recommendation card, and a
     // fixed grid keeps the pick reproducible. The ranges bracket the useful region for this
-    // plant and stop well short of the gains that merely run to the grid edge in a simulator
-    // with no actuator limit.
+    // plant and stop well short of the gains that merely run to the grid edge; the
+    // simulator saturates the valve at 0–100% with anti-windup (see PidSimulator), so
+    // edge-riding tunings pay for their saturation in the metrics.
     private static readonly double[] KpGrid = { 0.2, 0.3, 0.5, 0.8, 1, 1.5, 2, 3, 4, 5, 7, 10 };
     private static readonly double[] KiGrid = { 0.01, 0.02, 0.05, 0.1, 0.2, 0.4, 0.8, 1.5 };
     private static readonly double[] KdGrid = { 0, 0.1, 0.25, 0.5, 1, 2 };

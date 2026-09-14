@@ -137,6 +137,7 @@ public sealed partial class AiModelPicker : UserControl
             AppSettingsService.Save(s);
         }
         AiConfigService.ApplyActive(App.Ai);
+        CtxRing.Refresh();
         SelectionChanged?.Invoke();
     }
 

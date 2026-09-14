@@ -38,7 +38,7 @@ public sealed class CascadeAdvisorResult
 /// </summary>
 public class CascadeAdvisorService
 {
-    private readonly Services.AiService _aiService;
+    private readonly string _requestedLanguage;
 
     /// <param name="language">
     /// "id" / "en"; empty falls back to this process's own setting. The cascade designer runs
@@ -46,15 +46,11 @@ public class CascadeAdvisorService
     /// </param>
     public CascadeAdvisorService(string language = "")
     {
-        _aiService = new Services.AiService();
-        Services.AiConfigService.ApplyActive(_aiService);
+        _requestedLanguage = language;
+    }
 
-        // Follow the app's language rather than hard-coding English (the old prompt always came
-        // back in English regardless of the setting): the review sits next to localized UI text.
-        string lang = string.IsNullOrWhiteSpace(language)
-            ? Services.LocalizationManager.Instance.CurrentLanguage
-            : language;
-
+    private static string BuildSystemPrompt(string lang)
+    {
         // The plants are fixed and known, but the old prompt never named them, so the model fell
         // back on generic PID intuition that misfires on strongly lag/dead-time-dominant plants.
         // Give it both identified transfer functions, built from the very constants the simulator
@@ -65,24 +61,18 @@ public class CascadeAdvisorService
             "The cascade controls a heat exchanger with two identified First-Order-Plus-Dead-Time " +
             "plants (from a lab open-loop step test). OUTER loop — temperature, whose input is flow: " +
             gp1 + $" (time constant ~{CascadeSimulator.Tau1:F0} s, dead time ~{CascadeSimulator.Theta1:F0} s) — " +
-            "slow and strongly lag/dead-time-dominant, so derivative action on temperature helps only " +
-            "a little and overshoot is driven mainly by Kp/Ki. INNER loop — flow, whose input is the " +
-            "valve: " + gp2 + $" (dead-time-dominated, theta/tau ~{CascadeSimulator.Theta2 / CascadeSimulator.Tau2:F1}), " +
-            "so the inner PI must stay gentle. The outer PID's output is the inner PI's setpoint. " +
+            "slow and lag-dominant with no dead time of its own, so derivative action on temperature " +
+            "buys nothing and only stretches settling; overshoot is driven by Kp/Ki. INNER loop — flow, " +
+            "whose input is the valve: " + gp2 + $" (lag-dominated, theta/tau ~{CascadeSimulator.Theta2 / CascadeSimulator.Tau2:F1}), " +
+            "so the inner PI can be reasonably tight. The outer PID's output is the inner PI's setpoint " +
+            $"(saturated at {CascadeSimulator.FlowSpMin:F0}–{CascadeSimulator.FlowSpMax:F0} L/min) and the valve at " +
+            $"{CascadeSimulator.ValveMin:F0}–{CascadeSimulator.ValveMax:F0}%, both with conditional-integration anti-windup. " +
             "Cascade's golden rule: the inner loop must be several times faster than the outer and is " +
             "tuned first; the inner loop's speed is what lets cascade reject a flow disturbance long " +
             "before it reaches the temperature. Reason from these specific plants rather than from " +
             "generic tuning rules of thumb, which are unreliable here. ";
 
-        bool indonesian = lang == "id";
-        string languageRule = indonesian
-            ? "Write your review in Indonesian (Bahasa Indonesia), using standard control " +
-              "engineering terminology. Keep the established English terms (overshoot, rise time, " +
-              "settling time, steady-state error, setpoint, gain, cascade, inner/outer loop) rather " +
-              "than translating them, as that is how they appear in the course material and UI."
-            : "Write your review in English.";
-
-        _aiService.SystemPrompt =
+        return
             "You are a Senior Professor of Control Systems Engineering reviewing a student's CASCADE " +
             "tuning of a heat exchanger. The OUTER (primary) loop controls TEMPERATURE with a PID; its " +
             "output is the setpoint of the INNER (secondary) loop, which controls FLOW with a PI and " +
@@ -100,7 +90,7 @@ public class CascadeAdvisorService
             "NOT propose gains of your own — the recommended gains are what the student will be offered, " +
             "and any numbers you invent would contradict them. When earlier attempts are shown, take " +
             "them into account and note what did or did not help. " +
-            languageRule + " " +
+            AdvisorCore.LanguageRule(lang, "cascade, inner/outer loop") + " " +
             "Reply with the review prose only — no JSON, no code blocks, no gain values on their own line.";
     }
 
@@ -115,7 +105,7 @@ public class CascadeAdvisorService
         CascadeInput gains, CascadeMetrics metrics,
         IReadOnlyList<CascadeAttempt>? history = null,
         CascadeRecommendation? recommended = null, CascadeMetrics? recommendedMetrics = null,
-        CancellationToken ct = default)
+        CancellationToken ct = default, string diagnosis = "")
     {
         string task = recommended is not null
             ? "A better tuning has already been found for these plants by simulating candidate gains " +
@@ -140,6 +130,7 @@ public class CascadeAdvisorService
             $"Temperature response: Overshoot = {metrics.Overshoot:F1}%, Rise Time = {metrics.RiseTime:F2}s, " +
             $"Settling Time = {metrics.SettlingTime:F1}s, Steady-State Error = {metrics.SteadyStateError:F3}" +
             (metrics.Stable ? "" : " (the temperature never settled at the setpoint — the loop is oscillating or far too slow)") + ".\n" +
+            (string.IsNullOrEmpty(diagnosis) ? "" : $"Diagnosis: {diagnosis}.\n") +
             $"Error performance indices over the step (integrals of the tracking error, lower is better): " +
             $"IAE = {metrics.IAE:F0}, ISE = {metrics.ISE:F0}, ITAE = {metrics.ITAE:F0}.\n" +
             (metrics.DisturbanceImprovement >= 1f
@@ -152,7 +143,8 @@ public class CascadeAdvisorService
         string raw;
         try
         {
-            raw = await _aiService.StreamChatAsync(prompt, _ => { }, ct);
+            string lang = AdvisorCore.ResolveLanguage(_requestedLanguage);
+            raw = await AdvisorCore.GetReviewAsync(BuildSystemPrompt(lang), prompt, ct);
         }
         catch (Exception ex)
         {

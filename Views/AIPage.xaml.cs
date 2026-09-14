@@ -57,13 +57,23 @@ public sealed partial class AIPage : Page
     {
         ApplyLocalization();
         _ = ModelPicker.ReloadAsync();
+        _ = ChatSessionService.Instance.EnsureLoadedAsync();
         if (!_initialized)
         {
             _initialized = true;
             Lang.PropertyChanged += (_, _) => DispatcherQueue.TryEnqueue(ApplyLocalization);
             ActualThemeChanged += OnActualThemeChanged;
+            ChatSessionService.Instance.ContentChanged += OnChatSessionContentChanged;
         }
     }
+
+    private void OnChatSessionContentChanged()
+        => DispatcherQueue.TryEnqueue(() =>
+        {
+            ChatPanel.Children.Clear();
+            _renderedCount = 0;
+            SyncBubblesWithHistory();
+        });
 
     private void OnActualThemeChanged(FrameworkElement sender, object args)
     {
@@ -194,6 +204,7 @@ public sealed partial class AIPage : Page
             App.Ai.AddHistoryEntry("user", text);
             App.Ai.AddHistoryEntry("assistant", routed);
             _renderedCount        = App.Ai.History.Count;
+            ChatSessionService.Instance.SaveActive();
             ChatSendBtn.IsEnabled = true;
             StopBtn.Visibility    = Visibility.Collapsed;
             ScrollToBottom();
@@ -254,6 +265,7 @@ public sealed partial class AIPage : Page
             // guessed tuning can't pass unchecked.
             var note = Services.ControlEngineering.TuningChat.VerifyGainsNote(aiBubble.Text, (float)App.CascadeSession.Setpoint);
             string finalText = note is null ? aiBubble.Text : aiBubble.Text + note;
+            if (note is not null) _ai.AmendLastAssistantEntry(note);
             aiBubbleBorder.Child = MarkdownRenderer.Render(finalText, 13, ActualTheme == ElementTheme.Dark);
         }
 
@@ -266,6 +278,7 @@ public sealed partial class AIPage : Page
 
         // Update rendered count to match new history size
         _renderedCount = App.Ai.History.Count;
+        ChatSessionService.Instance.SaveActive();
     }
 
     // ── Bubble builders ───────────────────────────────────────────────────────

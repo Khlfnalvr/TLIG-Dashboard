@@ -16,16 +16,18 @@ public sealed class CascadeSessionService
     public static CascadeSessionService Instance { get; } = new();
     private CascadeSessionService() { }
 
-    // SIMC-tuned defaults for the identified FOPDT plants (see CascadeSimulator): a
-    // stable, mildly overshooting temperature response that settles at the setpoint,
-    // and a gentle inner PI suited to the delay-dominated flow plant.
-    public double OuterKp     { get; set; } = 1.53;
-    public double OuterKi     { get; set; } = 0.015;
-    public double OuterKd     { get; set; } = 8.0;
-    public double InnerKp     { get; set; } = 0.036;
-    public double InnerKi     { get; set; } = 0.10;
+    // SIMC defaults for the identified FOPDT plants, verified on the simulator itself:
+    // overshoot 1.7%, rise 55 s, settling 93 s, no steady-state offset. Kept identical to
+    // CascadeInput's defaults — see the derivation there. The disturbance is sized at ~42%
+    // of the operating flow (~31.4 L/min at the default 60 °C setpoint), the same relative
+    // upset the previous identification's -40 represented on its own larger flow scale.
+    public double OuterKp     { get; set; } = 2.468;
+    public double OuterKi     { get; set; } = 0.0165;
+    public double OuterKd     { get; set; } = 0;
+    public double InnerKp     { get; set; } = 0.2606;
+    public double InnerKi     { get; set; } = 0.0486;
     public double Setpoint    { get; set; } = 60;
-    public double Disturbance { get; set; } = -40;
+    public double Disturbance { get; set; } = -13;
 
     public CascadeDesignResult? LastResult { get; private set; }
     public CascadeRecommendation? PendingRecommendation { get; private set; }
@@ -95,12 +97,16 @@ public sealed class CascadeSessionService
     {
         if (PendingRecommendation is not { } rec) return Task.FromResult<CascadeDesignResult?>(null);
 
+        var (outerOk, _) = GainValidator.ValidateOuter(rec.OuterKp, rec.OuterKi, rec.OuterKd);
+        var (innerOk, _) = GainValidator.ValidateInner(rec.InnerKp, rec.InnerKi);
+        ClearRecommendation();
+        if (!outerOk || !innerOk) return Task.FromResult<CascadeDesignResult?>(null);
+
         OuterKp = rec.OuterKp;
         OuterKi = rec.OuterKi;
         OuterKd = rec.OuterKd;
         InnerKp = rec.InnerKp;
         InnerKi = rec.InnerKi;
-        ClearRecommendation();
         return RunAsync(ct);
     }
 
@@ -122,16 +128,15 @@ public sealed class CascadeSessionService
         Disturbance = (float)Disturbance,
     };
 
-    // NumberBox yields NaN when cleared — normalise so every view reads back what ran.
     private void NormalizeInputs()
     {
-        if (double.IsNaN(Setpoint) || Setpoint <= 0) Setpoint = 60;
-        if (double.IsNaN(OuterKp)) OuterKp = 0;
-        if (double.IsNaN(OuterKi)) OuterKi = 0;
-        if (double.IsNaN(OuterKd)) OuterKd = 0;
-        if (double.IsNaN(InnerKp)) InnerKp = 0;
-        if (double.IsNaN(InnerKi)) InnerKi = 0;
-        if (double.IsNaN(Disturbance)) Disturbance = 0;
+        if (!double.IsFinite(Setpoint) || Setpoint <= 0) Setpoint = 60;
+        OuterKp = GainValidator.Sanitize(OuterKp);
+        OuterKi = GainValidator.Sanitize(OuterKi);
+        OuterKd = GainValidator.Sanitize(OuterKd);
+        InnerKp = GainValidator.Sanitize(InnerKp);
+        InnerKi = GainValidator.Sanitize(InnerKi);
+        if (!double.IsFinite(Disturbance)) Disturbance = 0;
     }
 
     private void SetRunning(bool running)

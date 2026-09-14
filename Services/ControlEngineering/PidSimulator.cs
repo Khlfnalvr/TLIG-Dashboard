@@ -40,11 +40,22 @@ public class PidSimulator
     // output sits flat at zero, and the settle detector below would otherwise mistake that
     // initial plateau for a settled response and stop before the plant has even reacted.
     private const double MinDuration = 80.0;
-    // The run stops once the response has stopped moving: the trailing window's spread
-    // and |dy| both fall under this fraction of the reference.
+    // The run stops once the response has stopped moving AND has arrived at the
+    // setpoint: the trailing window's spread and |dy| both fall under this fraction of
+    // the reference, and the output is within a small band of the setpoint. The
+    // setpoint-proximity test is essential — without it a sluggish response creeping to
+    // target (tiny Ki) looks "flat" while still far from the setpoint, and overshoot
+    // (measured against that last sample) is badly overstated. Same rule as
+    // CascadeSimulator, scaled for this plant.
     private const double SettleTolFraction = 1e-5;
+    private const double SettleBandFraction = 0.005;
     private const double SettleWindowSeconds = 4.0;
     private const double SettleCheckSeconds = 1.0;
+
+    // Actuator saturation (valve %): the single-loop PID drives the valve directly, so
+    // the command is clamped exactly like the cascade's inner loop, with conditional
+    // (clamping) anti-windup on the integrator. Mirrors CascadeSimulator.ValveMin/Max.
+    public const double OutputMin = 0.0, OutputMax = 100.0;
 
     /// <summary>
     /// Integrates the closed-loop step response with RK4.
@@ -67,12 +78,13 @@ public class PidSimulator
 
         double scale = Math.Max(1.0, Math.Abs(reference));
         double tol = SettleTolFraction * scale;
+        double settleBand = SettleBandFraction * scale;
         double blowUp = 1e6 * scale;
 
         var time = new List<double>(Math.Min(maxSteps, 8192));
         var amplitude = new List<double>(Math.Min(maxSteps, 8192));
         // Plant-input history feeding the dead-time buffer (u delayed by `delay` samples).
-        var uHist = new double[maxSteps];
+        var uHist = new List<double>(Math.Min(maxSteps, 8192));
 
         // State: [y, z] where z is the integral of the error. The plant is first-order,
         // so there is no separate velocity state — dy/dt is algebraic in y and the
@@ -96,23 +108,24 @@ public class PidSimulator
 
             // RK4 Integration. uDel is a known past value, held constant across the four
             // sub-steps; the valve command issued now (k1's u) is recorded for future steps.
-            double[] k1 = Derivatives(y, z, uDel, reference, kp, ki, kd, out double u);
-            uHist[i] = u;
+            Derivatives(y, z, uDel, reference, kp, ki, kd, out double dydt1, out double dzdt1, out double u);
+            uHist.Add(u);
 
-            // dy/dt is k1[0]; the loop has settled once the recent window is flat and the
-            // output has stopped moving.
+            // The loop has settled once the recent window is flat, the output has stopped
+            // moving, AND it has actually reached the setpoint band (see SettleBandFraction).
             if (auto && i >= minSteps && i >= window && i % checkEvery == 0 &&
-                IsWindowFlat(amplitude, window, tol) && Math.Abs(k1[0]) < tol)
+                Math.Abs(y - reference) < settleBand &&
+                IsWindowFlat(amplitude, window, tol) && Math.Abs(dydt1) < tol)
             {
                 break;
             }
 
-            double[] k2 = Derivatives(y + 0.5 * dt * k1[0], z + 0.5 * dt * k1[1], uDel, reference, kp, ki, kd, out _);
-            double[] k3 = Derivatives(y + 0.5 * dt * k2[0], z + 0.5 * dt * k2[1], uDel, reference, kp, ki, kd, out _);
-            double[] k4 = Derivatives(y + dt * k3[0], z + dt * k3[1], uDel, reference, kp, ki, kd, out _);
+            Derivatives(y + 0.5 * dt * dydt1, z + 0.5 * dt * dzdt1, uDel, reference, kp, ki, kd, out double dydt2, out double dzdt2, out _);
+            Derivatives(y + 0.5 * dt * dydt2, z + 0.5 * dt * dzdt2, uDel, reference, kp, ki, kd, out double dydt3, out double dzdt3, out _);
+            Derivatives(y + dt * dydt3, z + dt * dzdt3, uDel, reference, kp, ki, kd, out double dydt4, out double dzdt4, out _);
 
-            y += (dt / 6.0) * (k1[0] + 2 * k2[0] + 2 * k3[0] + k4[0]);
-            z += (dt / 6.0) * (k1[1] + 2 * k2[1] + 2 * k3[1] + k4[1]);
+            y += (dt / 6.0) * (dydt1 + 2 * dydt2 + 2 * dydt3 + dydt4);
+            z += (dt / 6.0) * (dzdt1 + 2 * dzdt2 + 2 * dzdt3 + dzdt4);
         }
 
         return new SimulationResult
@@ -172,46 +185,71 @@ public class PidSimulator
 
     // Closed-loop first-order plant with input dead time:
     //   dy/dt = (Gain * u(t-θ) - y) / Tau       — FOPDT plant, delayed input `uDel`
-    //   u     = Kp*(r-y) + Ki*z - Kd*(dy/dt)    — PID, derivative on measurement
-    //   dz/dt = r - y
+    //   u     = sat(Kp*(r-y) + Ki*z - Kd*(dy/dt)) — PID, derivative on measurement,
+    //                                              saturated to the valve range
+    //   dz/dt = conditional anti-windup: the integrator freezes while saturated and
+    //           the error would only push the command further into the limit
     // u depends on dy/dt, which uses the DELAYED input (a known past value), so there is
-    // no algebraic loop.
-    private double[] Derivatives(double y, double z, double uDel, double r, double kp, double ki, double kd, out double u)
+    // no algebraic loop. Out-params (no per-sub-step allocation) mirror CascadeSimulator.
+    private static void Derivatives(double y, double z, double uDel, double r, double kp, double ki, double kd,
+        out double dydt, out double dzdt, out double u)
     {
-        double dydt = (Gain * uDel - y) / Tau;
+        dydt = (Gain * uDel - y) / Tau;
         double e = r - y;
-        u = kp * e + ki * z - kd * dydt;
-        double dz = e;
-        return new[] { dydt, dz };
+        double raw = kp * e + ki * z - kd * dydt;
+        u = Math.Max(OutputMin, Math.Min(OutputMax, raw));
+        dzdt = AntiWindup(e, raw);
+    }
+
+    // Conditional-integration anti-windup, same rule as CascadeSimulator: stop
+    // integrating when the output is saturated and the error would only push it
+    // further into the limit.
+    private static double AntiWindup(double error, double rawOutput)
+    {
+        if (rawOutput > OutputMax && error > 0) return 0.0;
+        if (rawOutput < OutputMin && error < 0) return 0.0;
+        return error;
     }
 
     /// Rise time (10%→90%), overshoot %, 2%-band settling time, steady-state error % —
     /// shared by the Dashboard's chart display and the diagnosis' input features,
     /// so both read the exact same numbers off a given response curve.
+    ///
+    /// All metrics are measured against the <paramref name="reference"/> (setpoint), not
+    /// the last sample: with the setpoint-proximity settle rule the two coincide on a
+    /// settled run, but on a truncated/sluggish run the last sample is still far from
+    /// target and measuring against it would report a flattering overshoot of ~0% and a
+    /// settling time of ~0 s. Same convention as CascadeSimulator.ComputeMetrics.
     public static (double rise, double overshootPct, double settling, double steadyErrPct) ComputeStepMetrics(
         double[] time, double[] amplitude, double reference = 1.0)
     {
         if (time.Length == 0 || amplitude.Length == 0) return (0, 0, 0, 0);
 
         double final = amplitude[^1];
-        double peak  = amplitude.Max();
-        double overshootPct = final > 0 ? Math.Max(0, (peak - final) / final * 100.0) : 0;
-        double steadyErrPct = reference > 0 ? Math.Abs(reference - final) / reference * 100.0 : 0;
+        // Fall back to the last sample only when no usable reference was given.
+        double denom = Math.Abs(reference) > 1e-12 ? reference : final;
+        bool rising = denom >= 0;
 
-        double lo = 0.1 * final, hi = 0.9 * final;
+        double peak = amplitude.Max();
+        double overshootPct = denom > 0 ? Math.Max(0, (peak - denom) / denom * 100.0) : 0;
+        double steadyErrPct = Math.Abs(reference) > 1e-12
+            ? Math.Abs(reference - final) / Math.Abs(reference) * 100.0 : 0;
+
+        double t1 = 0.1 * denom, t2 = 0.9 * denom;
+        double lo = Math.Min(t1, t2), hi = Math.Max(t1, t2);
         double t10 = 0, t90 = 0;
         bool got10 = false, got90 = false;
         for (int i = 0; i < amplitude.Length; i++)
         {
-            if (!got10 && amplitude[i] >= lo) { t10 = time[i]; got10 = true; }
-            if (!got90 && amplitude[i] >= hi) { t90 = time[i]; got90 = true; break; }
+            if (!got10 && (rising ? amplitude[i] >= lo : amplitude[i] <= lo)) { t10 = time[i]; got10 = true; }
+            if (!got90 && (rising ? amplitude[i] >= hi : amplitude[i] <= hi)) { t90 = time[i]; got90 = true; break; }
         }
         double rise = got90 ? t90 - t10 : 0;
 
-        double band = 0.02 * Math.Abs(final);
+        double band = 0.02 * Math.Abs(denom);
         int lastOutside = -1;
         for (int i = 0; i < amplitude.Length; i++)
-            if (Math.Abs(amplitude[i] - final) > band) lastOutside = i;
+            if (Math.Abs(amplitude[i] - denom) > band) lastOutside = i;
         double settling = lastOutside < 0 ? 0
             : lastOutside + 1 < time.Length ? time[lastOutside + 1] : time[^1];
 
