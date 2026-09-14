@@ -137,7 +137,8 @@ jobs:
             "- Sudah terpasang: buka aplikasi, tombol notifikasi pembaruan akan muncul sendiri.",
             "  Pembaruan tidak dipasang diam-diam, harus diklik dulu.",
             "",
-            "Kalau perlu mundur, pasang kembali installer v1.0.3."
+            "Kalau perlu mundur, pasang kembali installer v1.0.4 -- rilis itu tetap ada",
+            "beserta seluruh asetnya, hanya tidak lagi berstatus latest."
           )
           Set-Content -Path release-notes.md -Value $lines -Encoding utf8
 
