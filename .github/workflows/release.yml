@@ -13,6 +13,10 @@
 name: Release
 
 on:
+  # Jalur utama: dorong tag v* dan rilis terbit dari commit yang ditandai itu.
+  push:
+    tags: [ 'v*' ]
+  # Jalur cadangan, kalau perlu menerbitkan tanpa membuat tag lebih dulu.
   workflow_dispatch:
     inputs:
       prerelease:
@@ -151,9 +155,23 @@ jobs:
             "publish/TLIGDashboard-Server-v$v-Update.zip#Update Package Server",
             "publish/TLIGDashboard-Client-v$v-Update.zip#Update Package Client",
             '--title', "Version $v",
-            '--notes-file', 'release-notes.md',
-            '--target', $env:GITHUB_SHA
+            '--notes-file', 'release-notes.md'
           )
+          # Saat dipicu tag, tag-nya sudah ada dan gh memakainya apa adanya.
+          # Saat dispatch manual, tag belum ada sehingga sasarannya perlu disebut.
+          if ('${{ github.event_name }}' -eq 'workflow_dispatch') {
+            $ghArgs += @('--target', $env:GITHUB_SHA)
+          }
           if ($pre) { $ghArgs += '--prerelease' }
+
+          # Tag harus sepadan dengan <Version> di csproj, kalau tidak PC yang
+          # sudah terpasang akan membandingkan versi yang salah.
+          $tagRef = $env:GITHUB_REF
+          if ($tagRef -like 'refs/tags/*') {
+            $tag = $tagRef -replace '^refs/tags/', ''
+            if ($tag -ne "v$v") {
+              throw "Tag $tag tidak cocok dengan versi di csproj (v$v). Selaraskan dulu."
+            }
+          }
           gh @ghArgs
           Write-Host "Release v$v dibuat (prerelease: $pre)"
