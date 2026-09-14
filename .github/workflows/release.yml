@@ -173,5 +173,24 @@ jobs:
               throw "Tag $tag tidak cocok dengan versi di csproj (v$v). Selaraskan dulu."
             }
           }
-          gh @ghArgs
-          Write-Host "Release v$v dibuat (prerelease: $pre)"
+          # Rilis bisa saja sudah dibuat lebih dulu lewat halaman Releases di
+          # browser (itu cara membuat tag tanpa terminal). Kalau begitu, jangan
+          # gagal -- cukup unggah asetnya ke rilis yang sudah ada dan perbarui
+          # judul serta catatannya, supaya kedua cara sama-sama berakhir benar.
+          $existing = gh release view "v$v" --json tagName 2>$null
+          if ($LASTEXITCODE -eq 0 -and $existing) {
+            Write-Host "Release v$v sudah ada -- mengunggah aset ke sana."
+            gh release upload "v$v" `
+              "publish/TLIGDashboard-Server-v$v-Setup.exe#Installer Server" `
+              "publish/TLIGDashboard-Client-v$v-Setup.exe#Installer Client" `
+              "publish/TLIGDashboard-Server-v$v-Update.zip#Update Package Server" `
+              "publish/TLIGDashboard-Client-v$v-Update.zip#Update Package Client" `
+              --clobber
+            if ($LASTEXITCODE -ne 0) { throw "Gagal mengunggah aset ke rilis v$v" }
+            gh release edit "v$v" --title "Version $v" --notes-file release-notes.md
+            if ($LASTEXITCODE -ne 0) { throw "Gagal memperbarui catatan rilis v$v" }
+          } else {
+            gh @ghArgs
+            if ($LASTEXITCODE -ne 0) { throw "Gagal membuat rilis v$v" }
+          }
+          Write-Host "Release v$v siap (prerelease: $pre)"
