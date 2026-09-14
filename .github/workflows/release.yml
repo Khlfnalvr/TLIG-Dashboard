@@ -1,0 +1,159 @@
+# Publish a TLIG Dashboard release.
+#
+# Dijalankan manual dari tab Actions. Mengikuti prosedur yang sudah ada di repo
+# (release.ps1 + installer_server.iss / installer_client.iss) supaya nama asetnya
+# persis seperti yang dicari UpdateService:
+#
+#   TLIGDashboard-<Flavor>-v<VERSION>-Setup.exe
+#   TLIGDashboard-<Flavor>-v<VERSION>-Update.zip
+#
+# Versinya dibaca dari <Version> di TLIGDashboard.csproj -- satu sumber kebenaran,
+# jadi tidak ada peluang tag dan isi biner berbeda versi.
+
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      prerelease:
+        description: 'Terbitkan sebagai prerelease (hanya PC Early Access yang menerimanya)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write        # membuat tag + release
+
+jobs:
+  release:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.x'
+
+      - name: Read version from csproj
+        id: ver
+        shell: pwsh
+        run: |
+          [xml]$proj = Get-Content TLIGDashboard.csproj
+          $v = ($proj.Project.PropertyGroup.Version | Where-Object { $_ }) | Select-Object -First 1
+          if (-not $v) { throw 'Version tidak ditemukan di TLIGDashboard.csproj' }
+          "version=$v" >> $env:GITHUB_OUTPUT
+          Write-Host "Versi: $v"
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup --no-progress -y
+
+      # release.ps1 mengerjakan semuanya: dotnet publish dua flavor, membuat
+      # Update ZIP, lalu mengompilasi kedua installer lewat ISCC.
+      - name: Build release artifacts
+        shell: pwsh
+        run: .\release.ps1
+
+      - name: Verify artifacts
+        shell: pwsh
+        run: |
+          $v = '${{ steps.ver.outputs.version }}'
+          $expected = @(
+            "TLIGDashboard-Server-v$v-Setup.exe",
+            "TLIGDashboard-Server-v$v-Update.zip",
+            "TLIGDashboard-Client-v$v-Setup.exe",
+            "TLIGDashboard-Client-v$v-Update.zip"
+          )
+          foreach ($name in $expected) {
+            $f = Join-Path 'publish' $name
+            if (-not (Test-Path $f)) { throw "Aset hilang: $name" }
+            $mb = [math]::Round((Get-Item $f).Length / 1MB, 1)
+            Write-Host "OK  $name  ($mb MB)"
+          }
+          # PIDtest.py harus ikut terbawa, kalau tidak tombol RUN di PC tujuan
+          # tidak punya jembatan untuk dijalankan ke LabVIEW.
+          foreach ($flavor in @('Server','Client')) {
+            $py = Join-Path "publish/$flavor" 'PIDtest.py'
+            if (-not (Test-Path $py)) { throw "PIDtest.py tidak ada di publish/$flavor" }
+            if (-not (Select-String -Path $py -Pattern '>dddddd' -Quiet)) {
+              throw "PIDtest.py di publish/$flavor masih versi 32 byte"
+            }
+            Write-Host "OK  publish/$flavor/PIDtest.py  (48 byte / 6 double)"
+          }
+
+      - name: Write release notes
+        shell: pwsh
+        run: |
+          $v = '${{ steps.ver.outputs.version }}'
+          $lines = @(
+            "## Bukaan Valve dan tombol STOP / RESET / E-STOP kini sampai ke LabVIEW",
+            "",
+            "Sebelumnya keduanya hanya ditulis ke baris CSV pada jalur balik port 6001, dan",
+            "jalur itu terbukti tidak pernah sampai. Keduanya dipindahkan ke paket biner port",
+            "6000 yang sudah terbukti bekerja, jalur yang sama dengan Kp/Ki/Kd/Setpoint.",
+            "",
+            "### PENTING - VI LabVIEW harus disesuaikan lebih dulu",
+            "",
+            "Paket port 6000 tumbuh dari 4 double (32 byte) menjadi 6 double (48 byte):",
+            "",
+            "    SP, KC, KI, KD, PUMP, CMD",
+            "",
+            "Di block diagram LabVIEW:",
+            "",
+            "1. TCP Read: bytes to read 32 menjadi 48",
+            "2. Konstanta cluster pada terminal type milik Unflatten From String: 4 DBL menjadi 6 DBL",
+            "3. Unbundle: 4 baris menjadi 6 baris",
+            "4. Keluaran 5 dikawat ke kontrol bukaan valve / MV",
+            "5. Keluaran 6 lewat To Long Integer, lalu Case 0/1/2/3 + Default",
+            "",
+            "Kode tombol: RUN = 1, STOP = 0, RESET = 2, E-STOP = 3.",
+            "",
+            "VI yang masih membaca 32 byte tidak akan memunculkan error. Ia membaca potongan",
+            "byte yang melenceng lalu menampilkan angka palsu yang kelihatan meyakinkan, jadi",
+            "jangan menjalankan versi ini sebelum VI-nya diubah.",
+            "",
+            "Hanya PC Server yang tersambung ke LabVIEW yang terpengaruh. Flavor Client",
+            "meneruskan perintahnya ke Server lewat HTTP dan tidak menyentuh VI sama sekali.",
+            "",
+            "### Perubahan lain",
+            "",
+            "- STOP / RESET / E-STOP tidak lagi mematikan proses Python. Perintahnya bersifat",
+            "  latch: koneksi tetap hidup, nilai yang sudah diisi tetap ada, dan yang berhenti",
+            "  adalah aksi di dalam VI lewat Case CMD. Proses berhenti saat dashboard ditutup.",
+            "- Default PythonScriptPath dikosongkan supaya salinan PIDtest.py di sebelah exe",
+            "  yang dipakai. Sebelumnya menunjuk ke drive D, yang di sebagian PC adalah",
+            "  partisi System Reserved sehingga tombol RUN selalu gagal.",
+            "- Transfer function cascade hasil identifikasi baru, audit simulator P0-P3,",
+            "  validasi gain untuk saran AI, diagram blok cascade XAML, ring konteks token,",
+            "  dan sesi chat yang tersimpan.",
+            "",
+            "### Cara memasang",
+            "",
+            "- Pemasangan baru: unduh TLIGDashboard-Server-v$v-Setup.exe atau versi Client-nya.",
+            "- Sudah terpasang: buka aplikasi, tombol notifikasi pembaruan akan muncul sendiri.",
+            "  Pembaruan tidak dipasang diam-diam, harus diklik dulu.",
+            "",
+            "Kalau perlu mundur, pasang kembali installer v1.0.3."
+          )
+          Set-Content -Path release-notes.md -Value $lines -Encoding utf8
+
+      - name: Create GitHub Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $v = '${{ steps.ver.outputs.version }}'
+          $pre = '${{ inputs.prerelease }}' -eq 'true'
+          $ghArgs = @(
+            'release','create',"v$v",
+            "publish/TLIGDashboard-Server-v$v-Setup.exe#Installer Server",
+            "publish/TLIGDashboard-Client-v$v-Setup.exe#Installer Client",
+            "publish/TLIGDashboard-Server-v$v-Update.zip#Update Package Server",
+            "publish/TLIGDashboard-Client-v$v-Update.zip#Update Package Client",
+            '--title', "Version $v",
+            '--notes-file', 'release-notes.md',
+            '--target', $env:GITHUB_SHA
+          )
+          if ($pre) { $ghArgs += '--prerelease' }
+          gh @ghArgs
+          Write-Host "Release v$v dibuat (prerelease: $pre)"
