@@ -23,8 +23,17 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$Version      = "1.0.5"
 $Project      = Join-Path $PSScriptRoot "TLIGDashboard.csproj"
+
+# Versinya DIBACA dari csproj, bukan ditulis ulang di sini. Sebelumnya nomor ini
+# dihardcode, dan saat rilis v1.0.6 nomor di csproj serta di kedua file installer
+# sudah dinaikkan tetapi baris ini tertinggal di 1.0.5 -- installer-nya lahir
+# bernama v1.0.6 sementara ZIP-nya v1.0.5, dan langkah verifikasi menolaknya
+# lima menit kemudian. Satu sumber kebenaran menutup celah itu.
+[xml]$ProjectXml = Get-Content $Project
+$VersionNode = $ProjectXml.SelectSingleNode('//PropertyGroup/Version')
+if (-not $VersionNode) { throw "Version tidak ditemukan di $Project" }
+$Version      = $VersionNode.InnerText.Trim()
 $PublishRoot  = Join-Path $PSScriptRoot "publish"
 $InnoCompiler = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
 
@@ -33,6 +42,18 @@ $Flavors = if ($Flavor -eq 'Both') { @('Server', 'Client') } else { @($Flavor) }
 $InstallerScript = @{
     Server = Join-Path $PSScriptRoot "installer_server.iss"
     Client = Join-Path $PSScriptRoot "installer_client.iss"
+}
+
+# Nomor versi di file .iss tidak bisa dibaca dari csproj, jadi masih ditulis
+# tangan. Dicocokkan di depan supaya salah ketik ketahuan sekarang juga, bukan
+# setelah menunggu dua publish dan dua kompilasi installer selesai.
+if (-not $SkipInstaller) {
+    $IssVersionPattern = '(?m)^#define\s+AppVersion\s+"' + [regex]::Escape($Version) + '"'
+    foreach ($f in $Flavors) {
+        if ((Get-Content $InstallerScript[$f] -Raw) -notmatch $IssVersionPattern) {
+            throw "AppVersion di $($InstallerScript[$f]) tidak cocok dengan Version di csproj ($Version). Selaraskan dulu."
+        }
+    }
 }
 
 New-Item -ItemType Directory -Path $PublishRoot -Force | Out-Null
