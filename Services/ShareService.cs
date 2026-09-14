@@ -1264,6 +1264,30 @@ public sealed class ShareServer
                     return;
             }
 
+            // Jalur 6001: VI mengambil Bukaan Valve dari koneksi TCP yang dibukanya sendiri
+            // ke 127.0.0.1:6001, jadi hanya dashboard yang sejalan dengan VI (Server) yang
+            // bisa mengisinya. Perintah Client sudah sampai lewat 6000 (pid_bridge.json),
+            // tapi valve-nya tidak ikut terbaca karena VI mengambilnya dari 6001. Digemakan
+            // di sini supaya perintah Client memakai koneksi 6001 milik Server -- jalur yang
+            // sudah terbukti bekerja -- tanpa menyentuh VI sama sekali.
+            //
+            // Formatnya HARUS identik dengan DashboardPage.SendControlLine(): VI mem-parse
+            // kolom berdasarkan posisi, bukan nama. SendLine sudah menambahkan CRLF sendiri.
+            //
+            // pump/cmd yang null (Client lama) tidak dikirim: nilai yang sedang berlaku tidak
+            // terbaca dari sini, dan menuliskan 0 justru akan menutup valve.
+            if ((action is "run" or "sync") && pump is { } p && cmd is { } c)
+            {
+                var inv = System.Globalization.CultureInfo.InvariantCulture;
+                HmiDataService.Instance.SendLine(string.Join(",",
+                    kp.ToString("0.###", inv),
+                    ki.ToString("0.###", inv),
+                    kd.ToString("0.###", inv),
+                    sp.ToString("0.###", inv),
+                    p.ToString("0.###", inv),
+                    c.ToString(inv)));
+            }
+
             await WriteJsonAsync(stream, new JsonObject
             {
                 ["ok"]      = true,
