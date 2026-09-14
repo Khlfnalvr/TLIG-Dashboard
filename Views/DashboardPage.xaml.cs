@@ -175,13 +175,41 @@ public sealed partial class DashboardPage : Page
             return;
 
         var inv = CultureInfo.InvariantCulture;
-        Data.SendLine(string.Join(",",
+        QueueControlLine(string.Join(",",
             kp.ToString("0.###", inv),
             ki.ToString("0.###", inv),
             kd.ToString("0.###", inv),
             sp.ToString("0.###", inv),
             pump.ToString("0.###", inv),
             _runState.ToString(inv)));
+    }
+
+    // Lines are handed to a background chain instead of being written inline, because
+    // HmiDataService.SendLine writes to the socket SYNCHRONOUSLY. A LabVIEW that has stopped
+    // reading its end lets the OS send buffer fill until that write blocks, and doing it on the
+    // UI thread froze the dashboard: the RUN button is re-enabled from a DispatcherQueue callback
+    // that CascadeSessionService queues when a run finishes, but RunPidAsync then calls
+    // PullPidInputs() -> SendControlLine() on that same thread. The write blocked there, the
+    // queued re-enable could never execute, and RUN stayed greyed out until LabVIEW was aborted
+    // and the stuck write finally threw. STOP looked dead for the same reason.
+    //
+    // One chained continuation rather than bare Task.Run: thread-pool tasks could start in any
+    // order and deliver a stale line after a newer one, which for a latched CMD means the rig
+    // could be left holding the wrong command.
+    private static readonly object _sendChainGate = new();
+    private static Task _sendChain = Task.CompletedTask;
+
+    private static void QueueControlLine(string line)
+    {
+        lock (_sendChainGate)
+            _sendChain = _sendChain.ContinueWith(
+                _ =>
+                {
+                    // A peer that has gone away is HmiDataService's to drop; swallowing here only
+                    // keeps one dead socket from tearing down the whole send chain.
+                    try { Data.SendLine(line); } catch { }
+                },
+                CancellationToken.None, TaskContinuationOptions.None, TaskScheduler.Default);
     }
 
     private void OnLabViewClientConnected(bool connected)
