@@ -536,6 +536,10 @@ public sealed class LocalizationManager : INotifyPropertyChanged
     public string HeH_Title             => T(nameof(HeH_Title));
     public string HeH_Subtitle          => T(nameof(HeH_Subtitle));
     public string HeH_Refresh           => T(nameof(HeH_Refresh));
+    public string HeH_ExportRuns        => T(nameof(HeH_ExportRuns));
+    public string HeH_ExportLog         => T(nameof(HeH_ExportLog));
+    public string HeH_ExportSaved       => T(nameof(HeH_ExportSaved));
+    public string HeH_ExportFailed      => T(nameof(HeH_ExportFailed));
     public string HeH_Unreachable       => T(nameof(HeH_Unreachable));
     public string HeH_StatTotalRuns     => T(nameof(HeH_StatTotalRuns));
     public string HeH_StatCompleted     => T(nameof(HeH_StatCompleted));
@@ -1448,6 +1452,10 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             [nameof(HeH_Title)]             = "HE Queue & Run History",
             [nameof(HeH_Subtitle)]          = "Which parameter combinations were run, by whom, and who held the plant when",
             [nameof(HeH_Refresh)]           = "Refresh",
+            [nameof(HeH_ExportRuns)]        = "Export runs (CSV)",
+            [nameof(HeH_ExportLog)]         = "Export queue (CSV)",
+            [nameof(HeH_ExportSaved)]       = "CSV saved",
+            [nameof(HeH_ExportFailed)]      = "Could not save the CSV",
             [nameof(HeH_Unreachable)]       = "History could not be read — the server is unreachable, or this account is not allowed to read it.",
             [nameof(HeH_StatTotalRuns)]     = "Runs recorded",
             [nameof(HeH_StatCompleted)]     = "Completed",
@@ -2125,6 +2133,10 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             [nameof(HeH_Title)]             = "Riwayat Antrian & Percobaan HE",
             [nameof(HeH_Subtitle)]          = "Kombinasi parameter apa saja yang sudah dijalankan, oleh siapa, dan siapa memegang plant kapan",
             [nameof(HeH_Refresh)]           = "Segarkan",
+            [nameof(HeH_ExportRuns)]        = "Ekspor percobaan (CSV)",
+            [nameof(HeH_ExportLog)]         = "Ekspor antrian (CSV)",
+            [nameof(HeH_ExportSaved)]       = "CSV tersimpan",
+            [nameof(HeH_ExportFailed)]      = "Gagal menyimpan CSV",
             [nameof(HeH_Unreachable)]       = "Riwayat tidak terbaca — server tidak terjangkau, atau akun ini tidak berhak membacanya.",
             [nameof(HeH_StatTotalRuns)]     = "Percobaan tercatat",
             [nameof(HeH_StatCompleted)]     = "Selesai",
@@ -2297,6 +2309,7 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             ["Export_FormatPng"] = "PNG - raster, lossless",
             ["Export_FormatJpg"] = "JPG - raster, smaller",
             ["Export_FormatSvg"] = "SVG - vector, editable",
+            ["Export_FileTypeCsv"] = "CSV (spreadsheet)",
             ["Export_FileTypePng"] = "PNG image",
             ["Export_FileTypeJpeg"] = "JPEG image",
             ["Export_FileTypeSvg"] = "SVG vector",
@@ -2440,6 +2453,7 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             ["Export_FormatPng"] = "PNG - raster, lossless",
             ["Export_FormatJpg"] = "JPG - raster, lebih kecil",
             ["Export_FormatSvg"] = "SVG - vektor, bisa diedit",
+            ["Export_FileTypeCsv"] = "CSV (lembar kerja)",
             ["Export_FileTypePng"] = "Gambar PNG",
             ["Export_FileTypeJpeg"] = "Gambar JPEG",
             ["Export_FileTypeSvg"] = "Vektor SVG",

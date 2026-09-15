@@ -218,7 +218,19 @@ menampilkan dua tabel yang menjawab dua pertanyaan berbeda:
   mengantre, dan siapa mengambil alih giliran siapa.
 
 Kartu ringkasan di atasnya membaca `GetStatsAsync`, termasuk "berapa kali plant
-tidak perlu dijalankan". Halaman ini staf saja karena isinya memperlihatkan siapa
+tidak perlu dijalankan".
+
+Kedua tabel bisa diekspor ke **CSV** untuk lampiran laporan praktikum
+(`Services/HeCsvExport`). Yang masuk file persis baris yang sedang tampil.
+Filenya dibuat supaya langsung benar saat dibuka Excel: pemisah kolom mengikuti
+setelan wilayah Windows (di Indonesia titik-koma), angkanya diformat dengan
+budaya yang sama, diawali petunjuk `sep=` supaya tetap terpecah benar di
+komputer dengan setelan lain, dan ditulis UTF-8 **dengan BOM** — tanpa BOM Excel
+merusak "°C" dan huruf beraksen. Nama kolomnya sengaja tidak diterjemahkan:
+isinya data yang diolah lagi, dan nama kolom yang berubah saat bahasa aplikasi
+diganti akan mematahkan rumus serta skrip yang sudah dibuat mahasiswa. Waktu
+ditulis dalam waktu lokal, dan nama kolomnya diakhiri `_local` supaya tidak ada
+yang mengira UTC. Halaman ini staf saja karena isinya memperlihatkan siapa
 mengerjakan apa — dan yang menegakkannya Server (`/he/queue/log` dan
 `/he/params/runs` menolak selain staf), bukan penyembunyian menunya.
 
@@ -269,8 +281,8 @@ diambil dari nilai yang sedang diperintahkan, bukan dari balasan VI.
   di kartu Control, lengkap dengan penanda bahwa itu kurva terukur.
 * Halaman Cascade belum ikut menggambar kurva cache — pencarian cache memang
   hanya terjadi di kartu Control halaman Dashboard.
-* Belum ada ekspor (CSV/Excel) dari halaman riwayat untuk lampiran laporan
-  praktikum.
+* Ekspor CSV sudah ada untuk kedua tabel; ekspor kurva satu run (satu file per
+  percobaan, siap diplot di Excel) belum.
 * Lapisan non-UI diuji lewat 52 skenario otomatis; kompilasi WinUI-nya
   diverifikasi oleh workflow `Build` di GitHub Actions (net10-windows tidak bisa
   dibangun di Linux).

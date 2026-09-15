@@ -1,10 +1,14 @@
 using System.ComponentModel;
+using System.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using TLIGDashboard.Models;
 using TLIGDashboard.Services;
+using Windows.Storage;
+using Windows.Storage.Pickers;
 using Windows.UI;
+using WinRT.Interop;
 
 namespace TLIGDashboard.Views;
 
@@ -45,6 +49,12 @@ public sealed partial class HeQueueHistoryPage : Page
 
     private bool _loading;
 
+    // Baris yang sedang tampil, disimpan apa adanya untuk diekspor: yang masuk
+    // file harus persis yang dilihat di layar, bukan hasil pembacaan ulang yang
+    // bisa saja sudah berbeda.
+    private IReadOnlyList<HeParameterRun> _runs = [];
+    private IReadOnlyList<HeQueueLogEntry> _log = [];
+
     public HeQueueHistoryPage()
     {
         InitializeComponent();
@@ -77,6 +87,8 @@ public sealed partial class HeQueueHistoryPage : Page
         TitleText.Text    = Lang.HeH_Title;
         SubtitleText.Text = Lang.HeH_Subtitle;
         RefreshText.Text  = Lang.HeH_Refresh;
+        ExportRunsText.Text = Lang.HeH_ExportRuns;
+        ExportLogText.Text  = Lang.HeH_ExportLog;
 
         StatTotalLabel.Text     = Lang.HeH_StatTotalRuns;
         StatCompletedLabel.Text = Lang.HeH_StatCompleted;
@@ -106,6 +118,55 @@ public sealed partial class HeQueueHistoryPage : Page
 
     private void Refresh_Click(object sender, RoutedEventArgs e) => _ = LoadAsync();
 
+    // ── Ekspor CSV ──────────────────────────────────────────────────────────
+
+    private async void ExportRuns_Click(object sender, RoutedEventArgs e)
+        => await SaveCsvAsync(HeCsvExport.Runs(_runs), "riwayat-percobaan-he");
+
+    private async void ExportLog_Click(object sender, RoutedEventArgs e)
+        => await SaveCsvAsync(HeCsvExport.QueueLog(_log), "riwayat-antrian-he");
+
+    /// <summary>
+    /// Menanyakan lokasi simpan lalu menulis CSV-nya. Ditulis UTF-8 <b>dengan
+    /// BOM</b>: tanpa itu Excel membaca file sebagai ANSI dan "°C" berikut huruf
+    /// beraksen di nama mahasiswa jadi rusak.
+    /// </summary>
+    private async Task SaveCsvAsync(string csv, string baseName)
+    {
+        if (App.CurrentWindow is not { } window) return;
+
+        try
+        {
+            var picker = new FileSavePicker
+            {
+                SuggestedStartLocation = PickerLocationId.DocumentsLibrary,
+                SuggestedFileName      = $"{baseName}_{DateTime.Now:yyyyMMdd_HHmmss}",
+            };
+            picker.FileTypeChoices.Add(Lang.Get("Export_FileTypeCsv"), new[] { ".csv" });
+
+            // WinUI 3: picker perlu tahu jendela pemiliknya, kalau tidak ia
+            // melempar saat dibuka (pola yang sama dipakai ChartExportService).
+            InitializeWithWindow.Initialize(picker, WindowNative.GetWindowHandle(window));
+
+            var file = await picker.PickSaveFileAsync();
+            if (file is null) return;   // dibatalkan pengguna — bukan kegagalan
+
+            await FileIO.WriteBytesAsync(file, new UTF8Encoding(encoderShouldEmitUTF8Identifier: true).GetBytes(csv));
+
+            ExportBar.Severity = InfoBarSeverity.Success;
+            ExportBar.Title    = Lang.HeH_ExportSaved;
+            ExportBar.Message  = file.Path;
+            ExportBar.IsOpen   = true;
+        }
+        catch (Exception ex)
+        {
+            ExportBar.Severity = InfoBarSeverity.Error;
+            ExportBar.Title    = Lang.HeH_ExportFailed;
+            ExportBar.Message  = ex.Message;
+            ExportBar.IsOpen   = true;
+        }
+    }
+
     private async Task LoadAsync()
     {
         if (_loading) return;
@@ -115,6 +176,11 @@ public sealed partial class HeQueueHistoryPage : Page
         {
             var history = await HeControlService.GetRecentRunsAsync(MaxRows);
             var log     = await HeControlService.GetRecentLogAsync(MaxRows);
+
+            _runs = history.Runs;
+            _log  = log;
+            ExportRunsButton.IsEnabled = _runs.Count > 0;
+            ExportLogButton.IsEnabled  = _log.Count > 0;
 
             // Bedakan "tidak terbaca" dari "memang masih kosong": praktikum yang
             // belum dimulai dan Server yang tidak terjangkau kelihatan sama di
