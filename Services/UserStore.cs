@@ -9,34 +9,43 @@ namespace TLIGDashboard.Services;
 /// Roles a user account can hold. Used for capability gating.
 ///
 /// The taxonomy maps onto the campus roles requested by the product:
-///   • <see cref="Dosen"/> (lecturer) and <see cref="Asisten"/> (assistant) are the
-///     "staff"/admin accounts — full access. They may edit the learning analytics
-///     and are the only accounts allowed to sign in to the <b>Server</b> application.
+///   • <see cref="Admin"/> (lab administrator), <see cref="Dosen"/> (lecturer) and
+///     <see cref="Asisten"/> (assistant) are the "staff" accounts — full access.
+///     They may edit the learning analytics and are the only accounts allowed to
+///     sign in to the <b>Server</b> application.
 ///   • <see cref="Mahasiswa"/> (student) is the restricted, client-only role: it can
 ///     use the client but only consume what the staff configure (read-only analytics).
+///
+/// Staff is not a flat tier: the HE queue hands out control of the plant in the
+/// order Admin → Dosen/Asisten → Mahasiswa (see <see cref="Models.HeQueuePriority"/>),
+/// which is why <see cref="Admin"/> is a role of its own rather than a synonym of
+/// <see cref="Dosen"/>.
 /// </summary>
 public static class UserRoles
 {
+    public const string Admin     = "Admin";     // lab admin — full access (staff), highest queue priority
     public const string Dosen     = "Dosen";     // lecturer  — full access (staff)
     public const string Asisten   = "Asisten";   // assistant — full access (staff)
     public const string Mahasiswa = "Mahasiswa"; // student   — restricted, client-only
 
-    public static readonly string[] All = [Dosen, Asisten, Mahasiswa];
+    public static readonly string[] All = [Admin, Dosen, Asisten, Mahasiswa];
 
     // Legacy values that may still be present in older users.json files. Read only —
     // never written; migrated to the current taxonomy on load (see UserStore.Load).
-    private const string LegacyAdmin    = "Admin";
     private const string LegacyOperator = "Operator";
     private const string LegacyViewer   = "Viewer";
 
     public static bool IsValid(string? role) => Array.IndexOf(All, role) >= 0;
 
     /// <summary>
-    /// Staff ("admin") roles — lecturers and assistants. They have full access
+    /// Staff roles — the lab admin, lecturers and assistants. They have full access
     /// (edit analytics, manage users) and are the only accounts permitted to sign
     /// in to the Server application.
     /// </summary>
-    public static bool IsStaff(string? role) => role is Dosen or Asisten;
+    public static bool IsStaff(string? role) => role is Admin or Dosen or Asisten;
+
+    /// <summary>The lab administrator — highest priority in the HE control queue.</summary>
+    public static bool IsAdmin(string? role) => role is Admin;
 
     /// <summary>Students (Mahasiswa) — restricted, read-only client experience.</summary>
     public static bool IsStudent(string? role) => !IsStaff(role);
@@ -46,12 +55,15 @@ public static class UserRoles
 
     /// <summary>
     /// Maps a (possibly legacy) stored role onto the current taxonomy:
-    /// Admin→Dosen, Operator→Asisten, Viewer→Mahasiswa. Already-current values pass through;
+    /// Operator→Asisten, Viewer→Mahasiswa. Already-current values pass through;
     /// anything unrecognised falls back to the least-privilege student role.
+    ///
+    /// "Admin" used to be a legacy value folded into <see cref="Dosen"/>; it is a
+    /// real role again (the top of the HE queue), so it now passes through
+    /// unchanged and older databases keep the admins they already had.
     /// </summary>
     public static string Migrate(string? role) => role switch
     {
-        LegacyAdmin    => Dosen,
         LegacyOperator => Asisten,
         LegacyViewer   => Mahasiswa,
         _              => Normalize(role),
@@ -88,8 +100,9 @@ public sealed class UsersFile
 /// Server-side user database. Stores accounts (username + salted PBKDF2 password
 /// hash + role) in <c>%LOCALAPPDATA%\TLIGDashboard\users.json</c> and authenticates
 /// both the local server console login and remote clients connecting over the
-/// share protocol. A default <c>admin / admin</c> Administrator is seeded on first
-/// run so the server is usable out of the box.
+/// share protocol. A default <c>admin / admin</c> account with the
+/// <see cref="UserRoles.Admin"/> role is seeded on first run so the server is usable
+/// out of the box.
 /// </summary>
 public sealed class UserStore
 {
@@ -333,11 +346,24 @@ public sealed class UserStore
                 }
             }
 
-            // Seed a default staff account (Dosen) so a fresh server can be signed into.
+            // Seed a default staff account so a fresh server can be signed into.
             if (_file.Users.Count == 0)
             {
-                _file.Users.Add(CreateUser("admin", "admin", "Administrator", UserRoles.Dosen));
+                _file.Users.Add(CreateUser("admin", "admin", "Administrator", UserRoles.Admin));
                 migrated = true;
+            }
+            // Databases created before the Admin role existed have no Admin at all,
+            // which would leave the top tier of the HE control queue permanently
+            // empty. Promote the seeded "admin" account once, and only while no
+            // other account already holds the role.
+            else if (!_file.Users.Any(u => UserRoles.IsAdmin(u.Role)))
+            {
+                var seeded = FindLocked("admin");
+                if (seeded is not null && UserRoles.IsStaff(seeded.Role))
+                {
+                    seeded.Role = UserRoles.Admin;
+                    migrated = true;
+                }
             }
 
             if (migrated) SaveLocked();

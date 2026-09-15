@@ -25,7 +25,7 @@ Panduan ini menjelaskan cara memakai **TLIG Dashboard** — aplikasi desktop Win
 | Dijalankan di | PC lab yang tersambung langsung ke HMI LabVIEW/PLC | Laptop/PC mahasiswa atau dosen di mana saja |
 | Kamera & layar HMI | **Menyiarkan** (broadcast) ke semua Client yang terhubung | **Menerima** siaran dari Server |
 | Kunci API AI | Disimpan lokal di Server (tidak pernah dikirim ke Client) | Tidak perlu kunci sendiri — chat diteruskan lewat Server |
-| Login | Hanya akun **Dosen/Asisten** yang boleh login langsung di Server | Semua peran (Dosen/Asisten/Mahasiswa) bisa login, harus mengisi alamat Server |
+| Login | Hanya akun **staf (Admin/Dosen/Asisten)** yang boleh login langsung di Server | Semua peran bisa login, harus mengisi alamat Server |
 | Halaman navigasi | Sama persis dengan Client, ditambah halaman **Settings** dan **Users** | Sama persis dengan Server, kecuali Settings & Users tidak muncul |
 | Registrasi mandiri | Tidak ada (akun dibuat lewat halaman Users) | Ada, lewat tautan "Buat akun" di layar login |
 
@@ -48,13 +48,16 @@ Aplikasi memiliki **pembaruan otomatis**: 3 detik setelah dibuka, aplikasi menge
 
 ## 3. Peran Pengguna (Role)
 
-| Peran | Deskripsi | Bisa login di Server? |
-|---|---|---|
-| **Dosen** | Staf pengajar, akses penuh (admin) | Ya |
-| **Asisten** | Asisten praktikum, akses penuh setara Dosen | Ya |
-| **Mahasiswa** | Peserta praktikum, akses terbatas (hanya lihat/kerjakan tugas & challenge) | **Tidak** — akun mahasiswa hanya bisa login lewat Client |
+| Peran | Deskripsi | Bisa login di Server? | Prioritas antrian HE |
+|---|---|---|---|
+| **Admin** | Pengelola lab, akses penuh | Ya | 1 (paling didahulukan) |
+| **Dosen** | Staf pengajar, akses penuh | Ya | 2 |
+| **Asisten** | Asisten praktikum, akses penuh setara Dosen | Ya | 2 (setara Dosen) |
+| **Mahasiswa** | Peserta praktikum, akses terbatas (hanya lihat/kerjakan tugas & challenge) | **Tidak** — akun mahasiswa hanya bisa login lewat Client | 3 |
 
-Dosen dan Asisten disebut **staf**. Mereka yang boleh: mengelola pengguna, membuat/menilai tugas & challenge, mengatur siaran dan koneksi PLC, serta mengonfigurasi provider AI. Akun awal bawaan (seed) adalah `admin` / `admin` dengan peran Dosen — segera ganti kata sandinya lewat halaman **Users** setelah instalasi pertama.
+Admin, Dosen, dan Asisten disebut **staf**. Mereka yang boleh: mengelola pengguna, membuat/menilai tugas & challenge, mengatur siaran dan koneksi PLC, serta mengonfigurasi provider AI. Akun awal bawaan (seed) adalah `admin` / `admin` dengan peran Admin — segera ganti kata sandinya lewat halaman **Users** setelah instalasi pertama. (Pada instalasi lama yang databasenya sudah ada, akun `admin` dinaikkan sekali ke peran Admin saat aplikasi dijalankan, selama belum ada akun Admin lain.)
+
+Kolom **prioritas antrian HE** menentukan siapa yang lebih dulu boleh mengoperasikan plant Heat Exchanger saat beberapa orang ingin memakainya bersamaan — lihat [Database/README.md](Database/README.md).
 
 ---
 
@@ -128,7 +131,7 @@ Semua pengguna (Server maupun Client, staf maupun mahasiswa) lalu bisa memilih p
 
 ### 5.5 Mengelola pengguna (halaman Users)
 Halaman **Users** hanya tampil di Server, untuk akun berperan staf. Di sini staf bisa:
-- **Tambah pengguna**: isi Username, Nama Tampilan, Password, NRP (opsional, untuk mahasiswa), Kelas (opsional), dan pilih Role (Dosen/Asisten/Mahasiswa).
+- **Tambah pengguna**: isi Username, Nama Tampilan, Password, NRP (opsional, untuk mahasiswa), Kelas (opsional), dan pilih Role (Admin/Dosen/Asisten/Mahasiswa).
 - **Edit**: ubah Nama Tampilan, NRP, Kelas.
 - **Reset Password**: set kata sandi baru untuk akun tertentu.
 - **Aktifkan/Nonaktifkan**: akun nonaktif tidak bisa login.
@@ -161,6 +164,34 @@ Ringkasan sistem kontrol dalam satu layar:
 - Kartu metrik: **Rise Time, Overshoot, Settling Time, Steady-State Error**.
 - Panel **Status Sistem** dan **Alarm**.
 - Pratinjau ringkas Live View, Learning Analytic, dan AI Chat tanpa perlu pindah halaman.
+
+#### Antrian giliran memakai plant HE
+Plant Heat Exchanger hanya bisa dipegang **satu orang** pada satu waktu, jadi di
+kartu **Control** ada strip status antrian:
+
+- **Plant bebas** — tekan JALANKAN dan langsung jalan.
+- **Dipakai <nama>** — JALANKAN memasukkan Anda ke antrian, dan tidak ada
+  perintah apa pun yang dikirim ke LabVIEW. Posisi antrean Anda tampil di strip
+  itu; tekan JALANKAN lagi begitu giliran Anda tiba, atau **Keluar antrian**
+  kalau tidak jadi.
+- Giliran dibagi menurut peran: **Admin → Dosen/Asisten → Mahasiswa**, dan di
+  dalam tingkat yang sama siapa yang lebih dulu meminta, dia yang lebih dulu
+  dilayani. Peran yang lebih tinggi bisa mengambil alih kendali dari yang lebih
+  rendah; yang diambil alih kembali ke antrian **di posisi terdepan tingkatnya**,
+  jadi langsung dapat giliran lagi begitu plant bebas.
+- Tombol **BERHENTI** melepas giliran sekaligus menutup percobaan, sehingga
+  antrean berikutnya bisa mulai. RESET dan E-STOP tidak melepas giliran.
+- Akun **Admin** punya tombol **Cabut paksa** untuk mengambil kendali yang
+  tertinggal (klien mati atau lupa menekan BERHENTI). Kendali yang dipegang lebih
+  dari 30 menit juga dilepas otomatis oleh Server.
+
+#### Hasil yang diambil dari database
+Kombinasi **Setpoint, Kp, Ki, Kd, dan Bukaan Valve** yang sama akan memberi
+respons yang sama, jadi kalau kombinasi itu sudah pernah dijalankan, hasilnya
+ditampilkan dari database dan **plant tidak dijalankan ulang** — lengkap dengan
+kapan dan oleh siapa percobaan itu dilakukan. Kalau memang ingin mengulang di
+plant (misalnya alat baru dikalibrasi), tekan **Tetap jalankan di plant** pada
+pemberitahuan tersebut.
 
 ### 7.2 Parameter
 Tempat mengatur dan menjalankan proses PID di HMI LabVIEW lewat koneksi PLC TCP:

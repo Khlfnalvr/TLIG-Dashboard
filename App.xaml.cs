@@ -62,6 +62,21 @@ public partial class App : Application
     public static Services.ControlEngineering.CascadeSessionService CascadeSession { get; }
         = Services.ControlEngineering.CascadeSessionService.Instance;
 
+    /// <summary>
+    /// Antrian giliran memakai plant HE — hanya satu orang boleh mengendalikan
+    /// plant pada satu waktu, dan giliran dibagikan menurut prioritas
+    /// Admin → Dosen/Asisten → Mahasiswa. Databasenya milik Server; Client
+    /// meminta giliran ke Server, tidak punya file antrian sendiri.
+    /// </summary>
+    public static Services.HeQueueRepository HeQueue { get; } = Services.HeQueueRepository.Instance;
+
+    /// <summary>
+    /// Cache hasil percobaan parameter HE. Kombinasi SP/Kc/Ti/Td/Pump yang sudah
+    /// pernah dijalankan hasilnya diambil dari sini, jadi plant tidak perlu
+    /// dijalankan ulang hanya untuk mendapatkan angka yang sama.
+    /// </summary>
+    public static Services.HeParameterCacheRepository HeParamCache { get; } = Services.HeParameterCacheRepository.Instance;
+
     public App()
     {
         InitializeComponent();
@@ -72,6 +87,8 @@ public partial class App : Application
     {
         try
         {
+            InitializeHeDatabases();
+
             CurrentWindow = new MainWindow();
             ViewModel = CurrentWindow.ViewModel;
             CurrentWindow.Activate();
@@ -80,6 +97,67 @@ public partial class App : Application
         catch (Exception ex)
         {
             ShowFatalError(ex);
+        }
+    }
+
+    /// <summary>
+    /// Membuat/memutakhirkan database HE (antrian giliran + cache parameter) di
+    /// sisi Server. Berjalan di latar belakang supaya jendela tidak menunggu
+    /// disk, dan kegagalannya tidak mematikan aplikasi: tanpa database, fitur
+    /// antrian dan cache saja yang tidak aktif — dashboard tetap bisa dipakai.
+    /// </summary>
+    private static void InitializeHeDatabases()
+    {
+        if (!Services.BuildInfo.IsServer) return;
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await HeQueue.InitializeAsync();
+                await HeParamCache.InitializeAsync();
+                await WatchStaleHolderAsync();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"HE database init failed: {ex}");
+            }
+        });
+    }
+
+    /// <summary>
+    /// Penjaga antrian: melepas kendali yang sudah dipegang melewati
+    /// <see cref="Services.HeControlService.MaxHold"/>. Tanpa ini, satu Client
+    /// yang mati atau lupa menekan STOP membuat antrian macet selamanya — dan
+    /// justru itu yang paling sering terjadi di lab.
+    ///
+    /// Snapshot dibaca dulu, baru dilepas, supaya rekaman run yang menggantung
+    /// ikut ditutup sebagai <c>Aborted</c> (dan karena itu tidak pernah dipakai
+    /// ulang sebagai hasil cache). Berjalan selama aplikasi Server hidup; kalau
+    /// satu putaran gagal (database terkunci sesaat), putaran berikutnya mencoba
+    /// lagi — tidak ada gunanya mematikan penjaganya.
+    /// </summary>
+    private static async Task WatchStaleHolderAsync()
+    {
+        var period = TimeSpan.FromMinutes(1);
+        while (true)
+        {
+            await Task.Delay(period);
+            try
+            {
+                var snapshot = await HeQueue.GetSnapshotAsync();
+                if (snapshot.Holder is not { } holder) continue;
+                if (holder.HeldFor <= Services.HeControlService.MaxHold) continue;
+
+                await Services.HeRunRecorder.Instance.FinishAsync(
+                    Models.HeParameterRunStatus.Aborted,
+                    $"Kendali dilepas otomatis setelah {Services.HeControlService.MaxHold.TotalMinutes:0} menit");
+                await HeQueue.ExpireStaleHolderAsync(Services.HeControlService.MaxHold);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"HE stale-holder watchdog: {ex}");
+            }
         }
     }
 

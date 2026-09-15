@@ -136,6 +136,24 @@ public sealed partial class MainWindow : Window
             // Don't leave the external Python client (PIDtest.py) running after the HMI closes.
             try { App.PythonBridge.Dispose(); } catch { }
 
+            // Percobaan yang masih terbuka ditutup selagi sampelnya masih ada di
+            // memori — statusnya Aborted, jadi tersimpan sebagai catatan tapi tidak
+            // pernah disodorkan sebagai hasil cache. Sengaja TIDAK melepas giliran:
+            // Server yang tutup tidak berarti orang berikutnya boleh jalan, dan
+            // penjaga batas waktu di App yang akan membereskannya.
+            //
+            // Lewat Task.Run lalu ditunggu dengan batas waktu, BUKAN ditunggu
+            // langsung di thread UI: penyimpanannya memakai await biasa, jadi
+            // kelanjutannya akan dijadwalkan kembali ke thread UI yang justru
+            // sedang menunggu — dan aplikasi menggantung saat ditutup.
+            try
+            {
+                Task.Run(() => Services.HeRunRecorder.Instance
+                        .FinishAsync(Models.HeParameterRunStatus.Aborted, "Aplikasi Server ditutup"))
+                    .Wait(TimeSpan.FromSeconds(5));
+            }
+            catch { }
+
             if (_hwnd != IntPtr.Zero && _oldWndProc != IntPtr.Zero)
                 SetWindowLongPtr(_hwnd, GWLP_WNDPROC, _oldWndProc);
         };

@@ -1,0 +1,58 @@
+<UserControl
+    x:Class="TLIGDashboard.Controls.HeQueueStatusView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- Strip status antrian plant HE: siapa yang sedang memegang kendali, di
+         posisi berapa pengguna ini, dan dua tindakan yang mungkin dilakukannya
+         (keluar antrian; Admin mencabut paksa). Isinya diisi dari code-behind,
+         bukan x:Bind, mengikuti kontrol lain di folder ini. -->
+    <Border x:Name="Root"
+            Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+            BorderThickness="1"
+            CornerRadius="6"
+            Padding="8,6">
+        <Grid ColumnSpacing="8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+
+            <Ellipse x:Name="StateDot"
+                     Grid.Column="0"
+                     Width="9" Height="9"
+                     VerticalAlignment="Center"/>
+
+            <StackPanel Grid.Column="1" Spacing="1" VerticalAlignment="Center">
+                <TextBlock x:Name="StatusText"
+                           FontSize="11"
+                           FontWeight="SemiBold"
+                           TextTrimming="CharacterEllipsis"/>
+                <TextBlock x:Name="DetailText"
+                           FontSize="10"
+                           Opacity="0.7"
+                           TextTrimming="CharacterEllipsis"
+                           Visibility="Collapsed"/>
+            </StackPanel>
+
+            <Button x:Name="LeaveButton"
+                    Grid.Column="2"
+                    FontSize="10"
+                    Height="26"
+                    Padding="8,0"
+                    Visibility="Collapsed"
+                    Click="LeaveButton_Click"/>
+
+            <Button x:Name="ForceButton"
+                    Grid.Column="3"
+                    FontSize="10"
+                    Height="26"
+                    Padding="8,0"
+                    Visibility="Collapsed"
+                    Click="ForceButton_Click"/>
+        </Grid>
+    </Border>
+</UserControl>
