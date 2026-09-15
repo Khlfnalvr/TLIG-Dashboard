@@ -240,6 +240,8 @@ Menu **Riwayat** hanya muncul untuk akun staf (Admin/Dosen/Asisten), di Server m
 
 Empat kartu di atasnya meringkas isi database: jumlah percobaan tercatat, yang selesai, berapa kali hasil diambil dari database (plant tidak perlu dijalankan ulang), dan kapan percobaan terakhir. Tombol **Segarkan** membaca ulang datanya.
 
+**Klik satu baris di tabel percobaan** untuk membuka detailnya: grafik respons percobaan itu, parameter yang dipakai, metrik hasilnya, dan tombol **Ekspor kurva (CSV)** — satu baris per titik waktu, tinggal diplot sendiri di Excel untuk lampiran laporan. Percobaan lama yang tidak menyimpan kurva tetap bisa dibuka; dialognya berkata apa adanya bahwa kurvanya tidak ada.
+
 Tombol **Ekspor percobaan (CSV)** dan **Ekspor antrian (CSV)** menyimpan tabel yang sedang tampil sebagai file CSV untuk lampiran laporan praktikum — tinggal buka dengan Excel, kolomnya sudah terpecah benar dan angkanya sudah memakai desimal Indonesia. Nama kolom di file sengaja dibiarkan dalam bahasa Inggris (`started_at_local`, `sp`, `kc`, …) supaya rumus atau skrip yang sudah dibuat tidak patah saat bahasa aplikasi diganti.
 
 ---

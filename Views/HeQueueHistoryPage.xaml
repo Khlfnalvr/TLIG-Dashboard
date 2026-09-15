@@ -178,6 +178,14 @@
                         </ItemsRepeater.Layout>
                         <ItemsRepeater.ItemTemplate>
                             <DataTemplate>
+                                <!-- Seluruh baris jadi tombol: klik membuka kurva
+                                     percobaan itu (HeRunDetailDialog). -->
+                                <Button HorizontalAlignment="Stretch"
+                                        HorizontalContentAlignment="Stretch"
+                                        Background="Transparent"
+                                        BorderThickness="0"
+                                        Padding="0"
+                                        Click="RunRow_Click">
                                 <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                                         BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                                         BorderThickness="1" CornerRadius="8" Padding="16,10">
@@ -223,6 +231,7 @@
                                                    VerticalAlignment="Center"/>
                                     </Grid>
                                 </Border>
+                                </Button>
                             </DataTemplate>
                         </ItemsRepeater.ItemTemplate>
                     </ItemsRepeater>

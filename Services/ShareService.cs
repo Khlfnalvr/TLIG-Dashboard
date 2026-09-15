@@ -62,6 +62,7 @@ public static class ShareProtocol
     public const string HeQueueLogPath          = "/he/queue/log";           // GET  ?limit= riwayat (staf)
     public const string HeParamLookupPath       = "/he/params/lookup";       // POST {sp,kc,ti,td,pump} cari hasil cache
     public const string HeParamRunsPath         = "/he/params/runs";         // GET  ?limit= daftar percobaan + ringkasan (staf)
+    public const string HeParamRunPath          = "/he/params/run";          // GET  ?id= satu percobaan LENGKAP dengan kurvanya (staf)
 
     public const string GuidWs            = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 
@@ -315,6 +316,10 @@ public sealed class ShareServer
             else if (method == "GET" && path == ShareProtocol.HeParamRunsPath)
             {
                 await HandleHeParamRunsGetAsync(stream, rawPath, headers, ct);
+            }
+            else if (method == "GET" && path == ShareProtocol.HeParamRunPath)
+            {
+                await HandleHeParamRunGetAsync(stream, rawPath, headers, ct);
             }
             else if (method == "GET" && path == "/info")
             {
@@ -1667,6 +1672,39 @@ public sealed class ShareServer
             ["runs"]  = arr,
             ["stats"] = HeQueueJson.FromStats(stats),
         }.ToJsonString(), ct);
+    }
+
+    /// <summary>
+    /// GET /he/params/run?id=N — satu percobaan LENGKAP dengan kurva responsnya,
+    /// untuk layar detail dan ekspor kurva. Kebalikan dari <c>/he/params/runs</c>
+    /// yang sengaja tanpa kurva: di sini kurvanya justru yang dicari, jadi ikut
+    /// dikirim (dijarangkan seperlunya oleh <see cref="HeQueueJson.FromRun"/>).
+    /// Staf saja, sama seperti daftar dan log.
+    /// </summary>
+    private async Task HandleHeParamRunGetAsync(
+        NetworkStream stream, string rawPath, Dictionary<string, string> headers, CancellationToken ct)
+    {
+        var session = GetSession(BearerToken(headers));
+        if (session is null)
+        {
+            await WriteSimpleAsync(stream, "401 Unauthorized", "text/plain", "Invalid or expired session", ct);
+            return;
+        }
+        if (!UserRoles.IsStaff(session.Role))
+        {
+            await WriteSimpleAsync(stream, "403 Forbidden", "text/plain", "Only staff can read a run", ct);
+            return;
+        }
+
+        long runId = QueryInt(rawPath, "id", 0);
+        var run = runId > 0 ? await App.HeParamCache.GetRunAsync(runId, ct) : null;
+        if (run is null)
+        {
+            await WriteSimpleAsync(stream, "404 Not Found", "application/json", "{\"error\":\"run_not_found\"}", ct);
+            return;
+        }
+
+        await WriteJsonAsync(stream, HeQueueJson.FromRun(run).ToJsonString(), ct);
     }
 
     /// <summary>Nilai integer satu parameter query (mis. <c>?limit=50</c>), atau <paramref name="fallback"/>.</summary>

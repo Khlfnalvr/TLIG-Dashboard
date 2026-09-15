@@ -540,6 +540,10 @@ public sealed class LocalizationManager : INotifyPropertyChanged
     public string HeH_ExportLog         => T(nameof(HeH_ExportLog));
     public string HeH_ExportSaved       => T(nameof(HeH_ExportSaved));
     public string HeH_ExportFailed      => T(nameof(HeH_ExportFailed));
+    public string HeH_ExportCurve       => T(nameof(HeH_ExportCurve));
+    public string HeH_DetailTitle       => T(nameof(HeH_DetailTitle));
+    public string HeH_DetailNoCurve     => T(nameof(HeH_DetailNoCurve));
+    public string HeH_DetailNotFound    => T(nameof(HeH_DetailNotFound));
     public string HeH_Unreachable       => T(nameof(HeH_Unreachable));
     public string HeH_StatTotalRuns     => T(nameof(HeH_StatTotalRuns));
     public string HeH_StatCompleted     => T(nameof(HeH_StatCompleted));
@@ -1456,6 +1460,10 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             [nameof(HeH_ExportLog)]         = "Export queue (CSV)",
             [nameof(HeH_ExportSaved)]       = "CSV saved",
             [nameof(HeH_ExportFailed)]      = "Could not save the CSV",
+            [nameof(HeH_ExportCurve)]       = "Export curve (CSV)",
+            [nameof(HeH_DetailTitle)]       = "Run detail",
+            [nameof(HeH_DetailNoCurve)]     = "This run has no recorded curve — only its parameters and metrics were kept.",
+            [nameof(HeH_DetailNotFound)]    = "The run could not be read. It may have been deleted, or the server is unreachable.",
             [nameof(HeH_Unreachable)]       = "History could not be read — the server is unreachable, or this account is not allowed to read it.",
             [nameof(HeH_StatTotalRuns)]     = "Runs recorded",
             [nameof(HeH_StatCompleted)]     = "Completed",
@@ -2137,6 +2145,10 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             [nameof(HeH_ExportLog)]         = "Ekspor antrian (CSV)",
             [nameof(HeH_ExportSaved)]       = "CSV tersimpan",
             [nameof(HeH_ExportFailed)]      = "Gagal menyimpan CSV",
+            [nameof(HeH_ExportCurve)]       = "Ekspor kurva (CSV)",
+            [nameof(HeH_DetailTitle)]       = "Detail percobaan",
+            [nameof(HeH_DetailNoCurve)]     = "Percobaan ini tidak menyimpan kurva — yang tercatat hanya parameter dan metriknya.",
+            [nameof(HeH_DetailNotFound)]    = "Percobaan ini tidak terbaca. Mungkin sudah dihapus, atau server tidak terjangkau.",
             [nameof(HeH_Unreachable)]       = "Riwayat tidak terbaca — server tidak terjangkau, atau akun ini tidak berhak membacanya.",
             [nameof(HeH_StatTotalRuns)]     = "Percobaan tercatat",
             [nameof(HeH_StatCompleted)]     = "Selesai",

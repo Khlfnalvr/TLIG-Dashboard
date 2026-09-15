@@ -1,14 +1,12 @@
 using System.ComponentModel;
-using System.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
+using TLIGDashboard.Controls;
+using TLIGDashboard.Helpers;
 using TLIGDashboard.Models;
 using TLIGDashboard.Services;
-using Windows.Storage;
-using Windows.Storage.Pickers;
 using Windows.UI;
-using WinRT.Interop;
 
 namespace TLIGDashboard.Views;
 
@@ -118,6 +116,17 @@ public sealed partial class HeQueueHistoryPage : Page
 
     private void Refresh_Click(object sender, RoutedEventArgs e) => _ = LoadAsync();
 
+    /// <summary>
+    /// Klik satu baris riwayat membuka kurva percobaannya. Kurvanya tidak ikut
+    /// terbawa daftar (sengaja — ribuan titik per run), jadi dialognya yang
+    /// mengambil run itu sendiri lewat <c>GetRunAsync</c>.
+    /// </summary>
+    private async void RunRow_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is not HeRunHistoryRow row) return;
+        await HeRunDetailDialog.ShowAsync(XamlRoot, row.RunId);
+    }
+
     // ── Ekspor CSV ──────────────────────────────────────────────────────────
 
     private async void ExportRuns_Click(object sender, RoutedEventArgs e)
@@ -127,35 +136,21 @@ public sealed partial class HeQueueHistoryPage : Page
         => await SaveCsvAsync(HeCsvExport.QueueLog(_log), "riwayat-antrian-he");
 
     /// <summary>
-    /// Menanyakan lokasi simpan lalu menulis CSV-nya. Ditulis UTF-8 <b>dengan
-    /// BOM</b>: tanpa itu Excel membaca file sebagai ANSI dan "°C" berikut huruf
-    /// beraksen di nama mahasiswa jadi rusak.
+    /// Menyimpan CSV lewat dialog "simpan sebagai" milik Windows, lalu melaporkan
+    /// hasilnya di InfoBar. Aturan penulisannya (UTF-8 ber-BOM, lokasi awal)
+    /// dipegang <see cref="CsvFileSaver"/> — dialog detail percobaan memakai yang
+    /// sama, jadi keduanya tidak bisa pelan-pelan berbeda.
     /// </summary>
     private async Task SaveCsvAsync(string csv, string baseName)
     {
-        if (App.CurrentWindow is not { } window) return;
-
         try
         {
-            var picker = new FileSavePicker
-            {
-                SuggestedStartLocation = PickerLocationId.DocumentsLibrary,
-                SuggestedFileName      = $"{baseName}_{DateTime.Now:yyyyMMdd_HHmmss}",
-            };
-            picker.FileTypeChoices.Add(Lang.Get("Export_FileTypeCsv"), new[] { ".csv" });
-
-            // WinUI 3: picker perlu tahu jendela pemiliknya, kalau tidak ia
-            // melempar saat dibuka (pola yang sama dipakai ChartExportService).
-            InitializeWithWindow.Initialize(picker, WindowNative.GetWindowHandle(window));
-
-            var file = await picker.PickSaveFileAsync();
-            if (file is null) return;   // dibatalkan pengguna — bukan kegagalan
-
-            await FileIO.WriteBytesAsync(file, new UTF8Encoding(encoderShouldEmitUTF8Identifier: true).GetBytes(csv));
+            var path = await CsvFileSaver.SaveAsync(csv, baseName);
+            if (path is null) return;   // dibatalkan pengguna — bukan kegagalan
 
             ExportBar.Severity = InfoBarSeverity.Success;
             ExportBar.Title    = Lang.HeH_ExportSaved;
-            ExportBar.Message  = file.Path;
+            ExportBar.Message  = path;
             ExportBar.IsOpen   = true;
         }
         catch (Exception ex)
@@ -236,6 +231,7 @@ public sealed partial class HeQueueHistoryPage : Page
 
         return new HeRunHistoryRow
         {
+            RunId      = run.RunId,
             When       = run.StartedAtUtc.ToLocalTime().ToString("dd MMM HH:mm"),
             User       = string.IsNullOrWhiteSpace(run.RequestedByName)
                 ? (run.RequestedByUserId ?? "—") : run.RequestedByName!,
@@ -323,6 +319,8 @@ public sealed partial class HeQueueHistoryPage : Page
 /// <summary>Satu baris tabel riwayat percobaan (dibaca DataTemplate lewat {Binding}).</summary>
 public sealed class HeRunHistoryRow
 {
+    /// <summary>Dipakai saat barisnya diklik, untuk mengambil kurva run ini.</summary>
+    public long   RunId      { get; init; }
     public string When       { get; init; } = "";
     public string User       { get; init; } = "";
     public string Parameters { get; init; } = "";

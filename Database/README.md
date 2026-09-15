@@ -220,6 +220,12 @@ menampilkan dua tabel yang menjawab dua pertanyaan berbeda:
 Kartu ringkasan di atasnya membaca `GetStatsAsync`, termasuk "berapa kali plant
 tidak perlu dijalankan".
 
+Klik satu baris riwayat percobaan untuk membuka **detail**-nya
+(`Controls/HeRunDetailDialog`): kurva responsnya digambar di sana, berikut
+parameter dan metriknya, dan ada tombol ekspor kurva ke CSV (satu baris per titik
+waktu, siap diplot sendiri di Excel). Kurvanya baru diambil saat itu lewat
+`GET /he/params/run` — daftar riwayatnya sendiri sengaja tidak membawanya.
+
 Kedua tabel bisa diekspor ke **CSV** untuk lampiran laporan praktikum
 (`Services/HeCsvExport`). Yang masuk file persis baris yang sedang tampil.
 Filenya dibuat supaya langsung benar saat dibuka Excel: pemisah kolom mengikuti
@@ -246,6 +252,7 @@ mengerjakan apa — dan yang menegakkannya Server (`/he/queue/log` dan
 | `GET  /he/queue/log?limit=` | riwayat antrian — staf saja |
 | `POST /he/params/lookup` | hasil cache untuk satu kombinasi parameter (kurvanya dijarangkan ≤1200 titik) |
 | `GET  /he/params/runs?limit=` | daftar percobaan terbaru + ringkasan cache, tanpa kurva — staf saja |
+| `GET  /he/params/run?id=` | satu percobaan **lengkap dengan kurvanya** — staf saja |
 
 `POST /sim/pid/run` — jalur yang benar-benar menggerakkan plant — ikut dijaga
 antrian yang sama, jadi Client yang melewati layar tetap tidak bisa menyerobot:
@@ -275,14 +282,8 @@ diambil dari nilai yang sedang diperintahkan, bukan dari balasan VI.
 
 ## 5. Yang belum dikerjakan
 
-* Halaman riwayat baru menampilkan metrik ringkas tiap run; kurvanya belum bisa
-  dibuka dari sana (ambil lewat `GetRunAsync` kalau nanti dibuatkan layarnya).
-  Yang sudah: hasil cache yang muncul saat menekan RUN digambar ke chart respons
-  di kartu Control, lengkap dengan penanda bahwa itu kurva terukur.
 * Halaman Cascade belum ikut menggambar kurva cache — pencarian cache memang
   hanya terjadi di kartu Control halaman Dashboard.
-* Ekspor CSV sudah ada untuk kedua tabel; ekspor kurva satu run (satu file per
-  percobaan, siap diplot di Excel) belum.
-* Lapisan non-UI diuji lewat 52 skenario otomatis; kompilasi WinUI-nya
+* Lapisan non-UI diuji lewat 72 skenario otomatis; kompilasi WinUI-nya
   diverifikasi oleh workflow `Build` di GitHub Actions (net10-windows tidak bisa
   dibangun di Linux).

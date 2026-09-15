@@ -74,6 +74,38 @@ public static class HeCsvExport
         return sb.ToString();
     }
 
+    /// <summary>
+    /// Kurva respons satu percobaan — satu baris per titik waktu, siap diplot
+    /// langsung di Excel. Ini bentuk yang paling sering dibutuhkan laporan
+    /// praktikum: grafik respons buatan sendiri, bukan tangkapan layar.
+    ///
+    /// Kolom mengikuti tujuh kanal yang disimpan cache. Kanal yang tidak diukur
+    /// dibiarkan kosong, jadi Excel menggambarnya sebagai garis putus, bukan
+    /// menariknya ke nol.
+    /// </summary>
+    public static string RunSamples(HeParameterRun run, CultureInfo? culture = null)
+    {
+        var c   = culture ?? CultureInfo.CurrentCulture;
+        var sep = Separator(c);
+        var sb  = new StringBuilder();
+
+        sb.Append("sep=").Append(sep).Append(NewLine);
+        Row(sb, sep,
+            "run_id", "t_seconds", "flow_tube", "flow_shell", "signal_ma",
+            "signal_percent", "pv_shell_in", "set_point", "pv_shell_out");
+
+        var id = run.RunId.ToString(CultureInfo.InvariantCulture);
+        foreach (var s in run.Samples)
+            Row(sb, sep,
+                id,
+                Num(s.TSeconds, c),
+                Num(s.FlowTube, c), Num(s.FlowShell, c),
+                Num(s.SignalMa, c), Num(s.SignalPercent, c),
+                Num(s.PvShellIn, c), Num(s.SetPoint, c), Num(s.PvShellOut, c));
+
+        return sb.ToString();
+    }
+
     /// <summary>Riwayat antrian: siapa memegang plant kapan, dan siapa mengambil alih siapa.</summary>
     public static string QueueLog(IEnumerable<HeQueueLogEntry> entries, CultureInfo? culture = null)
     {

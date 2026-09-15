@@ -79,6 +79,12 @@ public static class HeQueueClient
         };
     }
 
+    public static async Task<HeParameterRun?> GetRunAsync(string host, string token, long runId)
+    {
+        var node = await GetAsync(host, token, $"{ShareProtocol.HeParamRunPath}?id={runId}");
+        return node is null ? null : HeQueueJson.ToRun(node);
+    }
+
     public static async Task<HeParameterRun?> FindCachedRunAsync(string host, string token, HeParameterInput input)
     {
         var node = await PostAsync(host, token, ShareProtocol.HeParamLookupPath, new JsonObject
@@ -561,6 +567,19 @@ public static class HeControlService
         if (!Enabled) return new HeRunHistory();
         var cfg = AppSettingsService.Load();
         return await HeQueueClient.GetRecentRunsAsync(cfg.ServerHost, cfg.ServerToken, limit);
+    }
+
+    /// <summary>
+    /// Satu percobaan lengkap dengan kurvanya — untuk layar detail dan ekspor
+    /// kurva. <c>null</c> kalau run-nya sudah dihapus atau tidak terbaca.
+    /// </summary>
+    public static async Task<HeParameterRun?> GetRunAsync(long runId)
+    {
+        if (BuildInfo.IsServer) return await App.HeParamCache.GetRunAsync(runId);
+
+        if (!Enabled) return null;
+        var cfg = AppSettingsService.Load();
+        return await HeQueueClient.GetRunAsync(cfg.ServerHost, cfg.ServerToken, runId);
     }
 
     /// <summary>
