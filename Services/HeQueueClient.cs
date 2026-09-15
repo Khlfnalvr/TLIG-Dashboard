@@ -61,6 +61,24 @@ public static class HeQueueClient
 
     // ── Cache hasil parameter ───────────────────────────────────────────────
 
+    public static async Task<HeRunHistory> GetRecentRunsAsync(string host, string token, int limit)
+    {
+        var node = await GetAsync(host, token, $"{ShareProtocol.HeParamRunsPath}?limit={limit}");
+        if (node is null) return new HeRunHistory();
+
+        var runs = new List<HeParameterRun>();
+        if (node["runs"] is JsonArray arr)
+            foreach (var item in arr)
+                if (item is not null) runs.Add(HeQueueJson.ToRun(item));
+
+        return new HeRunHistory
+        {
+            Runs  = runs,
+            Stats = node["stats"] is { } stats ? HeQueueJson.ToStats(stats) : null,
+            Ok    = true,
+        };
+    }
+
     public static async Task<HeParameterRun?> FindCachedRunAsync(string host, string token, HeParameterInput input)
     {
         var node = await PostAsync(host, token, ShareProtocol.HeParamLookupPath, new JsonObject
@@ -256,6 +274,14 @@ public static class HeQueueJson
         ["itae"]               = m.Itae,
     };
 
+    public static JsonObject FromStats(HeParameterCacheStats stats) => new()
+    {
+        ["totalRuns"]     = stats.TotalRuns,
+        ["completedRuns"] = stats.CompletedRuns,
+        ["totalReuses"]   = stats.TotalReuses,
+        ["lastRunUtc"]    = stats.LastRunUtc is { } last ? Time(last) : null,
+    };
+
     private static JsonObject FromSample(HeParameterRunSample s) => new()
     {
         ["t"]             = s.TSeconds,
@@ -376,6 +402,12 @@ public static class HeQueueJson
 
         return run;
     }
+
+    public static HeParameterCacheStats ToStats(JsonNode node) => new(
+        (int?)node["totalRuns"]     ?? 0,
+        (int?)node["completedRuns"] ?? 0,
+        (int?)node["totalReuses"]   ?? 0,
+        node["lastRunUtc"] is { } last ? ParseTime(last) : null);
 
     private static HeControlHolder ToHolder(JsonNode node) => new()
     {
@@ -510,6 +542,25 @@ public static class HeControlService
 
         var cfg = AppSettingsService.Load();
         return await HeQueueClient.GetRecentLogAsync(cfg.ServerHost, cfg.ServerToken, limit);
+    }
+
+    /// <summary>
+    /// Daftar percobaan terbaru beserta ringkasan cache — isi halaman riwayat.
+    /// Di Server dibaca langsung dari repository, di Client lewat HTTP.
+    /// </summary>
+    public static async Task<HeRunHistory> GetRecentRunsAsync(int limit = 100)
+    {
+        if (BuildInfo.IsServer)
+            return new HeRunHistory
+            {
+                Runs  = await App.HeParamCache.ListRunsAsync(limit),
+                Stats = await App.HeParamCache.GetStatsAsync(),
+                Ok    = true,
+            };
+
+        if (!Enabled) return new HeRunHistory();
+        var cfg = AppSettingsService.Load();
+        return await HeQueueClient.GetRecentRunsAsync(cfg.ServerHost, cfg.ServerToken, limit);
     }
 
     /// <summary>

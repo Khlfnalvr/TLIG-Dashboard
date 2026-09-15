@@ -232,6 +232,14 @@ Chat berbasis AI untuk membantu analisis sistem kontrol:
 - Staf bisa membuka konfigurasi provider langsung dari ikon gerigi di sebelah dropdown ini, baik di Server maupun Client.
 - Jika belum ada provider yang diaktifkan/diberi kunci API, chat menampilkan pesan error alih-alih mencoba mengirim.
 
+### 7.7 Riwayat Antrian & Percobaan HE (staf)
+Menu **Riwayat** hanya muncul untuk akun staf (Admin/Dosen/Asisten), di Server maupun Client. Isinya dua tabel:
+
+- **Riwayat percobaan** — kombinasi parameter apa saja yang sudah pernah dijalankan, oleh siapa, berapa lama, statusnya (Selesai/Gagal/Dihentikan), metrik ringkasnya, dan berapa kali hasilnya dipakai ulang tanpa menjalankan plant. Percobaan yang gagal ikut tercatat di sini walaupun tidak pernah dipakai sebagai hasil cache.
+- **Riwayat antrian** — siapa memegang plant kapan, siapa mengantre, siapa mengambil alih giliran siapa, dan kendali mana yang dicabut paksa atau lewat batas waktu.
+
+Empat kartu di atasnya meringkas isi database: jumlah percobaan tercatat, yang selesai, berapa kali hasil diambil dari database (plant tidak perlu dijalankan ulang), dan kapan percobaan terakhir. Tombol **Segarkan** membaca ulang datanya.
+
 ---
 
 ## 8. Fitur Antarmuka Umum

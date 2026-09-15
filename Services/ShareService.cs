@@ -61,6 +61,7 @@ public static class ShareProtocol
     public const string HeQueueForceReleasePath = "/he/queue/force-release"; // POST {note} cabut paksa (Admin)
     public const string HeQueueLogPath          = "/he/queue/log";           // GET  ?limit= riwayat (staf)
     public const string HeParamLookupPath       = "/he/params/lookup";       // POST {sp,kc,ti,td,pump} cari hasil cache
+    public const string HeParamRunsPath         = "/he/params/runs";         // GET  ?limit= daftar percobaan + ringkasan (staf)
 
     public const string GuidWs            = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 
@@ -310,6 +311,10 @@ public sealed class ShareServer
             else if (method == "POST" && path == ShareProtocol.HeParamLookupPath)
             {
                 await HandleHeParamLookupAsync(stream, headers, ct);
+            }
+            else if (method == "GET" && path == ShareProtocol.HeParamRunsPath)
+            {
+                await HandleHeParamRunsGetAsync(stream, rawPath, headers, ct);
             }
             else if (method == "GET" && path == "/info")
             {
@@ -1623,6 +1628,44 @@ public sealed class ShareServer
         {
             ["found"] = run is not null,
             ["run"]   = run is null ? null : HeQueueJson.FromRun(run),
+        }.ToJsonString(), ct);
+    }
+
+    /// <summary>
+    /// GET /he/params/runs?limit=N — daftar percobaan terbaru beserta ringkasan
+    /// cache, untuk halaman riwayat. Staf saja, sama seperti log antrian:
+    /// keduanya memperlihatkan siapa mengerjakan apa.
+    ///
+    /// Kurva respons tidak ikut (<see cref="HeParameterCacheRepository.ListRunsAsync"/>
+    /// memang tidak membacanya) — satu run bisa ribuan titik, dan halaman riwayat
+    /// hanya butuh parameter serta metrik ringkasnya.
+    /// </summary>
+    private async Task HandleHeParamRunsGetAsync(
+        NetworkStream stream, string rawPath, Dictionary<string, string> headers, CancellationToken ct)
+    {
+        var session = GetSession(BearerToken(headers));
+        if (session is null)
+        {
+            await WriteSimpleAsync(stream, "401 Unauthorized", "text/plain", "Invalid or expired session", ct);
+            return;
+        }
+        if (!UserRoles.IsStaff(session.Role))
+        {
+            await WriteSimpleAsync(stream, "403 Forbidden", "text/plain", "Only staff can read the run history", ct);
+            return;
+        }
+
+        int limit = Math.Clamp(QueryInt(rawPath, "limit", 100), 1, 500);
+        var runs  = await App.HeParamCache.ListRunsAsync(limit, 0, ct);
+        var stats = await App.HeParamCache.GetStatsAsync(ct);
+
+        var arr = new JsonArray();
+        foreach (var run in runs) arr.Add((JsonNode)HeQueueJson.FromRun(run));
+
+        await WriteJsonAsync(stream, new JsonObject
+        {
+            ["runs"]  = arr,
+            ["stats"] = HeQueueJson.FromStats(stats),
         }.ToJsonString(), ct);
     }
 

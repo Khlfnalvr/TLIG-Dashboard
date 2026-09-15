@@ -53,6 +53,7 @@ public sealed partial class MainWindow : Window
         // GradingStudent and GradingLecturer pages removed from nav (merged into LearningAnalyticPage)
         { "Broadcast", typeof(BroadcastSettingsPage) },
         { "UserManagement", typeof(UserManagementPage) },
+        { "HeHistory", typeof(HeQueueHistoryPage) },
         // "Logging" page removed from nav — LoggingPage kept for potential future use
     };
 
@@ -908,6 +909,12 @@ public sealed partial class MainWindow : Window
     /// Management (staff — Dosen/Asisten). Both are hidden until the operator signs
     /// in. Note only staff can sign in to the server at all, so on the server a
     /// signed-in user is always staff.
+    ///
+    /// Riwayat HE berbeda dari keduanya: tampil di <b>kedua</b> flavor untuk staf,
+    /// karena dosen/asisten yang memegang Client juga perlu melihat siapa memakai
+    /// plant dan percobaan apa saja yang sudah dijalankan. Yang menegakkan
+    /// batasannya tetap Server (endpoint <c>/he/queue/log</c> dan
+    /// <c>/he/params/runs</c> menolak selain staf) — menu ini hanya cerminannya.
     /// </summary>
     private void ApplyRoleNavVisibility()
     {
@@ -916,13 +923,17 @@ public sealed partial class MainWindow : Window
 
         bool showBroadcast = Services.BuildInfo.IsServer && signedIn;
         bool showUm        = Services.BuildInfo.IsServer && signedIn && isStaff;
+        bool showHistory   = signedIn && isStaff;
 
         NavBroadcast.Visibility      = showBroadcast ? Visibility.Visible : Visibility.Collapsed;
         NavUserManagement.Visibility = showUm        ? Visibility.Visible : Visibility.Collapsed;
+        NavHeHistory.Visibility      = showHistory   ? Visibility.Visible : Visibility.Collapsed;
 
         if (!showBroadcast && ReferenceEquals(NavView.SelectedItem, NavBroadcast))
             NavView.SelectedItem = FirstVisibleNavItem();
         if (!showUm && ReferenceEquals(NavView.SelectedItem, NavUserManagement))
+            NavView.SelectedItem = FirstVisibleNavItem();
+        if (!showHistory && ReferenceEquals(NavView.SelectedItem, NavHeHistory))
             NavView.SelectedItem = FirstVisibleNavItem();
     }
 

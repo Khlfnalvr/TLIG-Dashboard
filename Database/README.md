@@ -201,6 +201,24 @@ sqlite3 %LOCALAPPDATA%\TLIGDashboard\heParamCache.db "SELECT run_id, param_key, 
 memanggil endpoint di bawah. Panel statusnya `Controls/HeQueueStatusView`,
 menyegarkan diri tiap 3 detik.
 
+### Halaman riwayat
+
+`Views/HeQueueHistoryPage` (menu **Riwayat**, staf saja di kedua flavor)
+menampilkan dua tabel yang menjawab dua pertanyaan berbeda:
+
+* **Riwayat percobaan** (dari `he_parameter_runs`) — kombinasi parameter apa saja
+  yang pernah dijalankan, oleh siapa, berapa lama, statusnya, metrik ringkasnya,
+  dan berapa kali hasilnya dipakai ulang tanpa menjalankan plant. Run `Failed` /
+  `Aborted` ikut terdaftar: riwayat memang mencatat yang gagal juga, cuma cache
+  yang tidak pernah menyodorkannya.
+* **Riwayat antrian** (dari `he_queue_log`) — siapa memegang plant kapan, siapa
+  mengantre, dan siapa mengambil alih giliran siapa.
+
+Kartu ringkasan di atasnya membaca `GetStatsAsync`, termasuk "berapa kali plant
+tidak perlu dijalankan". Halaman ini staf saja karena isinya memperlihatkan siapa
+mengerjakan apa — dan yang menegakkannya Server (`/he/queue/log` dan
+`/he/params/runs` menolak selain staf), bukan penyembunyian menunya.
+
 ### Endpoint (Server)
 
 | Endpoint | Isi |
@@ -212,6 +230,7 @@ menyegarkan diri tiap 3 detik.
 | `POST /he/queue/force-release` | cabut paksa — **Admin saja** (ditolak di server, bukan sekadar tombolnya disembunyikan) |
 | `GET  /he/queue/log?limit=` | riwayat antrian — staf saja |
 | `POST /he/params/lookup` | hasil cache untuk satu kombinasi parameter (kurvanya dijarangkan ≤1200 titik) |
+| `GET  /he/params/runs?limit=` | daftar percobaan terbaru + ringkasan cache, tanpa kurva — staf saja |
 
 `POST /sim/pid/run` — jalur yang benar-benar menggerakkan plant — ikut dijaga
 antrian yang sama, jadi Client yang melewati layar tetap tidak bisa menyerobot:
@@ -241,9 +260,12 @@ diambil dari nilai yang sedang diperintahkan, bukan dari balasan VI.
 
 ## 5. Yang belum dikerjakan
 
-* Halaman riwayat/laporan yang memakai `GET /he/queue/log` dan `ListRunsAsync`
-  belum ada — datanya sudah terkumpul, tampilannya belum dibuat.
 * Kurva dari cache baru ditampilkan sebagai ringkasan metrik di InfoBar, belum
-  digambar ulang ke chart respons.
-* Kompilasi WinUI belum diverifikasi di lingkungan ini (net10-windows tidak bisa
-  dibangun di Linux); lapisan non-UI-nya diuji lewat 44 skenario otomatis.
+  digambar ulang ke chart respons. Halaman riwayat pun baru menampilkan metrik
+  ringkasnya; kurva satu run diambil terpisah lewat `GetRunAsync` kalau nanti
+  ada layar yang menggambarnya.
+* Belum ada ekspor (CSV/Excel) dari halaman riwayat untuk lampiran laporan
+  praktikum.
+* Lapisan non-UI diuji lewat 52 skenario otomatis; kompilasi WinUI-nya
+  diverifikasi oleh workflow `Build` di GitHub Actions (net10-windows tidak bisa
+  dibangun di Linux).
