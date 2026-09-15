@@ -530,6 +530,7 @@ public sealed class LocalizationManager : INotifyPropertyChanged
     public string HeQ_CacheMsg     => T(nameof(HeQ_CacheMsg));      // {0} waktu, {1} nama
     public string HeQ_CacheMetrics => T(nameof(HeQ_CacheMetrics));  // {0} rise, {1} settling, {2} overshoot, {3} error
     public string HeQ_RunAnyway    => T(nameof(HeQ_RunAnyway));
+    public string HeQ_MeasuredCaption => T(nameof(HeQ_MeasuredCaption)); // {0} waktu, {1} nama
 
     // ── Riwayat antrian & percobaan HE ────────────────────────────────────
     public string HeH_Title             => T(nameof(HeH_Title));
@@ -1442,6 +1443,7 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             [nameof(HeQ_CacheMsg)]     = "This combination was already run on {0} by {1} — the result comes from the database, the plant was not run again.",
             [nameof(HeQ_CacheMetrics)] = "Rise {0} s · Settling {1} s · Overshoot {2} % · Final error {3} °C",
             [nameof(HeQ_RunAnyway)]    = "Run on the plant anyway",
+            [nameof(HeQ_MeasuredCaption)] = "Measured curve from a stored plant run ({0}, by {1}) — not a simulation. Final error is in \u00B0C.",
 
             [nameof(HeH_Title)]             = "HE Queue & Run History",
             [nameof(HeH_Subtitle)]          = "Which parameter combinations were run, by whom, and who held the plant when",
@@ -2118,6 +2120,7 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             [nameof(HeQ_CacheMsg)]     = "Kombinasi ini sudah pernah dijalankan {0} oleh {1} — hasilnya diambil dari database, plant tidak dijalankan ulang.",
             [nameof(HeQ_CacheMetrics)] = "Rise {0} s · Settling {1} s · Overshoot {2} % · Error akhir {3} °C",
             [nameof(HeQ_RunAnyway)]    = "Tetap jalankan di plant",
+            [nameof(HeQ_MeasuredCaption)] = "Kurva terukur dari percobaan plant yang tersimpan ({0}, oleh {1}) — bukan hasil simulasi. Error akhir dalam \u00B0C.",
 
             [nameof(HeH_Title)]             = "Riwayat Antrian & Percobaan HE",
             [nameof(HeH_Subtitle)]          = "Kombinasi parameter apa saja yang sudah dijalankan, oleh siapa, dan siapa memegang plant kapan",

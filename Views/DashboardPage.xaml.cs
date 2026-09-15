@@ -522,6 +522,73 @@ public sealed partial class DashboardPage : Page
                 Metric(m.OvershootPercent), Metric(m.SteadyStateError));
 
         ShowControlInfo(InfoBarSeverity.Success, Lang.HeQ_CacheTitle, message, showRunAnyway: true);
+        RenderCachedRun(run, when, who);
+    }
+
+    /// <summary>
+    /// Menggambar kurva percobaan yang tersimpan ke chart respons, berikut
+    /// metriknya — supaya hasil dari database terbaca sama utuhnya dengan hasil
+    /// yang baru dijalankan, bukan cuma sebagai sebaris angka di InfoBar.
+    ///
+    /// Yang tergambar adalah kurva <b>terukur</b>: suhu keluaran shell sebagai
+    /// process variable dan flow tube sebagai loop dalam — pasangan yang sama
+    /// dengan yang dimodelkan Gp1/Gp2, jadi bentuknya memang bisa disandingkan
+    /// dengan kurva simulasi di kartu yang sama. Baseline single-loop dan penanda
+    /// gangguan tidak ada di percobaan sungguhan, jadi keduanya dikirim kosong.
+    ///
+    /// Catatan satuan: <c>SteadyStateError</c> milik run plant adalah selisih
+    /// akhir dalam °C, sedangkan yang dari simulator adalah pecahan relatif.
+    /// Keterangan di atas chart menyebut hal ini supaya angkanya tidak dibaca
+    /// sebagai besaran yang sama.
+    /// </summary>
+    private void RenderCachedRun(Models.HeParameterRun run, string when, string who)
+    {
+        // Run lama yang tersimpan tanpa kurva: chart dan kartu metrik sengaja
+        // TIDAK disentuh. Menimpanya sebagian hanya akan memasangkan kurva
+        // simulasi lama dengan angka terukur — lebih menyesatkan daripada
+        // membiarkan InfoBar-nya bicara sendiri.
+        if (run.Samples.Count == 0) return;
+
+        int n = run.Samples.Count;
+        var time = new double[n];
+        var temperature = new double[n];
+        var flow = new double[n];
+        for (int i = 0; i < n; i++)
+        {
+            var s = run.Samples[i];
+            time[i]        = s.TSeconds;
+            // Kanal yang tidak terukur jadi NaN, yang oleh Chart.js digambar
+            // sebagai putus — bukan ditarik ke nol.
+            temperature[i] = s.PvShellOut ?? double.NaN;
+            flow[i]        = s.FlowTube ?? s.FlowShell ?? double.NaN;
+        }
+
+        // Dijarangkan dengan aturan yang sama dengan kurva simulasi di atas: run
+        // plant yang panjang bisa ribuan titik, dan seluruhnya harus melewati
+        // ExecuteScriptAsync sebagai teks. Di sisi Client kurvanya sudah
+        // dijarangkan Server (≤1200 titik), jadi ini yang menjaga sisi Server.
+        int stride = System.Math.Max(1, n / 1500);
+        RespChart.Update(
+            Sample(time, stride), Sample(temperature, stride), [],
+            Sample(flow, stride), [], run.Input.Sp, -1);
+
+        var m = run.Metrics;
+        RiseTimeValue.Text  = Metric(m?.RiseTimeSeconds);
+        OvershootValue.Text = Metric(m?.OvershootPercent);
+        SettlingValue.Text  = Metric(m?.SettlingTimeSeconds);
+        SteadyErrValue.Text = Metric(m?.SteadyStateError);
+
+        IaeValue.Text  = m?.Iae  is { } iae  ? FormatIndex(iae)  : "--";
+        IseValue.Text  = m?.Ise  is { } ise  ? FormatIndex(ise)  : "--";
+        ItaeValue.Text = m?.Itae is { } itae ? FormatIndex(itae) : "--";
+
+        // Diagnosa adalah pembacaan simulator atas gain-nya, bukan sifat kurva
+        // terukur; membiarkan diagnosa run sebelumnya di sini akan terbaca
+        // seolah-olah milik percobaan ini.
+        DiagnosisValue.Text = "--";
+
+        RespMeasuredCaption.Text       = Lang.Format(nameof(Lang.HeQ_MeasuredCaption), when, who);
+        RespMeasuredCaption.Visibility = Visibility.Visible;
     }
 
     private static string Metric(double? value) => value is null ? "--" : value.Value.ToString("0.##");
@@ -567,6 +634,11 @@ public sealed partial class DashboardPage : Page
     /// </summary>
     private void RenderCascadeResult(CascadeDesignResult result)
     {
+        // Yang digambar mulai baris ini hasil simulasi, jadi penanda "kurva
+        // terukur" dari percobaan cache harus padam — kalau tidak, kurva simulasi
+        // akan tampil dengan keterangan milik percobaan sebelumnya.
+        RespMeasuredCaption.Visibility = Visibility.Collapsed;
+
         var sim = result.Simulation;
         // Cascade runs adaptively (~thousands of samples); thin for the chart, metrics use the
         // full arrays. Same two-loop view as the Cascade page: temperature + flow on two

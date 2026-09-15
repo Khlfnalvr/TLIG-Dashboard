@@ -353,9 +353,19 @@
                                 <RowDefinition Height="Auto"/>
                                 <RowDefinition Height="*"/>
                             </Grid.RowDefinitions>
-                            <TextBlock Grid.Row="0"
-                                       Text="{x:Bind Lang.Panel_ResponSistem, Mode=OneWay}"
-                                       Style="{StaticResource DashCardTitleStyle}"/>
+                            <StackPanel Grid.Row="0" Spacing="3">
+                                <TextBlock Text="{x:Bind Lang.Panel_ResponSistem, Mode=OneWay}"
+                                           Style="{StaticResource DashCardTitleStyle}"/>
+                                <!-- Muncul HANYA saat yang tergambar adalah kurva terukur dari
+                                     percobaan plant yang tersimpan, bukan hasil simulasi. Tanpa
+                                     penanda ini, dua hal yang sangat berbeda akan terlihat sama
+                                     persis di kartu yang sama. -->
+                                <TextBlock x:Name="RespMeasuredCaption"
+                                           FontSize="10"
+                                           Opacity="0.75"
+                                           TextWrapping="Wrap"
+                                           Visibility="Collapsed"/>
+                            </StackPanel>
                             <Border Grid.Row="1"
                                     x:Name="ResponSistemChart"
                                     Style="{StaticResource DashInputBoxStyle}"

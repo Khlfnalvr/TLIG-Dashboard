@@ -187,7 +187,10 @@ sqlite3 %LOCALAPPDATA%\TLIGDashboard\heParamCache.db "SELECT run_id, param_key, 
    memberitahu posisinya, dan **tidak ada apa pun yang dikirim ke LabVIEW**.
 2. **Cek cache.** Sebelum plant disentuh, `FindCachedRunAsync` dicari lebih
    dulu. Kalau kombinasi SP/Kc/Ti/Td/Pump-nya sudah pernah dijalankan, hasilnya
-   ditampilkan dari database dan plant tidak dijalankan ulang. Tombol "tetap
+   ditampilkan dari database dan plant tidak dijalankan ulang: kurva terukurnya
+   digambar ke chart respons (suhu shell out + flow tube, dijarangkan ≤1500
+   titik) dan kartu metriknya diisi dari run itu, dengan keterangan di atas
+   chart bahwa yang tampil kurva terukur — bukan simulasi. Tombol "tetap
    jalankan di plant" pada InfoBar itu melewati cache satu kali.
 3. **Jalan + direkam.** Baru setelah itu perintah berangkat ke bridge, dan
    `HeRunRecorder` mulai mengumpulkan kurva responsnya dari `HmiDataService`.
@@ -260,10 +263,12 @@ diambil dari nilai yang sedang diperintahkan, bukan dari balasan VI.
 
 ## 5. Yang belum dikerjakan
 
-* Kurva dari cache baru ditampilkan sebagai ringkasan metrik di InfoBar, belum
-  digambar ulang ke chart respons. Halaman riwayat pun baru menampilkan metrik
-  ringkasnya; kurva satu run diambil terpisah lewat `GetRunAsync` kalau nanti
-  ada layar yang menggambarnya.
+* Halaman riwayat baru menampilkan metrik ringkas tiap run; kurvanya belum bisa
+  dibuka dari sana (ambil lewat `GetRunAsync` kalau nanti dibuatkan layarnya).
+  Yang sudah: hasil cache yang muncul saat menekan RUN digambar ke chart respons
+  di kartu Control, lengkap dengan penanda bahwa itu kurva terukur.
+* Halaman Cascade belum ikut menggambar kurva cache — pencarian cache memang
+  hanya terjadi di kartu Control halaman Dashboard.
 * Belum ada ekspor (CSV/Excel) dari halaman riwayat untuk lampiran laporan
   praktikum.
 * Lapisan non-UI diuji lewat 52 skenario otomatis; kompilasi WinUI-nya
