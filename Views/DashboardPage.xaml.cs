@@ -242,7 +242,17 @@ public sealed partial class DashboardPage : Page
     // accepts only one connection per Run — it would need restarting, and the planned
     // multi-client queue could never keep the VI alive. The process is stopped in exactly
     // one place: MainWindow's Closed handler (App.PythonBridge.Dispose()).
-    private void CtlStop_Click(object sender, RoutedEventArgs e)  => LatchCommand(CmdStop);
+    //
+    // STOP juga melepas giliran: percobaan selesai, jadi antrean berikutnya boleh
+    // jalan. RESET dan E-STOP sengaja TIDAK melepas — keduanya dipakai justru saat
+    // ada yang tidak beres, dan menyerahkan rig yang baru saja di-E-STOP kepada
+    // orang berikutnya adalah hal terakhir yang diinginkan.
+    private async void CtlStop_Click(object sender, RoutedEventArgs e)
+    {
+        LatchCommand(CmdStop);
+        await ReleaseHeControlAsync();
+    }
+
     private void CtlReset_Click(object sender, RoutedEventArgs e) => LatchCommand(CmdReset);
     private void CtlEStop_Click(object sender, RoutedEventArgs e) => LatchCommand(CmdEStop);
 
@@ -372,8 +382,55 @@ public sealed partial class DashboardPage : Page
 
     private async Task RunPidAsync()
     {
+        // ── 1. Sudah pernah dijalankan? Ambil dari database ──────────────────
+        // Kombinasi parameter yang sama akan memberi respons yang sama, jadi
+        // tidak ada gunanya menyalakan plant untuk pertanyaan yang sudah pernah
+        // dijawab. Diperiksa SEBELUM meminta giliran: percobaan yang dijawab dari
+        // database tidak perlu memakai plant sama sekali, jadi tidak boleh ikut
+        // menyita antrian orang lain. Tombol "tetap jalankan di plant" pada
+        // InfoBar-nya melewati pemeriksaan ini satu kali (mis. sehabis plant
+        // dikalibrasi ulang).
+        var input = CurrentHeInput();
+        if (_bypassCacheOnce)
+        {
+            _bypassCacheOnce = false;
+        }
+        else if (await HeControlService.FindCachedRunAsync(input) is { } cached)
+        {
+            ShowCachedRun(cached);
+            return;
+        }
+
+        // ── 2. Giliran dulu, baru plant ─────────────────────────────────────
+        // Plant HE hanya boleh dipegang satu orang. Kalau sedang dipakai orang
+        // lain, RUN berubah jadi "masuk antrian" dan tidak ada apa pun yang
+        // dikirim ke LabVIEW. Layar ini bukan penjaga satu-satunya: Server
+        // memeriksa hal yang persis sama lagi di /sim/pid/run, jadi Client yang
+        // melewati layar pun tetap tidak bisa menyerobot.
+        var decision = await HeControlService.RequestAsync(Models.HeRequestType.Run);
+        if (decision is not null && !decision.CanRunNow)
+        {
+            ShowControlInfo(InfoBarSeverity.Warning, Lang.HeQ_QueuedTitle,
+                Lang.Format(nameof(Lang.HeQ_QueuedMsg),
+                    decision.Holder?.DisplayName ?? "-", decision.Position));
+            await CtlQueueView.RefreshAsync();
+            return;
+        }
+
+        if (decision is { Outcome: Models.HeQueueOutcome.GrantedByOverride, Overridden: { } overridden })
+            ShowControlInfo(InfoBarSeverity.Warning, Lang.HeQ_Title,
+                Lang.Format(nameof(Lang.HeQ_OverrideMsg), overridden.DisplayName));
+        else
+            CtlQueueInfoBar.IsOpen = false;
+
         _runState = CmdRun;   // latched until another button is pressed
         PushPidInputs();      // pushes gains/setpoint/valve to the PID session AND to LabVIEW
+
+        // Kurva responsnya direkam supaya kombinasi ini tidak perlu dijalankan
+        // lagi lain kali. Hanya Server yang bisa merekam (data LabVIEW masuk ke
+        // sana); run yang dimulai dari Client direkam Server di /sim/pid/run.
+        if (BuildInfo.IsServer)
+            HeRunRecorder.Instance.Start(input, App.Session.Username, App.Session.DisplayName);
 
         // RUN also launches the external Python client (PIDtest.py) with the current gains
         // (the Control card drives the cascade's outer temperature PID).
@@ -383,11 +440,109 @@ public sealed partial class DashboardPage : Page
                              double.IsNaN(runPump) ? null : (double?)runPump,
                              CmdRun);
 
+        await CtlQueueView.RefreshAsync();
+
         // One RUN drives the cascade session that both this panel and the Cascade page show.
         // Fires ResultChanged (-> RenderCascadeResult) / RunFailed on the way through.
         var result = await App.CascadeSession.RunAsync();
         PullPidInputs();  // pick up the normalized setpoint
         if (result is not null) FoldAdvisorIntoChat(result);
+    }
+
+    // ── Antrian giliran plant HE ────────────────────────────────────────────
+
+    /// <summary>
+    /// Sekali pakai: RUN berikutnya melewati cache dan benar-benar menjalankan
+    /// plant. Dinyalakan oleh tombol pada InfoBar hasil cache, dan padam lagi
+    /// begitu dipakai — supaya "jalankan ulang sekali" tidak diam-diam menjadi
+    /// "jangan pernah pakai cache lagi".
+    /// </summary>
+    private bool _bypassCacheOnce;
+
+    /// <summary>
+    /// Kombinasi parameter yang sedang diperintahkan, dalam bentuk yang dipakai
+    /// cache. Kc/Ti/Td di sini adalah isi kotak Kp/Ki/Kd — angka yang sama persis
+    /// yang diterima VI sebagai KC/KI/KD lewat paket 48 byte, bukan hasil konversi
+    /// ke bentuk PID lain. Kotak yang sedang kosong (NaN) dibaca 0, sama seperti
+    /// yang dikirim bridge.
+    /// </summary>
+    private Models.HeParameterInput CurrentHeInput() => new()
+    {
+        Sp   = Safe(CtlSetpointBox.Value),
+        Kc   = Safe(KpBox.Value),
+        Ti   = Safe(KiBox.Value),
+        Td   = Safe(KdBox.Value),
+        Pump = Safe(CtlPump.Value),
+    };
+
+    private static double Safe(double value) => double.IsNaN(value) ? 0 : value;
+
+    /// <summary>
+    /// Melepas giliran setelah percobaan selesai, sekaligus menutup rekaman
+    /// run-nya. Yang bukan pemegang kendali tidak diberi kabar apa-apa: tombol
+    /// STOP-nya tetap bekerja untuk VI, hanya saja tidak ada giliran yang dilepas.
+    /// </summary>
+    private async Task ReleaseHeControlAsync()
+    {
+        if (!HeControlService.Enabled) return;
+
+        // Dibaca segar, bukan dari panel status: panel menyegarkan diri tiap 3
+        // detik, dan RUN lalu STOP dalam sekejap akan membaca keadaan yang sudah
+        // basi — rekaman run-nya jadi tidak pernah ditutup.
+        var status = await HeControlService.GetStatusAsync();
+        bool wasHolder = status?.IAmHolder ?? false;
+
+        // Server menutup rekamannya sendiri di sini; run yang dimulai dari Client
+        // ditutup Server saat permintaan lepas kendali tiba (/he/queue/release).
+        //
+        // Penyimpanannya dilempar ke thread lain: SQLite menulis secara sinkron di
+        // balik API async-nya, dan satu run bisa berisi ribuan titik — mengerjakannya
+        // di thread UI membuat dashboard tersendat tepat saat tombol BERHENTI ditekan.
+        if (BuildInfo.IsServer && wasHolder)
+            await Task.Run(() => HeRunRecorder.Instance.FinishAsync(Models.HeParameterRunStatus.Completed));
+
+        await HeControlService.ReleaseAsync();
+
+        if (wasHolder)
+            ShowControlInfo(InfoBarSeverity.Informational, Lang.HeQ_Title, Lang.HeQ_ReleasedMsg);
+        await CtlQueueView.RefreshAsync();
+    }
+
+    /// <summary>Menampilkan hasil yang diambil dari cache, lengkap dengan metrik ringkasnya.</summary>
+    private void ShowCachedRun(Models.HeParameterRun run)
+    {
+        string when = run.StartedAtUtc.ToLocalTime().ToString("g");
+        string who  = string.IsNullOrWhiteSpace(run.RequestedByName)
+            ? (run.RequestedByUserId ?? "-") : run.RequestedByName!;
+
+        string message = Lang.Format(nameof(Lang.HeQ_CacheMsg), when, who);
+        if (run.Metrics is { } m)
+            message += "\n" + Lang.Format(nameof(Lang.HeQ_CacheMetrics),
+                Metric(m.RiseTimeSeconds), Metric(m.SettlingTimeSeconds),
+                Metric(m.OvershootPercent), Metric(m.SteadyStateError));
+
+        ShowControlInfo(InfoBarSeverity.Success, Lang.HeQ_CacheTitle, message, showRunAnyway: true);
+    }
+
+    private static string Metric(double? value) => value is null ? "--" : value.Value.ToString("0.##");
+
+    private void ShowControlInfo(InfoBarSeverity severity, string title, string message, bool showRunAnyway = false)
+    {
+        CtlQueueInfoBar.Severity = severity;
+        CtlQueueInfoBar.Title    = title;
+        CtlQueueInfoBar.Message  = message;
+
+        CtlRunAnywayButton.Content    = Lang.HeQ_RunAnyway;
+        CtlRunAnywayButton.Visibility = showRunAnyway ? Visibility.Visible : Visibility.Collapsed;
+
+        CtlQueueInfoBar.IsOpen = true;
+    }
+
+    private async void CtlRunAnyway_Click(object sender, RoutedEventArgs e)
+    {
+        _bypassCacheOnce = true;
+        CtlQueueInfoBar.IsOpen = false;
+        await RunPidAsync();
     }
 
     private void OnPidResultChanged(object? sender, CascadeDesignResult result)

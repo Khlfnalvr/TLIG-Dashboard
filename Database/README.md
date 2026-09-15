@@ -177,11 +177,73 @@ sqlite3 %LOCALAPPDATA%\TLIGDashboard\heQueue.db "SELECT * FROM he_queue_log ORDE
 sqlite3 %LOCALAPPDATA%\TLIGDashboard\heParamCache.db "SELECT run_id, param_key, reuse_count FROM he_parameter_runs;"
 ```
 
-## 4. Yang belum dikerjakan
+## 4. Bagaimana layar dan jaringan memakainya
 
-Lapisan database dan aturan antriannya sudah lengkap dan bisa dipakai. Yang
-belum tersambung: **UI dan endpoint jaringannya** — tombol RUN belum memanggil
-`RequestControlAsync`, dan Client belum punya jalur HTTP ke Server untuk meminta
-giliran (menyusul di `ShareProtocol`, sejalan dengan `/tasks` dan `/students`
-yang sudah ada). Sampai itu dipasang, kedua database ini terbentuk dan siap,
-tapi belum ada yang mengisinya dari layar.
+### Alur satu kali RUN
+
+1. **Minta giliran.** Tombol RUN di kartu Control (`DashboardPage.RunPidAsync`)
+   memanggil `HeControlService.RequestAsync(HeRequestType.Run)`. Kalau plant
+   sedang dipakai orang lain, penekan RUN masuk antrian, sebuah InfoBar
+   memberitahu posisinya, dan **tidak ada apa pun yang dikirim ke LabVIEW**.
+2. **Cek cache.** Sebelum plant disentuh, `FindCachedRunAsync` dicari lebih
+   dulu. Kalau kombinasi SP/Kc/Ti/Td/Pump-nya sudah pernah dijalankan, hasilnya
+   ditampilkan dari database dan plant tidak dijalankan ulang. Tombol "tetap
+   jalankan di plant" pada InfoBar itu melewati cache satu kali.
+3. **Jalan + direkam.** Baru setelah itu perintah berangkat ke bridge, dan
+   `HeRunRecorder` mulai mengumpulkan kurva responsnya dari `HmiDataService`.
+4. **Selesai.** Tombol STOP menutup rekaman (tersimpan ke cache) lalu melepas
+   giliran, sehingga antrean berikutnya langsung bisa jalan. RESET dan E-STOP
+   sengaja tidak melepas giliran — keduanya dipakai justru saat ada yang tidak
+   beres.
+
+`HeControlService` menyembunyikan beda Server/Client persis seperti
+`LearningTaskService`: di Server ia memakai repository di atas, di Client ia
+memanggil endpoint di bawah. Panel statusnya `Controls/HeQueueStatusView`,
+menyegarkan diri tiap 3 detik.
+
+### Endpoint (Server)
+
+| Endpoint | Isi |
+|---|---|
+| `GET  /he/queue` | pemegang kendali, antrean, posisi pemanggil, boleh-tidaknya mencabut paksa |
+| `POST /he/queue/request` | minta giliran; `200` = boleh jalan, `409` = masuk antrian (berisi posisi) |
+| `POST /he/queue/release` | lepas kendali, rekaman run ditutup, giliran lanjut |
+| `POST /he/queue/cancel` | keluar dari antrian |
+| `POST /he/queue/force-release` | cabut paksa — **Admin saja** (ditolak di server, bukan sekadar tombolnya disembunyikan) |
+| `GET  /he/queue/log?limit=` | riwayat antrian — staf saja |
+| `POST /he/params/lookup` | hasil cache untuk satu kombinasi parameter (kurvanya dijarangkan ≤1200 titik) |
+
+`POST /sim/pid/run` — jalur yang benar-benar menggerakkan plant — ikut dijaga
+antrian yang sama, jadi Client yang melewati layar tetap tidak bisa menyerobot:
+
+* `run` → minta giliran; kalau belum giliran, jawabannya `409` dan perintahnya
+  tidak diteruskan ke bridge;
+* `sync` → hanya untuk pemegang kendali. **Kecuali** CMD STOP dan E-STOP, yang
+  selalu lewat: tombol berhenti yang bisa ditolak antrian adalah tombol berhenti
+  yang rusak;
+* `stop` → tutup rekaman + lepas giliran.
+
+### Penjaga di Server
+
+`App.WatchStaleHolderAsync` berjalan tiap menit dan melepas kendali yang sudah
+dipegang lebih dari `HeControlService.MaxHold` (30 menit) — klien yang mati atau
+lupa menekan STOP tidak membuat antrian macet semalaman. Rekaman run yang ikut
+menggantung ditutup sebagai `Aborted`, jadi tidak pernah dipakai ulang.
+
+### Kanal yang terekam
+
+Model cache menyediakan tujuh kanal, tapi VI yang dipakai sekarang mengirim
+empat nama (`Flow Tube`, `PV`, `Flow Shell`, `Temp. Shell out` — lihat
+`HmiDataService.DataLineFields`). Yang tidak dikirim disimpan **NULL**, bukan 0,
+supaya "tidak diukur" tidak tertukar dengan "terukur nol"; `HeRunRecorder` sudah
+mengenali nama-nama lainnya kalau suatu saat VI mulai mengirimnya. Set point
+diambil dari nilai yang sedang diperintahkan, bukan dari balasan VI.
+
+## 5. Yang belum dikerjakan
+
+* Halaman riwayat/laporan yang memakai `GET /he/queue/log` dan `ListRunsAsync`
+  belum ada — datanya sudah terkumpul, tampilannya belum dibuat.
+* Kurva dari cache baru ditampilkan sebagai ringkasan metrik di InfoBar, belum
+  digambar ulang ke chart respons.
+* Kompilasi WinUI belum diverifikasi di lingkungan ini (net10-windows tidak bisa
+  dibangun di Linux); lapisan non-UI-nya diuji lewat 44 skenario otomatis.

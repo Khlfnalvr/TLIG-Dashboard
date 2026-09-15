@@ -511,6 +511,26 @@ public sealed class LocalizationManager : INotifyPropertyChanged
     public string Ctl_Reset        => T(nameof(Ctl_Reset));
     public string Ctl_EStop        => T(nameof(Ctl_EStop));
 
+    // ── Antrian giliran plant HE ──────────────────────────────────────────
+    // Yang berisi {0}, {1}, … dipakai lewat Lang.Format(nameof(...), args).
+    public string HeQ_Title        => T(nameof(HeQ_Title));
+    public string HeQ_Free         => T(nameof(HeQ_Free));
+    public string HeQ_YouHolding   => T(nameof(HeQ_YouHolding));
+    public string HeQ_HeldBy       => T(nameof(HeQ_HeldBy));        // {0} nama, {1} peran, {2} lama pegang
+    public string HeQ_WaitingYou   => T(nameof(HeQ_WaitingYou));    // {0} posisi, {1} jumlah antrean
+    public string HeQ_WaitingCount => T(nameof(HeQ_WaitingCount));  // {0} jumlah antrean
+    public string HeQ_Leave        => T(nameof(HeQ_Leave));
+    public string HeQ_ForceRelease => T(nameof(HeQ_ForceRelease));
+    public string HeQ_Unreachable  => T(nameof(HeQ_Unreachable));
+    public string HeQ_QueuedTitle  => T(nameof(HeQ_QueuedTitle));
+    public string HeQ_QueuedMsg    => T(nameof(HeQ_QueuedMsg));     // {0} pemegang, {1} posisi
+    public string HeQ_OverrideMsg  => T(nameof(HeQ_OverrideMsg));   // {0} yang diambil alih
+    public string HeQ_ReleasedMsg  => T(nameof(HeQ_ReleasedMsg));
+    public string HeQ_CacheTitle   => T(nameof(HeQ_CacheTitle));
+    public string HeQ_CacheMsg     => T(nameof(HeQ_CacheMsg));      // {0} waktu, {1} nama
+    public string HeQ_CacheMetrics => T(nameof(HeQ_CacheMetrics));  // {0} rise, {1} settling, {2} overshoot, {3} error
+    public string HeQ_RunAnyway    => T(nameof(HeQ_RunAnyway));
+
     // ── Status system & alarm ─────────────────────────────────────────────
     public string Sys_StatusTitle  => T(nameof(Sys_StatusTitle));
     public string Sys_Plc          => T(nameof(Sys_Plc));
@@ -1367,6 +1387,24 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             [nameof(Ctl_Reset)]        = "RESET",
             [nameof(Ctl_EStop)]        = "E-STOP",
 
+            [nameof(HeQ_Title)]        = "PLANT QUEUE",
+            [nameof(HeQ_Free)]         = "Plant is free — RUN starts right away",
+            [nameof(HeQ_YouHolding)]   = "You hold the plant",
+            [nameof(HeQ_HeldBy)]       = "In use by {0} ({1}) · {2}",
+            [nameof(HeQ_WaitingYou)]   = "You are #{0} of {1} in the queue",
+            [nameof(HeQ_WaitingCount)] = "{0} waiting",
+            [nameof(HeQ_Leave)]        = "Leave queue",
+            [nameof(HeQ_ForceRelease)] = "Force release",
+            [nameof(HeQ_Unreachable)]  = "Queue unavailable — server unreachable",
+            [nameof(HeQ_QueuedTitle)]  = "Waiting for your turn",
+            [nameof(HeQ_QueuedMsg)]    = "The plant is in use by {0}. You are #{1} in the queue — press RUN again once it is your turn.",
+            [nameof(HeQ_OverrideMsg)]  = "Control taken over from {0}.",
+            [nameof(HeQ_ReleasedMsg)]  = "Control released — the next person in the queue can run now.",
+            [nameof(HeQ_CacheTitle)]   = "Result from the database",
+            [nameof(HeQ_CacheMsg)]     = "This combination was already run on {0} by {1} — the result comes from the database, the plant was not run again.",
+            [nameof(HeQ_CacheMetrics)] = "Rise {0} s · Settling {1} s · Overshoot {2} % · Final error {3} °C",
+            [nameof(HeQ_RunAnyway)]    = "Run on the plant anyway",
+
             [nameof(Sys_StatusTitle)]  = "STATUS SYSTEM",
             [nameof(Sys_Plc)]          = "PLC",
             [nameof(Sys_Camera)]       = "Camera",
@@ -1988,6 +2026,24 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             [nameof(Ctl_Stop)]         = "BERHENTI",
             [nameof(Ctl_Reset)]        = "RESET",
             [nameof(Ctl_EStop)]        = "E-STOP",
+
+            [nameof(HeQ_Title)]        = "ANTRIAN PLANT",
+            [nameof(HeQ_Free)]         = "Plant bebas — JALANKAN langsung jalan",
+            [nameof(HeQ_YouHolding)]   = "Anda sedang memegang kendali plant",
+            [nameof(HeQ_HeldBy)]       = "Dipakai {0} ({1}) · {2}",
+            [nameof(HeQ_WaitingYou)]   = "Anda antrean ke-{0} dari {1}",
+            [nameof(HeQ_WaitingCount)] = "{0} orang mengantre",
+            [nameof(HeQ_Leave)]        = "Keluar antrian",
+            [nameof(HeQ_ForceRelease)] = "Cabut paksa",
+            [nameof(HeQ_Unreachable)]  = "Antrian tidak terbaca — server tidak terjangkau",
+            [nameof(HeQ_QueuedTitle)]  = "Menunggu giliran",
+            [nameof(HeQ_QueuedMsg)]    = "Plant sedang dipakai {0}. Anda antrean ke-{1} — tekan JALANKAN lagi begitu giliran Anda tiba.",
+            [nameof(HeQ_OverrideMsg)]  = "Kendali diambil alih dari {0}.",
+            [nameof(HeQ_ReleasedMsg)]  = "Kendali dilepas — antrean berikutnya sudah boleh menjalankan plant.",
+            [nameof(HeQ_CacheTitle)]   = "Hasil dari database",
+            [nameof(HeQ_CacheMsg)]     = "Kombinasi ini sudah pernah dijalankan {0} oleh {1} — hasilnya diambil dari database, plant tidak dijalankan ulang.",
+            [nameof(HeQ_CacheMetrics)] = "Rise {0} s · Settling {1} s · Overshoot {2} % · Error akhir {3} °C",
+            [nameof(HeQ_RunAnyway)]    = "Tetap jalankan di plant",
 
             [nameof(Sys_StatusTitle)]  = "STATUS SISTEM",
             [nameof(Sys_Plc)]          = "PLC",

@@ -82,14 +82,27 @@ public sealed class HeParameterCacheRepository : HeSqliteDatabase
 
             if (countReuse)
             {
-                await using var bump = Command(conn, tx, """
+                await using (var bump = Command(conn, tx, """
                     UPDATE he_parameter_runs
                     SET reuse_count = reuse_count + 1, last_reused_at_utc = $now
                     WHERE run_id = $runId;
-                    """);
-                Bind(bump, "$now", ToDbTime(DateTime.UtcNow));
-                Bind(bump, "$runId", run.RunId);
-                await bump.ExecuteNonQueryAsync(token);
+                    """))
+                {
+                    Bind(bump, "$now", ToDbTime(DateTime.UtcNow));
+                    Bind(bump, "$runId", run.RunId);
+                    await bump.ExecuteNonQueryAsync(token);
+                }
+
+                // Dibaca ulang setelah dinaikkan supaya yang dikembalikan sudah
+                // menghitung pemakaian ulang kali ini juga. Kalau tidak, hasil
+                // yang baru saja diambil dari cache akan melaporkan
+                // reuse_count = 0 — dan HeParameterRun.IsFromCache, yang justru
+                // dipakai layar untuk berkata "ini dari database", ikut salah.
+                await using var reread = Command(conn, tx,
+                    $"SELECT {RunColumns} FROM he_parameter_runs WHERE run_id = $runId;");
+                Bind(reread, "$runId", run.RunId);
+                await using var rereader = await reread.ExecuteReaderAsync(token);
+                if (await rereader.ReadAsync(token)) run = ReadRun(rereader);
             }
 
             run.Metrics = await ReadMetricsAsync(conn, tx, run.RunId, token);

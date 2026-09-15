@@ -165,6 +165,34 @@ Ringkasan sistem kontrol dalam satu layar:
 - Panel **Status Sistem** dan **Alarm**.
 - Pratinjau ringkas Live View, Learning Analytic, dan AI Chat tanpa perlu pindah halaman.
 
+#### Antrian giliran memakai plant HE
+Plant Heat Exchanger hanya bisa dipegang **satu orang** pada satu waktu, jadi di
+kartu **Control** ada strip status antrian:
+
+- **Plant bebas** — tekan JALANKAN dan langsung jalan.
+- **Dipakai <nama>** — JALANKAN memasukkan Anda ke antrian, dan tidak ada
+  perintah apa pun yang dikirim ke LabVIEW. Posisi antrean Anda tampil di strip
+  itu; tekan JALANKAN lagi begitu giliran Anda tiba, atau **Keluar antrian**
+  kalau tidak jadi.
+- Giliran dibagi menurut peran: **Admin → Dosen/Asisten → Mahasiswa**, dan di
+  dalam tingkat yang sama siapa yang lebih dulu meminta, dia yang lebih dulu
+  dilayani. Peran yang lebih tinggi bisa mengambil alih kendali dari yang lebih
+  rendah; yang diambil alih kembali ke antrian **di posisi terdepan tingkatnya**,
+  jadi langsung dapat giliran lagi begitu plant bebas.
+- Tombol **BERHENTI** melepas giliran sekaligus menutup percobaan, sehingga
+  antrean berikutnya bisa mulai. RESET dan E-STOP tidak melepas giliran.
+- Akun **Admin** punya tombol **Cabut paksa** untuk mengambil kendali yang
+  tertinggal (klien mati atau lupa menekan BERHENTI). Kendali yang dipegang lebih
+  dari 30 menit juga dilepas otomatis oleh Server.
+
+#### Hasil yang diambil dari database
+Kombinasi **Setpoint, Kp, Ki, Kd, dan Bukaan Valve** yang sama akan memberi
+respons yang sama, jadi kalau kombinasi itu sudah pernah dijalankan, hasilnya
+ditampilkan dari database dan **plant tidak dijalankan ulang** — lengkap dengan
+kapan dan oleh siapa percobaan itu dilakukan. Kalau memang ingin mengulang di
+plant (misalnya alat baru dikalibrasi), tekan **Tetap jalankan di plant** pada
+pemberitahuan tersebut.
+
 ### 7.2 Parameter
 Tempat mengatur dan menjalankan proses PID di HMI LabVIEW lewat koneksi PLC TCP:
 - Isi nilai **Kp, Ki, Kd**, klik **Terapkan** untuk mengirim ke HMI.

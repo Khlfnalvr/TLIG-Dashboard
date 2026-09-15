@@ -116,12 +116,49 @@ public partial class App : Application
             {
                 await HeQueue.InitializeAsync();
                 await HeParamCache.InitializeAsync();
+                await WatchStaleHolderAsync();
             }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"HE database init failed: {ex}");
             }
         });
+    }
+
+    /// <summary>
+    /// Penjaga antrian: melepas kendali yang sudah dipegang melewati
+    /// <see cref="Services.HeControlService.MaxHold"/>. Tanpa ini, satu Client
+    /// yang mati atau lupa menekan STOP membuat antrian macet selamanya — dan
+    /// justru itu yang paling sering terjadi di lab.
+    ///
+    /// Snapshot dibaca dulu, baru dilepas, supaya rekaman run yang menggantung
+    /// ikut ditutup sebagai <c>Aborted</c> (dan karena itu tidak pernah dipakai
+    /// ulang sebagai hasil cache). Berjalan selama aplikasi Server hidup; kalau
+    /// satu putaran gagal (database terkunci sesaat), putaran berikutnya mencoba
+    /// lagi — tidak ada gunanya mematikan penjaganya.
+    /// </summary>
+    private static async Task WatchStaleHolderAsync()
+    {
+        var period = TimeSpan.FromMinutes(1);
+        while (true)
+        {
+            await Task.Delay(period);
+            try
+            {
+                var snapshot = await HeQueue.GetSnapshotAsync();
+                if (snapshot.Holder is not { } holder) continue;
+                if (holder.HeldFor <= Services.HeControlService.MaxHold) continue;
+
+                await Services.HeRunRecorder.Instance.FinishAsync(
+                    Models.HeParameterRunStatus.Aborted,
+                    $"Kendali dilepas otomatis setelah {Services.HeControlService.MaxHold.TotalMinutes:0} menit");
+                await HeQueue.ExpireStaleHolderAsync(Services.HeControlService.MaxHold);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"HE stale-holder watchdog: {ex}");
+            }
+        }
     }
 
     private async void OnUnhandledException(object sender, Microsoft.UI.Xaml.UnhandledExceptionEventArgs e)

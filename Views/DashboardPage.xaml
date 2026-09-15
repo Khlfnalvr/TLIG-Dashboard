@@ -493,6 +493,26 @@
                         <StackPanel Spacing="10">
                             <TextBlock Text="{x:Bind Lang.Ctl_Header, Mode=OneWay}"
                                        Style="{StaticResource DashCardTitleStyle}"/>
+
+                            <!-- Antrian giliran plant: siapa yang sedang memegang kendali dan
+                                 di posisi berapa pengguna ini. Menyembunyikan dirinya sendiri
+                                 kalau belum ada yang login (lihat HeQueueStatusView). -->
+                            <controls:HeQueueStatusView x:Name="CtlQueueView"/>
+
+                            <!-- Kabar dari RUN: masuk antrian, kendali diambil alih, atau hasil
+                                 yang diambil dari cache parameter. Tombol aksinya hanya muncul
+                                 untuk kasus cache ("tetap jalankan di plant"). -->
+                            <InfoBar x:Name="CtlQueueInfoBar"
+                                     IsOpen="False"
+                                     IsClosable="True"
+                                     Severity="Informational">
+                                <InfoBar.ActionButton>
+                                    <Button x:Name="CtlRunAnywayButton"
+                                            Visibility="Collapsed"
+                                            Click="CtlRunAnyway_Click"/>
+                                </InfoBar.ActionButton>
+                            </InfoBar>
+
                             <Grid ColumnSpacing="8">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="1.1*"/>

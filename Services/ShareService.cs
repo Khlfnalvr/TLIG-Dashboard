@@ -48,6 +48,20 @@ public static class ShareProtocol
     public const string ChallengeSubmissionsPath = "/challenge/submissions"; // GET all submissions (staff only)
     public const string ChallengeGradePath     = "/challenge/grade";     // POST dosen grade (staff only)
     public const string StudentsPath           = "/students";            // GET student roster (staff only)
+
+    // ── Antrian giliran plant HE + cache hasil parameter ─────────────────────
+    // Databasenya milik Server (hanya Server yang tersambung ke plant), jadi
+    // Client tidak memutuskan apa pun sendiri: ia meminta lewat endpoint ini dan
+    // memakai jawabannya apa adanya. /sim/pid/run juga dijaga antrian yang sama,
+    // sehingga Client yang melewati layar tetap tidak bisa menyerobot giliran.
+    public const string HeQueuePath             = "/he/queue";               // GET  status antrian untuk pemanggil
+    public const string HeQueueRequestPath      = "/he/queue/request";       // POST {type} minta giliran
+    public const string HeQueueReleasePath      = "/he/queue/release";       // POST lepas kendali
+    public const string HeQueueCancelPath       = "/he/queue/cancel";        // POST keluar dari antrian
+    public const string HeQueueForceReleasePath = "/he/queue/force-release"; // POST {note} cabut paksa (Admin)
+    public const string HeQueueLogPath          = "/he/queue/log";           // GET  ?limit= riwayat (staf)
+    public const string HeParamLookupPath       = "/he/params/lookup";       // POST {sp,kc,ti,td,pump} cari hasil cache
+
     public const string GuidWs            = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 
     /// <summary>Generates an opaque, high-entropy session token (URL-safe base64).</summary>
@@ -268,6 +282,34 @@ public sealed class ShareServer
             else if (method == "GET" && path == ShareProtocol.StudentsPath)
             {
                 await HandleStudentsGetAsync(stream, headers, ct);
+            }
+            else if (method == "GET" && path == ShareProtocol.HeQueuePath)
+            {
+                await HandleHeQueueGetAsync(stream, headers, ct);
+            }
+            else if (method == "POST" && path == ShareProtocol.HeQueueRequestPath)
+            {
+                await HandleHeQueueRequestAsync(stream, headers, ct);
+            }
+            else if (method == "POST" && path == ShareProtocol.HeQueueReleasePath)
+            {
+                await HandleHeQueueReleaseAsync(stream, headers, ct);
+            }
+            else if (method == "POST" && path == ShareProtocol.HeQueueCancelPath)
+            {
+                await HandleHeQueueCancelAsync(stream, headers, ct);
+            }
+            else if (method == "POST" && path == ShareProtocol.HeQueueForceReleasePath)
+            {
+                await HandleHeQueueForceReleaseAsync(stream, headers, ct);
+            }
+            else if (method == "GET" && path == ShareProtocol.HeQueueLogPath)
+            {
+                await HandleHeQueueLogGetAsync(stream, rawPath, headers, ct);
+            }
+            else if (method == "POST" && path == ShareProtocol.HeParamLookupPath)
+            {
+                await HandleHeParamLookupAsync(stream, headers, ct);
             }
             else if (method == "GET" && path == "/info")
             {
@@ -1224,9 +1266,21 @@ public sealed class ShareServer
     /// POST /sim/pid/run — a Client forwards a RUN / STOP / SYNC of the physical
     /// process here. Only the Server PC is wired to LabVIEW, so it runs the command on
     /// its own <see cref="PythonBridgeService"/> (PIDtest.py → LabVIEW, port 6000) — the
-    /// same bridge the Server's own RUN button uses. Any signed-in session may call this;
-    /// tighten with a <c>UserRoles.IsStaff(session.Role)</c> check if only Dosen/Asisten
-    /// should be allowed to actuate the rig.
+    /// same bridge the Server's own RUN button uses.
+    ///
+    /// <para><b>Dijaga antrian.</b> Ini pintu terakhir sebelum plant benar-benar
+    /// digerakkan, jadi di sinilah giliran ditegakkan, bukan di layar Client:</para>
+    /// <list type="bullet">
+    /// <item><c>run</c> — meminta giliran. Kalau plant sedang dipakai orang lain,
+    ///   pemanggil masuk antrian dan jawabannya <c>409</c> berisi posisi antrean;
+    ///   perintahnya tidak diteruskan ke bridge.</item>
+    /// <item><c>sync</c> — mengubah parameter selagi plant jalan. Hanya boleh oleh
+    ///   pemegang kendali, dan sengaja TIDAK ikut mengantre: setiap ketikan di kotak
+    ///   parameter memanggil ini, dan mengantrekan semuanya hanya akan membanjiri log.</item>
+    /// <item><c>stop</c> — melepas kendali sekaligus menutup rekaman run, sehingga
+    ///   giliran langsung berpindah ke antrean berikutnya.</item>
+    /// </list>
+    /// Pengguna yang belum login sudah tersaring oleh pemeriksaan session di atas.
     /// </summary>
     private async Task HandlePidRunAsync(NetworkStream stream, Dictionary<string, string> headers, CancellationToken ct)
     {
@@ -1255,9 +1309,74 @@ public sealed class ShareServer
             var bridge = PythonBridgeService.Instance;
             switch (action)
             {
-                case "run":  bridge.Run(kp, ki, kd, sp, pump, cmd);        break;
-                case "stop": bridge.Stop();                                break;
-                case "sync": bridge.SyncParams(kp, ki, kd, sp, pump, cmd); break;
+                case "run":
+                {
+                    var decision = await App.HeQueue.RequestControlAsync(
+                        session.Username, session.DisplayName, session.Role, Models.HeRequestType.Run, ct);
+                    if (!decision.CanRunNow)
+                    {
+                        await WriteSimpleAsync(stream, "409 Conflict", "application/json",
+                            QueueConflictJson(decision), ct);
+                        return;
+                    }
+
+                    // Rekam sejak sebelum perintahnya berangkat: paket pertama dari
+                    // LabVIEW bisa datang lebih cepat daripada balasan HTTP ini.
+                    //
+                    // Client lama tidak mengirim "pump", dan bukaan valve yang sedang
+                    // berlaku tidak terbaca dari sini. Run seperti itu sengaja TIDAK
+                    // direkam: menyimpannya sebagai Pump = 0 akan menaruh hasil di
+                    // bawah kunci parameter yang salah, dan orang berikutnya akan
+                    // disodori hasil percobaan yang sebenarnya berbeda. Plant-nya
+                    // tetap jalan — yang dilewati hanya pencatatannya.
+                    if (pump is { } recordedPump)
+                    {
+                        HeRunRecorder.Instance.Start(
+                            new Models.HeParameterInput { Sp = sp, Kc = kp, Ti = ki, Td = kd, Pump = recordedPump },
+                            session.Username, session.DisplayName);
+                    }
+                    else
+                    {
+                        await HeRunRecorder.Instance.FinishAsync(Models.HeParameterRunStatus.Aborted,
+                            "Run berikutnya datang dari Client tanpa nilai bukaan valve");
+                    }
+
+                    bridge.Run(kp, ki, kd, sp, pump, cmd);
+                    break;
+                }
+
+                case "stop":
+                    bridge.Stop();
+                    await HeRunRecorder.Instance.FinishAsync(Models.HeParameterRunStatus.Completed);
+                    await App.HeQueue.ReleaseControlAsync(session.Username, ct);
+                    break;
+
+                case "sync":
+                {
+                    // STOP dan E-STOP selalu lewat, siapa pun yang menekannya:
+                    // keduanya hanya menghentikan aksi di dalam VI, dan tombol
+                    // berhenti yang bisa ditolak antrian adalah tombol berhenti
+                    // yang rusak. RESET tetap dijaga — ia mengubah keadaan plant.
+                    bool halting = cmd is PythonBridgeService.CmdStop or PythonBridgeService.CmdEStop;
+
+                    // Selain itu: bukan permintaan giliran baru, jadi kalau bukan
+                    // pemegang kendali, parameternya tidak boleh menyentuh plant.
+                    var snapshot = await App.HeQueue.GetSnapshotAsync(ct);
+                    if (!halting && snapshot.Holder is not null && snapshot.Holder.UserId != session.Username)
+                    {
+                        await WriteSimpleAsync(stream, "409 Conflict", "application/json",
+                            new JsonObject
+                            {
+                                ["error"]  = "not_holder",
+                                ["holder"] = HeQueueJson.FromHolder(snapshot.Holder),
+                            }.ToJsonString(), ct);
+                        return;
+                    }
+
+                    bridge.SyncParams(kp, ki, kd, sp, pump, cmd);
+                    break;
+                }
+
                 default:
                     await WriteSimpleAsync(stream, "400 Bad Request", "application/json",
                         new JsonObject { ["error"] = $"Unknown action '{action}'" }.ToJsonString(), ct);
@@ -1299,6 +1418,228 @@ public sealed class ShareServer
             await WriteSimpleAsync(stream, "400 Bad Request", "application/json",
                 new JsonObject { ["error"] = ex.Message }.ToJsonString(), ct);
         }
+    }
+
+    // ── Antrian giliran plant HE + cache hasil parameter ─────────────────────
+    //
+    // Client tidak menyimpan antrian sendiri: setiap keputusan diambil di sini,
+    // di atas database Server, lewat repository yang sama yang dipakai layar
+    // Server. Jadi tidak ada dua sumber kebenaran yang bisa berselisih.
+
+    private static string QueueConflictJson(Models.HeQueueDecision decision) => new JsonObject
+    {
+        ["error"] = "queued",
+        ["queue"] = HeQueueJson.FromDecision(decision),
+    }.ToJsonString();
+
+    /// <summary>GET /he/queue — pemegang kendali, antrean, dan posisi pemanggil sendiri.</summary>
+    private async Task HandleHeQueueGetAsync(
+        NetworkStream stream, Dictionary<string, string> headers, CancellationToken ct)
+    {
+        var session = GetSession(BearerToken(headers));
+        if (session is null)
+        {
+            await WriteSimpleAsync(stream, "401 Unauthorized", "text/plain", "Invalid or expired session", ct);
+            return;
+        }
+
+        var status = await HeControlService.BuildStatusAsync(App.HeQueue, session.Username, session.Role, ct);
+        await WriteJsonAsync(stream, HeQueueJson.FromStatus(status).ToJsonString(), ct);
+    }
+
+    /// <summary>
+    /// POST /he/queue/request — meminta giliran memakai plant. Jawaban <c>200</c>
+    /// berarti boleh jalan sekarang, <c>409</c> berarti masuk antrian; keduanya
+    /// berisi keputusan lengkap, jadi Client tinggal menampilkannya.
+    /// </summary>
+    private async Task HandleHeQueueRequestAsync(
+        NetworkStream stream, Dictionary<string, string> headers, CancellationToken ct)
+    {
+        var session = GetSession(BearerToken(headers));
+        if (session is null)
+        {
+            await WriteSimpleAsync(stream, "401 Unauthorized", "text/plain", "Invalid or expired session", ct);
+            return;
+        }
+
+        var body = await ReadBodyAsync(stream, headers, ct);
+        var type = Models.HeRequestType.Run;
+        try
+        {
+            var raw = (string?)JsonNode.Parse(body)?["type"];
+            if (Enum.TryParse<Models.HeRequestType>(raw, ignoreCase: true, out var parsed)) type = parsed;
+        }
+        catch { /* badan kosong / rusak → anggap permintaan Run biasa */ }
+
+        var decision = await App.HeQueue.RequestControlAsync(
+            session.Username, session.DisplayName, session.Role, type, ct);
+
+        var json = HeQueueJson.FromDecision(decision).ToJsonString();
+        if (decision.CanRunNow) await WriteJsonAsync(stream, json, ct);
+        else                    await WriteSimpleAsync(stream, "409 Conflict", "application/json", json, ct);
+    }
+
+    /// <summary>POST /he/queue/release — melepas kendali; giliran lanjut ke antrean berikutnya.</summary>
+    private async Task HandleHeQueueReleaseAsync(
+        NetworkStream stream, Dictionary<string, string> headers, CancellationToken ct)
+    {
+        var session = GetSession(BearerToken(headers));
+        if (session is null)
+        {
+            await WriteSimpleAsync(stream, "401 Unauthorized", "text/plain", "Invalid or expired session", ct);
+            return;
+        }
+
+        // Kalau yang melepas memang sedang memegang kendali, rekaman run-nya
+        // ditutup di sini juga — kalau tidak, run itu akan menggantung sampai ada
+        // yang menekan RUN lagi.
+        var holder = (await App.HeQueue.GetSnapshotAsync(ct)).Holder;
+        if (holder?.UserId == session.Username)
+            await HeRunRecorder.Instance.FinishAsync(Models.HeParameterRunStatus.Completed);
+
+        var next = await App.HeQueue.ReleaseControlAsync(session.Username, ct);
+        await WriteJsonAsync(stream, new JsonObject
+        {
+            ["ok"]   = true,
+            ["next"] = next is null ? null : HeQueueJson.FromItem(next),
+        }.ToJsonString(), ct);
+    }
+
+    /// <summary>POST /he/queue/cancel — keluar dari antrian sebelum giliran datang.</summary>
+    private async Task HandleHeQueueCancelAsync(
+        NetworkStream stream, Dictionary<string, string> headers, CancellationToken ct)
+    {
+        var session = GetSession(BearerToken(headers));
+        if (session is null)
+        {
+            await WriteSimpleAsync(stream, "401 Unauthorized", "text/plain", "Invalid or expired session", ct);
+            return;
+        }
+
+        bool cancelled = await App.HeQueue.CancelRequestAsync(session.Username, ct);
+        await WriteJsonAsync(stream, new JsonObject
+        {
+            ["ok"]        = true,
+            ["cancelled"] = cancelled,
+        }.ToJsonString(), ct);
+    }
+
+    /// <summary>
+    /// POST /he/queue/force-release — Admin mencabut paksa kendali yang tertinggal
+    /// (klien mati, atau lupa menekan STOP). Peran lain ditolak di sini, bukan
+    /// hanya disembunyikan tombolnya di layar.
+    /// </summary>
+    private async Task HandleHeQueueForceReleaseAsync(
+        NetworkStream stream, Dictionary<string, string> headers, CancellationToken ct)
+    {
+        var session = GetSession(BearerToken(headers));
+        if (session is null)
+        {
+            await WriteSimpleAsync(stream, "401 Unauthorized", "text/plain", "Invalid or expired session", ct);
+            return;
+        }
+        if (!UserRoles.IsAdmin(session.Role))
+        {
+            await WriteSimpleAsync(stream, "403 Forbidden", "text/plain", "Only an Admin can force-release the plant", ct);
+            return;
+        }
+
+        var body = await ReadBodyAsync(stream, headers, ct);
+        string? note = null;
+        try { note = (string?)JsonNode.Parse(body)?["note"]; } catch { }
+
+        await HeRunRecorder.Instance.FinishAsync(Models.HeParameterRunStatus.Aborted,
+            note ?? $"Dicabut paksa oleh {session.DisplayName}");
+        var next = await App.HeQueue.ForceReleaseAsync(session.Username, note, ct);
+
+        await WriteJsonAsync(stream, new JsonObject
+        {
+            ["ok"]   = true,
+            ["next"] = next is null ? null : HeQueueJson.FromItem(next),
+        }.ToJsonString(), ct);
+    }
+
+    /// <summary>GET /he/queue/log?limit=N — riwayat antrian untuk panel/laporan (staf saja).</summary>
+    private async Task HandleHeQueueLogGetAsync(
+        NetworkStream stream, string rawPath, Dictionary<string, string> headers, CancellationToken ct)
+    {
+        var session = GetSession(BearerToken(headers));
+        if (session is null)
+        {
+            await WriteSimpleAsync(stream, "401 Unauthorized", "text/plain", "Invalid or expired session", ct);
+            return;
+        }
+        if (!UserRoles.IsStaff(session.Role))
+        {
+            await WriteSimpleAsync(stream, "403 Forbidden", "text/plain", "Only staff can read the queue log", ct);
+            return;
+        }
+
+        int limit = Math.Clamp(QueryInt(rawPath, "limit", 50), 1, 500);
+        var entries = await App.HeQueue.GetRecentLogAsync(limit, ct);
+
+        var arr = new JsonArray();
+        foreach (var entry in entries) arr.Add((JsonNode)HeQueueJson.FromLogEntry(entry));
+        await WriteJsonAsync(stream, new JsonObject { ["entries"] = arr }.ToJsonString(), ct);
+    }
+
+    /// <summary>
+    /// POST /he/params/lookup — hasil yang sudah pernah dijalankan untuk kombinasi
+    /// SP/Kc/Ti/Td/Pump ini. Ada isinya berarti plant tidak perlu dijalankan lagi.
+    /// </summary>
+    private async Task HandleHeParamLookupAsync(
+        NetworkStream stream, Dictionary<string, string> headers, CancellationToken ct)
+    {
+        var session = GetSession(BearerToken(headers));
+        if (session is null)
+        {
+            await WriteSimpleAsync(stream, "401 Unauthorized", "text/plain", "Invalid or expired session", ct);
+            return;
+        }
+
+        var body = await ReadBodyAsync(stream, headers, ct);
+        Models.HeParameterInput input;
+        try
+        {
+            var node = JsonNode.Parse(body) ?? throw new Exception("Invalid input");
+            input = new Models.HeParameterInput
+            {
+                Sp   = (double?)node["sp"]   ?? 0,
+                Kc   = (double?)node["kc"]   ?? 0,
+                Ti   = (double?)node["ti"]   ?? 0,
+                Td   = (double?)node["td"]   ?? 0,
+                Pump = (double?)node["pump"] ?? 0,
+            };
+        }
+        catch
+        {
+            await WriteSimpleAsync(stream, "400 Bad Request", "application/json",
+                "{\"error\":\"malformed_input\"}", ct);
+            return;
+        }
+
+        var run = await App.HeParamCache.FindCachedRunAsync(input, countReuse: true, ct);
+        await WriteJsonAsync(stream, new JsonObject
+        {
+            ["found"] = run is not null,
+            ["run"]   = run is null ? null : HeQueueJson.FromRun(run),
+        }.ToJsonString(), ct);
+    }
+
+    /// <summary>Nilai integer satu parameter query (mis. <c>?limit=50</c>), atau <paramref name="fallback"/>.</summary>
+    private static int QueryInt(string rawPath, string name, int fallback)
+    {
+        int q = rawPath.IndexOf('?');
+        if (q < 0) return fallback;
+
+        foreach (var pair in rawPath[(q + 1)..].Split('&', StringSplitOptions.RemoveEmptyEntries))
+        {
+            int eq = pair.IndexOf('=');
+            if (eq <= 0) continue;
+            if (!pair[..eq].Equals(name, StringComparison.OrdinalIgnoreCase)) continue;
+            if (int.TryParse(pair[(eq + 1)..], out int value)) return value;
+        }
+        return fallback;
     }
 
     // ── Challenge grading over HTTP (staff on CLIENT flavor) ─────────────────
