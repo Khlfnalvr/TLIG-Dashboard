@@ -100,6 +100,9 @@
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.8.260508005" />
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.28000.1839" />
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.3.2" />
+    <!-- SQLite (ADO.NET + bundled native engine) — backs the HE control queue and
+         the parameter-run cache; see Database\*.sql and Services\HeSqliteDatabase.cs. -->
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.11" />
     <PackageReference Include="System.Drawing.Common" Version="10.0.0" />
   </ItemGroup>
 
@@ -114,6 +117,18 @@
     <Content Include="cloudflared.exe" Condition="'$(Flavor)' == 'Server' And Exists('cloudflared.exe')">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      Database schemas for the HE control queue and the parameter-run cache.
+      Embedded (not copied to the output folder) so a trimmed, self-contained
+      publish cannot lose them: HeSqliteDatabase reads the DDL straight out of
+      the assembly on first run. Both scripts are idempotent (IF NOT EXISTS),
+      so they are safe to apply at every startup.
+    -->
+    <EmbeddedResource Include="Database\HeQueueSchema.sql" />
+    <EmbeddedResource Include="Database\HeParameterCacheSchema.sql" />
   </ItemGroup>
 
   <ItemGroup>

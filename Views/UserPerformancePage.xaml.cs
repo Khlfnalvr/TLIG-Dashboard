@@ -135,6 +135,7 @@ public sealed partial class UserPerformancePage : Page
 
     private string RoleLabelText(string role) => role switch
     {
+        UserRoles.Admin     => Lang.Um_RoleAdmin,
         UserRoles.Dosen     => Lang.Um_RoleDosen,
         UserRoles.Asisten   => Lang.Um_RoleAsisten,
         _                   => Lang.Um_RoleMahasiswa,
@@ -142,6 +143,7 @@ public sealed partial class UserPerformancePage : Page
 
     private static SolidColorBrush RoleTintFor(string role) => role switch
     {
+        UserRoles.Admin   => new(Windows.UI.Color.FromArgb(30, 244, 63, 94)),
         UserRoles.Dosen   => new(Windows.UI.Color.FromArgb(30, 59, 130, 246)),
         UserRoles.Asisten => new(Windows.UI.Color.FromArgb(30, 139, 92, 246)),
         _                 => new(Windows.UI.Color.FromArgb(30, 16, 185, 129)),

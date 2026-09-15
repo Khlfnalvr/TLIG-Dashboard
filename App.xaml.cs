@@ -62,6 +62,21 @@ public partial class App : Application
     public static Services.ControlEngineering.CascadeSessionService CascadeSession { get; }
         = Services.ControlEngineering.CascadeSessionService.Instance;
 
+    /// <summary>
+    /// Antrian giliran memakai plant HE — hanya satu orang boleh mengendalikan
+    /// plant pada satu waktu, dan giliran dibagikan menurut prioritas
+    /// Admin → Dosen/Asisten → Mahasiswa. Databasenya milik Server; Client
+    /// meminta giliran ke Server, tidak punya file antrian sendiri.
+    /// </summary>
+    public static Services.HeQueueRepository HeQueue { get; } = Services.HeQueueRepository.Instance;
+
+    /// <summary>
+    /// Cache hasil percobaan parameter HE. Kombinasi SP/Kc/Ti/Td/Pump yang sudah
+    /// pernah dijalankan hasilnya diambil dari sini, jadi plant tidak perlu
+    /// dijalankan ulang hanya untuk mendapatkan angka yang sama.
+    /// </summary>
+    public static Services.HeParameterCacheRepository HeParamCache { get; } = Services.HeParameterCacheRepository.Instance;
+
     public App()
     {
         InitializeComponent();
@@ -72,6 +87,8 @@ public partial class App : Application
     {
         try
         {
+            InitializeHeDatabases();
+
             CurrentWindow = new MainWindow();
             ViewModel = CurrentWindow.ViewModel;
             CurrentWindow.Activate();
@@ -81,6 +98,30 @@ public partial class App : Application
         {
             ShowFatalError(ex);
         }
+    }
+
+    /// <summary>
+    /// Membuat/memutakhirkan database HE (antrian giliran + cache parameter) di
+    /// sisi Server. Berjalan di latar belakang supaya jendela tidak menunggu
+    /// disk, dan kegagalannya tidak mematikan aplikasi: tanpa database, fitur
+    /// antrian dan cache saja yang tidak aktif — dashboard tetap bisa dipakai.
+    /// </summary>
+    private static void InitializeHeDatabases()
+    {
+        if (!Services.BuildInfo.IsServer) return;
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await HeQueue.InitializeAsync();
+                await HeParamCache.InitializeAsync();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"HE database init failed: {ex}");
+            }
+        });
     }
 
     private async void OnUnhandledException(object sender, Microsoft.UI.Xaml.UnhandledExceptionEventArgs e)
