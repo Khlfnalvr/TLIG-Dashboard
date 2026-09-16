@@ -126,33 +126,45 @@ public partial class App : Application
     }
 
     /// <summary>
-    /// Penjaga antrian: melepas kendali yang sudah dipegang melewati
-    /// <see cref="Services.HeControlService.MaxHold"/>. Tanpa ini, satu Client
-    /// yang mati atau lupa menekan STOP membuat antrian macet selamanya — dan
-    /// justru itu yang paling sering terjadi di lab.
+    /// Penjaga antrian: memutus kendali yang sudah dipegang melewati
+    /// <see cref="Services.HeControlService.MaxHold"/>. Tanpa ini, satu Client yang
+    /// mati atau lupa menekan BERHENTI membuat antrian macet selamanya — dan justru
+    /// itu yang paling sering terjadi di lab.
     ///
-    /// Snapshot dibaca dulu, baru dilepas, supaya rekaman run yang menggantung
-    /// ikut ditutup sebagai <c>Aborted</c> (dan karena itu tidak pernah dipakai
-    /// ulang sebagai hasil cache). Berjalan selama aplikasi Server hidup; kalau
-    /// satu putaran gagal (database terkunci sesaat), putaran berikutnya mencoba
-    /// lagi — tidak ada gunanya mematikan penjaganya.
+    /// <para><b>Plant dihentikan dulu, baru gilirannya dilepas</b>
+    /// (<see cref="Services.HeRigRelease"/>). Melepas giliran lebih dulu berarti
+    /// mahasiswa berikutnya bisa menerima rig yang masih menyala dengan setpoint
+    /// orang sebelumnya. Kalau perintah berhentinya tidak sampai, gilirannya sengaja
+    /// tidak dilepas dan staf diberi tahu lewat
+    /// <see cref="Services.HeRigRelease.Trouble"/>.</para>
+    ///
+    /// <para>Rekaman run yang menggantung ikut ditutup sebagai <c>Aborted</c> dengan
+    /// catatan "terputus", jadi datanya tetap tersimpan lengkap untuk laporan tapi
+    /// tidak pernah disodorkan sebagai hasil cache.</para>
+    ///
+    /// <para>Berjalan selama aplikasi Server hidup; kalau satu putaran gagal
+    /// (database terkunci sesaat), putaran berikutnya mencoba lagi — tidak ada
+    /// gunanya mematikan penjaganya.</para>
     /// </summary>
     private static async Task WatchStaleHolderAsync()
     {
         var period = TimeSpan.FromMinutes(1);
+        int minutes = (int)Math.Round(Services.HeControlService.MaxHold.TotalMinutes);
+        string reason = $"Kendali diputus otomatis setelah {minutes} menit";
+
         while (true)
         {
             await Task.Delay(period);
             try
             {
-                var snapshot = await HeQueue.GetSnapshotAsync();
-                if (snapshot.Holder is not { } holder) continue;
-                if (holder.HeldFor <= Services.HeControlService.MaxHold) continue;
-
-                await Services.HeRunRecorder.Instance.FinishAsync(
-                    Models.HeParameterRunStatus.Aborted,
-                    $"Kendali dilepas otomatis setelah {Services.HeControlService.MaxHold.TotalMinutes:0} menit");
-                await HeQueue.ExpireStaleHolderAsync(Services.HeControlService.MaxHold);
+                // Batas ini hanya berlaku untuk Mahasiswa — merekalah yang memakai
+                // rig bergantian. Dosen, Asisten, dan Admin ada di sana sebagai
+                // pengawas dan justru perlu bisa memegang kendali selama dibutuhkan
+                // ketika sesuatu tidak beres.
+                await Services.HeRigRelease.ExpireAsync(
+                    Services.HeControlService.MaxHold,
+                    Services.HeControlService.LimitedPriority,
+                    reason);
             }
             catch (Exception ex)
             {

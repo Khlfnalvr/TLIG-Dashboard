@@ -19,6 +19,7 @@ public sealed partial class ChallengeLearningPage : Page
 {
     // ── State ────────────────────────────────────────────────────────────────
     private readonly ChallengeService _service = ChallengeService.Instance;
+    private LocalizationManager Lang => App.Lang;
     private bool   _isAdmin;
     private string _studentId   = "";
     private string _studentName = "";
@@ -83,10 +84,12 @@ public sealed partial class ChallengeLearningPage : Page
         RefreshList();
         ActivityStore.Instance.Changed += OnActivityChanged;
         SubmissionReceived += OnSubmissionReceived;
+        Lang.PropertyChanged += OnLangChanged;
         Unloaded += (_, _) =>
         {
             ActivityStore.Instance.Changed -= OnActivityChanged;
             SubmissionReceived -= OnSubmissionReceived;
+            Lang.PropertyChanged -= OnLangChanged;
         };
     }
 
@@ -142,6 +145,14 @@ public sealed partial class ChallengeLearningPage : Page
 
     private void OnActivityChanged()
         => DispatcherQueue.TryEnqueue(() => { if (_selected != null && !_isAdmin) RefreshMyActivityLog(); });
+
+    /// <summary>
+    /// Hanya kartu riwayat percobaan yang ikut berganti bahasa di sini — sisa
+    /// halaman ini memang masih berbahasa Indonesia tetap, dan menggantinya
+    /// sekaligus bukan bagian dari pekerjaan ini.
+    /// </summary>
+    private void OnLangChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+        => DispatcherQueue.TryEnqueue(() => { if (!_isAdmin) RenderMyRuns(); });
 
     private void OnSubmissionReceived()
         => DispatcherQueue.TryEnqueue(() => { if (_selected != null && _isAdmin) _ = RebuildStudentListAsync(_selected); });
@@ -559,6 +570,7 @@ public sealed partial class ChallengeLearningPage : Page
 
         BuildStudentTaskList(ch);
         RefreshMyActivityLog();
+        _ = RefreshMyRunsAsync();
 
         // Pre-fill if already submitted
         var mySub = ch.Submissions.FirstOrDefault(s => s.StudentId == _studentId);
@@ -731,6 +743,224 @@ public sealed partial class ChallengeLearningPage : Page
 
         foreach (var log in myLogs)
             MyActivityList.Children.Add(BuildCompactLogRow(log));
+    }
+
+    // ════════════════════════════════════════════════════════════
+    //  RIWAYAT PERCOBAAN PLANT MILIK SENDIRI
+    // ════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// Sebanyak-banyaknya percobaan yang ditarik untuk tabel ini. Praktikum satu
+    /// semester tidak akan mendekatinya, dan ekspor CSV memakai daftar yang sama —
+    /// jadi yang terlihat di layar persis yang ikut ke file.
+    /// </summary>
+    private const int MyRunsLimit = 100;
+
+    private List<HeParameterRun> _myRuns = [];
+
+    /// <summary>
+    /// Membaca ulang percobaan milik mahasiswa yang sedang login.
+    ///
+    /// <para><b>Penyaringnya ada di Server, bukan di sini.</b> Yang dipanggil
+    /// <see cref="HeControlService.GetMyRunsAsync"/>: di Server ia memakai username
+    /// sesi, di Client ia memanggil <c>/he/params/my-runs</c> yang sama sekali tidak
+    /// menerima parameter pengguna. Tidak ada permintaan yang bisa diubah dari layar
+    /// ini untuk melihat percobaan mahasiswa lain.</para>
+    /// </summary>
+    private async Task RefreshMyRunsAsync()
+    {
+        MyRunsCard.Visibility = _isAdmin ? Visibility.Collapsed : Visibility.Visible;
+        if (_isAdmin) return;
+
+        try
+        {
+            _myRuns = [.. await HeControlService.GetMyRunsAsync(MyRunsLimit)];
+            MyRunsStatusText.Visibility = Visibility.Collapsed;
+        }
+        catch
+        {
+            _myRuns = [];
+            ShowMyRunsStatus(Lang.HeH_Unreachable, Critical);
+        }
+
+        RenderMyRuns();
+    }
+
+    private void RenderMyRuns()
+    {
+        MyRunsTitle.Text      = Lang.HeMy_Title;
+        MyRunsSubtitle.Text   = Lang.HeMy_Subtitle;
+        MyRunsExportBtn.Content = Lang.HeMy_Export;
+        ToolTipService.SetToolTip(MyRunsRefreshBtn, Lang.HeH_Refresh);
+
+        MyRunsList.Children.Clear();
+        MyRunsEmptyText.Text       = Lang.HeMy_Empty;
+        MyRunsEmptyText.Visibility = _myRuns.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        MyRunsExportBtn.IsEnabled  = _myRuns.Count > 0;
+
+        if (_myRuns.Count == 0) return;
+
+        MyRunsList.Children.Add(BuildMyRunsHeader());
+        foreach (var run in _myRuns)
+            MyRunsList.Children.Add(BuildMyRunRow(run));
+    }
+
+    private Grid BuildMyRunsHeader()
+    {
+        var g = MyRunsGrid();
+        g.Margin = new Thickness(0, 2, 0, 2);
+
+        Add(g, 0, Lang.HeH_ColWhen);
+        Add(g, 1, Lang.HeH_ColParams);
+        Add(g, 2, Lang.HeH_ColStatus);
+        return g;
+
+        void Add(Grid grid, int column, string text)
+        {
+            var blk = new TextBlock
+            {
+                Text = text, FontSize = 9, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center
+            };
+            Grid.SetColumn(blk, column);
+            grid.Children.Add(blk);
+        }
+    }
+
+    private Border BuildMyRunRow(HeParameterRun run)
+    {
+        var g = MyRunsGrid();
+
+        var when = new TextBlock
+        {
+            Text = run.StartedAtUtc.ToLocalTime().ToString("dd MMM HH:mm"),
+            FontSize = 9, Foreground = TextSecondary,
+            VerticalAlignment = VerticalAlignment.Top
+        };
+        Grid.SetColumn(when, 0);
+        g.Children.Add(when);
+
+        // Parameter di baris pertama, metrik di baris kedua: itulah dua hal yang
+        // dibandingkan mahasiswa saat menulis laporan, dan menaruhnya berdampingan
+        // di panel sesempit ini hanya akan memotong keduanya.
+        var stack = new StackPanel { Spacing = 1 };
+        stack.Children.Add(new TextBlock
+        {
+            Text = $"SP {N(run.Input.Sp)} · Kc {N(run.Input.Kc)} · Ti {N(run.Input.Ti)} · " +
+                   $"Td {N(run.Input.Td)} · Pump {N(run.Input.Pump)}%",
+            FontSize = 10, Foreground = TextPrimary,
+            TextTrimming = TextTrimming.CharacterEllipsis, TextWrapping = TextWrapping.NoWrap
+        });
+        stack.Children.Add(new TextBlock
+        {
+            Text = MetricsLine(run),
+            FontSize = 9, Foreground = TextSecondary,
+            TextTrimming = TextTrimming.CharacterEllipsis, TextWrapping = TextWrapping.NoWrap
+        });
+        Grid.SetColumn(stack, 1);
+        g.Children.Add(stack);
+
+        var (label, fg, bg) = RunStatusLook(run);
+        var badge = new Border
+        {
+            CornerRadius = new CornerRadius(3), Padding = new Thickness(5, 1, 5, 1),
+            Background = bg, VerticalAlignment = VerticalAlignment.Top,
+            Child = new TextBlock { Text = label, FontSize = 9, Foreground = fg }
+        };
+        Grid.SetColumn(badge, 2);
+        g.Children.Add(badge);
+
+        return new Border
+        {
+            Background = SubtleBg,
+            CornerRadius = new CornerRadius(4),
+            Padding = new Thickness(6, 4, 6, 4),
+            Child = g
+        };
+    }
+
+    private static Grid MyRunsGrid()
+    {
+        var g = new Grid { ColumnSpacing = 8 };
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        return g;
+    }
+
+    /// <summary>
+    /// Label status percobaan. Percobaan yang <b>terputus</b> — kendalinya dicabut
+    /// selagi plant berjalan — disimpan sebagai <c>Aborted</c> karena kolom status di
+    /// database dikunci pada tiga nilai; yang membedakannya adalah catatan run-nya,
+    /// dan di sinilah bedanya ditampilkan.
+    /// </summary>
+    private (string Label, Brush Foreground, Brush Background) RunStatusLook(HeParameterRun run)
+    {
+        if (run.IsInterrupted) return (Lang.HeH_StatusInterrupted, Critical, CriticalBg);
+
+        return run.Status switch
+        {
+            HeParameterRunStatus.Completed => (Lang.HeH_StatusCompleted, Success,  SuccessBg),
+            HeParameterRunStatus.Failed    => (Lang.HeH_StatusFailed,    Critical, CriticalBg),
+            _                              => (Lang.HeH_StatusAborted,   Caution,  CautionBg),
+        };
+    }
+
+    private string MetricsLine(HeParameterRun run)
+    {
+        var parts = new List<string>();
+        if (run.Metrics is { } m)
+        {
+            if (m.RiseTimeSeconds     is { } rise) parts.Add($"Rise {N(rise)} s");
+            if (m.SettlingTimeSeconds is { } settle) parts.Add($"Settling {N(settle)} s");
+            if (m.OvershootPercent    is { } os)   parts.Add($"OS {N(os)} %");
+            if (m.SteadyStateError    is { } err)  parts.Add($"Err {N(err)} °C");
+        }
+        if (run.DurationSeconds is { } dur) parts.Add($"{N(dur)} s");
+
+        return parts.Count == 0 ? "—" : string.Join(" · ", parts);
+    }
+
+    private static string N(double value) =>
+        value.ToString("0.###", System.Globalization.CultureInfo.CurrentCulture);
+
+    private async void MyRunsRefreshBtn_Click(object sender, RoutedEventArgs e)
+    {
+        MyRunsRefreshBtn.IsEnabled = false;
+        try { await RefreshMyRunsAsync(); }
+        finally { MyRunsRefreshBtn.IsEnabled = true; }
+    }
+
+    /// <summary>
+    /// Menyimpan tabel ini sebagai CSV lewat dialog "simpan sebagai", memakai
+    /// perakit dan penulis yang sama dengan halaman riwayat staf
+    /// (<see cref="HeCsvExport.Runs"/> + <see cref="CsvFileSaver"/>) — supaya file
+    /// yang dipegang mahasiswa dan yang dipegang dosen berbentuk persis sama.
+    /// </summary>
+    private async void MyRunsExportBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (_myRuns.Count == 0) return;
+
+        MyRunsExportBtn.IsEnabled = false;
+        try
+        {
+            string csv  = HeCsvExport.Runs(_myRuns);
+            string? path = await CsvFileSaver.SaveAsync(csv, "riwayat_percobaan_saya");
+            if (path is not null)
+                ShowMyRunsStatus($"{Lang.HeH_ExportSaved}: {path}", Success);
+        }
+        catch (Exception ex)
+        {
+            ShowMyRunsStatus($"{Lang.HeH_ExportFailed}: {ex.Message}", Critical);
+        }
+        finally { MyRunsExportBtn.IsEnabled = true; }
+    }
+
+    private void ShowMyRunsStatus(string text, Brush brush)
+    {
+        MyRunsStatusText.Text       = text;
+        MyRunsStatusText.Foreground = brush;
+        MyRunsStatusText.Visibility = Visibility.Visible;
     }
 
     private Border BuildCompactLogRow(ActivityLog log)

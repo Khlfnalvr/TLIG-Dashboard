@@ -540,6 +540,48 @@
                         </StackPanel>
                     </Border>
 
+                    <!-- Riwayat percobaan plant milik mahasiswa ini sendiri.
+                         Sengaja kartu terpisah di bawah "Aktivitas Saya", bukan
+                         digabung ke dalamnya: aktivitas adalah catatan langkah,
+                         sedangkan ini tabel hasil percobaan yang dipakai untuk
+                         laporan — termasuk diekspor ke CSV. Isinya disaring Server
+                         berdasarkan identitas login, bukan oleh layar ini. -->
+                    <Border x:Name="MyRunsCard" Style="{StaticResource CL_Card}">
+                        <StackPanel Spacing="8">
+                            <Grid>
+                                <StackPanel VerticalAlignment="Center">
+                                    <TextBlock x:Name="MyRunsTitle"
+                                               Text="RIWAYAT PERCOBAAN SAYA"
+                                               Style="{StaticResource CL_SectionHeader}"/>
+                                    <TextBlock x:Name="MyRunsSubtitle"
+                                               Style="{StaticResource CL_Label}"
+                                               TextWrapping="Wrap"/>
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" Spacing="6"
+                                            HorizontalAlignment="Right"
+                                            VerticalAlignment="Top">
+                                    <Button x:Name="MyRunsRefreshBtn"
+                                            Content="↻"
+                                            FontSize="10" CornerRadius="5"
+                                            Padding="8,3"
+                                            Click="MyRunsRefreshBtn_Click"/>
+                                    <Button x:Name="MyRunsExportBtn"
+                                            FontSize="10" CornerRadius="5"
+                                            Padding="8,3"
+                                            Click="MyRunsExportBtn_Click"/>
+                                </StackPanel>
+                            </Grid>
+                            <StackPanel x:Name="MyRunsList" Spacing="4"/>
+                            <TextBlock x:Name="MyRunsEmptyText"
+                                       Style="{StaticResource CL_Label}"
+                                       Margin="0,4" HorizontalAlignment="Center"/>
+                            <TextBlock x:Name="MyRunsStatusText"
+                                       FontSize="11" Margin="0,2"
+                                       TextWrapping="Wrap"
+                                       Visibility="Collapsed"/>
+                        </StackPanel>
+                    </Border>
+
                     <!-- Submit section -->
                     <Border Style="{StaticResource CL_Card}">
                         <StackPanel Spacing="10">

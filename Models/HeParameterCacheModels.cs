@@ -128,6 +128,24 @@ public sealed class HeParameterRun
 
     /// <summary>True kalau run ini datang dari cache, bukan baru saja dijalankan.</summary>
     public bool IsFromCache => ReuseCount > 0;
+
+    /// <summary>
+    /// Penanda di awal <see cref="Note"/> untuk percobaan yang <b>terputus</b>:
+    /// kendalinya dicabut selagi plant masih berjalan (batas 30 menit terlampaui,
+    /// aplikasi ditutup, atau staf mencabut paksa).
+    ///
+    /// <para>Statusnya tetap <see cref="HeParameterRunStatus.Aborted"/> — kolom
+    /// <c>status</c> di SQLite dikunci <c>CHECK (status IN (...))</c>, jadi nilai
+    /// baru berarti membangun ulang tabelnya beserta seluruh isinya. Datanya tetap
+    /// tersimpan lengkap; yang membedakan hanya catatan ini, dan layar riwayat
+    /// mahasiswa menampilkannya sebagai "Terputus".</para>
+    /// </summary>
+    public const string InterruptedMarker = "[terputus]";
+
+    /// <summary>Percobaan yang terhenti di tengah jalan karena kendalinya dicabut.</summary>
+    public bool IsInterrupted =>
+        Status == HeParameterRunStatus.Aborted &&
+        (Note?.StartsWith(InterruptedMarker, StringComparison.Ordinal) ?? false);
 }
 
 /// <summary>Ringkasan isi cache — untuk panel status/pengaturan di Server.</summary>

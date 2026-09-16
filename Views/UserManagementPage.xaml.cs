@@ -6,8 +6,15 @@ using TLIGDashboard.Services;
 
 namespace TLIGDashboard.Views;
 
-/// <summary>Flattened, fully-localized view of a <see cref="UserAccount"/> for the list.</summary>
-public sealed class UserRow
+/// <summary>
+/// Flattened, fully-localized view of a <see cref="UserAccount"/> for the list.
+///
+/// <para>Sebagian besar isinya dibangun sekali lalu tidak berubah, jadi dibiarkan
+/// <c>init</c>. Yang berubah sendiri hanya <see cref="QueueStatusLabel"/>: antrian
+/// plant bergerak karena orang lain, dan membangun ulang seluruh daftar tiap tiga
+/// detik akan mengacaukan gulir serta tombol yang sedang ditekan staf.</para>
+/// </summary>
+public sealed class UserRow : INotifyPropertyChanged
 {
     public string Username      { get; init; } = "";
     public string DisplayName   { get; init; } = "";
@@ -15,8 +22,27 @@ public sealed class UserRow
     public string Kelas         { get; init; } = "";
     public string NrpKelasLabel { get; init; } = "";   // combined display string
     public string RoleLabel     { get; init; } = "";
-    public string StatusLabel   { get; init; } = "";
+    public string StatusLabel   { get; init; } = "";   // aktif / dinonaktifkan (akun)
     public string LastLoginText { get; init; } = "";
+
+    /// <summary>
+    /// Keadaan pengguna ini di antrian plant HE: sedang memakai plant, mengantre di
+    /// posisi berapa, atau tidak sedang di antrian. Dinamai terpisah dari
+    /// <see cref="StatusLabel"/> yang sudah dipakai untuk status akun.
+    /// </summary>
+    public string QueueStatusLabel
+    {
+        get => _queueStatusLabel;
+        set
+        {
+            if (_queueStatusLabel == value) return;
+            _queueStatusLabel = value;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(QueueStatusLabel)));
+        }
+    }
+    private string _queueStatusLabel = "";
+
+    public event PropertyChangedEventHandler? PropertyChanged;
 
     // Visibility helpers for XAML x:Bind
     public Visibility NrpVisible          { get; init; } = Visibility.Collapsed;
@@ -52,12 +78,92 @@ public sealed partial class UserManagementPage : Page
         UserStore.Instance.Changed += OnStoreChanged;
         Lang.PropertyChanged       += OnLangChanged;
         Refresh();
+        StartQueuePolling();
     }
 
     private void OnUnloaded(object sender, RoutedEventArgs e)
     {
         UserStore.Instance.Changed -= OnStoreChanged;
         Lang.PropertyChanged       -= OnLangChanged;
+        _queueTimer?.Stop();
+    }
+
+    // ── Kolom antrian plant ─────────────────────────────────────────────────
+
+    /// <summary>
+    /// Selang penyegaran kolom antrian. Sama dengan strip antrian di Dashboard:
+    /// cukup terasa langsung, dan bacaannya murah — satu snapshot antrian untuk
+    /// seluruh tabel, bukan satu permintaan per baris.
+    /// </summary>
+    private static readonly TimeSpan QueueRefreshInterval = TimeSpan.FromSeconds(3);
+
+    private DispatcherTimer? _queueTimer;
+    private bool _queueRefreshing;
+
+    /// <summary>
+    /// Menyegarkan kolom antrian secara berkala. Hanya di Server: di sanalah
+    /// database antrian berada, dan halaman ini memang halaman Server.
+    /// </summary>
+    private void StartQueuePolling()
+    {
+        if (!BuildInfo.IsServer) return;
+
+        _queueTimer ??= new DispatcherTimer { Interval = QueueRefreshInterval };
+        _queueTimer.Tick -= OnQueueTick;
+        _queueTimer.Tick += OnQueueTick;
+        _queueTimer.Start();
+        _ = RefreshQueueColumnAsync();
+    }
+
+    private void OnQueueTick(object? sender, object e) => _ = RefreshQueueColumnAsync();
+
+    /// <summary>
+    /// Mengisi ulang kolom antrian di tempat — barisnya tidak dibangun ulang,
+    /// supaya gulir dan tombol yang sedang dipakai staf tidak tersentak tiap tiga
+    /// detik.
+    /// </summary>
+    private async Task RefreshQueueColumnAsync()
+    {
+        if (_queueRefreshing) return;
+        _queueRefreshing = true;
+        try
+        {
+            var snapshot = await App.HeQueue.GetSnapshotAsync();
+
+            var holder = snapshot.Holder;
+            var positions = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            for (int i = 0; i < snapshot.Waiting.Count; i++)
+                positions[snapshot.Waiting[i].UserId] = i + 1;
+
+            foreach (var row in _rows)
+            {
+                row.QueueStatusLabel =
+                    holder is not null && string.Equals(holder.UserId, row.Username, StringComparison.OrdinalIgnoreCase)
+                        ? Lang.Format(nameof(Lang.Um_QueueHolding), FormatDuration(holder.HeldFor))
+                    : positions.TryGetValue(row.Username, out int pos)
+                        ? Lang.Format(nameof(Lang.Um_QueueWaiting), pos)
+                        : Lang.Um_QueueIdle;
+            }
+        }
+        catch
+        {
+            // Database antrian belum siap atau sedang terkunci: kolomnya dibiarkan
+            // apa adanya dan dicoba lagi tiga detik kemudian. Menghapus isinya hanya
+            // akan membuat tabel berkedip tanpa alasan.
+        }
+        finally
+        {
+            _queueRefreshing = false;
+        }
+    }
+
+    /// <summary>Lama pegang dalam bentuk mm:ss (atau h:mm:ss kalau sudah lewat sejam).</summary>
+    private static string FormatDuration(TimeSpan span)
+    {
+        if (span < TimeSpan.Zero) span = TimeSpan.Zero;
+        return span.TotalHours >= 1
+            ? $"{(int)span.TotalHours}:{span.Minutes:00}:{span.Seconds:00}"
+            : $"{span.Minutes:00}:{span.Seconds:00}";
     }
 
     private void OnStoreChanged() => DispatcherQueue.TryEnqueue(Refresh);
@@ -90,6 +196,7 @@ public sealed partial class UserManagementPage : Page
                 LastLoginText = u.LastLoginUtc is null
                     ? Lang.Um_Never
                     : u.LastLoginUtc.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm"),
+                QueueStatusLabel = Lang.Um_QueueIdle,
                 ResetLabel    = Lang.Um_ResetPassword,
                 EditLabel     = Lang.Um_Edit,
                 ToggleLabel   = u.Enabled ? Lang.Um_Disable : Lang.Um_Enable,
@@ -97,6 +204,10 @@ public sealed partial class UserManagementPage : Page
             });
         }
         EmptyText.Visibility = _rows.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+
+        // Baris baru dibangun dengan kolom antrian kosong; diisi segera supaya tidak
+        // menunggu detak timer berikutnya (mis. sesudah menambah pengguna).
+        if (BuildInfo.IsServer) _ = RefreshQueueColumnAsync();
     }
 
     private string RoleLabel(string role) => role switch

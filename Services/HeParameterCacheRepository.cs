@@ -156,6 +156,43 @@ public sealed class HeParameterCacheRepository : HeSqliteDatabase
             return runs;
         }, ct);
 
+    /// <summary>
+    /// Percobaan milik <b>satu</b> pengguna saja — isi tabel "Riwayat Percobaan
+    /// Saya" di halaman Challenge Learning.
+    ///
+    /// <para>Penyaringannya dikerjakan di SQL, bukan dengan menyaring daftar
+    /// lengkap di memori: mahasiswa tidak boleh bisa melihat percobaan mahasiswa
+    /// lain, dan data yang tidak pernah dibaca dari disk tidak bisa bocor karena
+    /// salah tulis di lapisan atasnya. Siapa "saya" ditentukan pemanggil di sisi
+    /// Server dari identitas sesi, bukan dari permintaan Client.</para>
+    /// </summary>
+    public Task<IReadOnlyList<HeParameterRun>> ListRunsByUserAsync(
+        string userId, int limit = 100, int offset = 0, CancellationToken ct = default) =>
+        ReadAsync<IReadOnlyList<HeParameterRun>>(async (conn, token) =>
+        {
+            if (string.IsNullOrWhiteSpace(userId)) return [];
+
+            var runs = new List<HeParameterRun>();
+            await using var cmd = Command(conn, null, $"""
+                SELECT {RunColumns}
+                FROM he_parameter_runs
+                WHERE requested_by_user_id = $userId
+                ORDER BY started_at_utc DESC, run_id DESC
+                LIMIT $limit OFFSET $offset;
+                """);
+            Bind(cmd, "$userId", userId);
+            Bind(cmd, "$limit", limit);
+            Bind(cmd, "$offset", offset);
+
+            await using var reader = await cmd.ExecuteReaderAsync(token);
+            while (await reader.ReadAsync(token)) runs.Add(ReadRun(reader));
+
+            foreach (var run in runs)
+                run.Metrics = await ReadMetricsAsync(conn, null, run.RunId, token);
+
+            return runs;
+        }, ct);
+
     /// <summary>Ringkasan isi cache untuk panel status Server.</summary>
     public Task<HeParameterCacheStats> GetStatsAsync(CancellationToken ct = default) =>
         ReadAsync<HeParameterCacheStats>(async (conn, token) =>

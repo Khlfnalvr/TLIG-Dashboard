@@ -21,7 +21,7 @@ public sealed class HeQueueStatus
     /// <summary>True kalau pemohon sendiri yang sedang memegang kendali plant.</summary>
     public bool IAmHolder { get; init; }
 
-    /// <summary>True kalau peran pemohon (Admin) boleh mencabut paksa kendali orang lain.</summary>
+    /// <summary>True kalau peran pemohon (staf: Admin/Dosen/Asisten) boleh mencabut paksa kendali orang lain.</summary>
     public bool CanForceRelease { get; init; }
 
     public HeControlHolder? Holder => Snapshot.Holder;

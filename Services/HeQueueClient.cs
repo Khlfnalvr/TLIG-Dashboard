@@ -41,12 +41,46 @@ public static class HeQueueClient
     public static async Task<bool> ReleaseAsync(string host, string token) =>
         await PostAsync(host, token, ShareProtocol.HeQueueReleasePath, new JsonObject()) is not null;
 
+    /// <summary>
+    /// Melepas giliran saat Client ditutup atau logout: Server wajib menghentikan
+    /// rig dulu, dan hanya melepas giliran kalau itu berhasil. Tidak ada lagi orang
+    /// di depan layar ini yang akan menyadari perintah berhenti tidak sampai, jadi
+    /// rig yang masih menyala tidak boleh diserahkan ke antrean berikutnya.
+    /// </summary>
+    public static async Task<HeRigReleaseResult> ReleaseOnExitAsync(string host, string token, string reason)
+    {
+        var node = await PostAsync(host, token, ShareProtocol.HeQueueReleasePath, new JsonObject
+        {
+            ["require_stop"] = true,
+            ["reason"]       = reason,
+        });
+        return ToReleaseResult(node);
+    }
+
     public static async Task<bool> CancelAsync(string host, string token) =>
         await PostAsync(host, token, ShareProtocol.HeQueueCancelPath, new JsonObject()) is not null;
 
-    public static async Task<bool> ForceReleaseAsync(string host, string token, string? note) =>
-        await PostAsync(host, token, ShareProtocol.HeQueueForceReleasePath,
-            new JsonObject { ["note"] = note }) is not null;
+    public static async Task<HeRigReleaseResult> ForceReleaseAsync(string host, string token, string? note)
+    {
+        var node = await PostAsync(host, token, ShareProtocol.HeQueueForceReleasePath,
+            new JsonObject { ["note"] = note });
+        return ToReleaseResult(node);
+    }
+
+    /// <summary>
+    /// Jawaban Server atas pelepasan giliran. Server yang tidak terjangkau
+    /// (<c>node == null</c>) dilaporkan sebagai "tidak jadi dilepas", bukan
+    /// "berhasil" — memutihkan kegagalan jaringan di sini akan membuat layar
+    /// mengaku giliran sudah lepas padahal Server tidak pernah mendengarnya.
+    /// </summary>
+    private static HeRigReleaseResult ToReleaseResult(JsonNode? node)
+    {
+        if (node is null) return new HeRigReleaseResult(false, false, "server tidak terjangkau");
+        return new HeRigReleaseResult(
+            (bool?)node["released"]    ?? true,
+            (bool?)node["rig_stopped"] ?? true,
+            (string?)node["problem"]);
+    }
 
     public static async Task<IReadOnlyList<HeQueueLogEntry>> GetRecentLogAsync(string host, string token, int limit)
     {
@@ -77,6 +111,18 @@ public static class HeQueueClient
             Stats = node["stats"] is { } stats ? HeQueueJson.ToStats(stats) : null,
             Ok    = true,
         };
+    }
+
+    /// <summary>Percobaan milik pemanggil sendiri — Server yang menentukan "sendiri" itu siapa.</summary>
+    public static async Task<IReadOnlyList<HeParameterRun>> GetMyRunsAsync(string host, string token, int limit)
+    {
+        var node = await GetAsync(host, token, $"{ShareProtocol.HeParamMyRunsPath}?limit={limit}");
+        if (node?["runs"] is not JsonArray arr) return [];
+
+        var runs = new List<HeParameterRun>();
+        foreach (var item in arr)
+            if (item is not null) runs.Add(HeQueueJson.ToRun(item));
+        return runs;
     }
 
     public static async Task<HeParameterRun?> GetRunAsync(string host, string token, long runId)
@@ -467,8 +513,35 @@ public static class HeQueueJson
 /// </summary>
 public static class HeControlService
 {
-    /// <summary>Batas waktu memegang kendali tanpa aktivitas sebelum dilepas otomatis.</summary>
+    /// <summary>
+    /// Batas lama memegang kendali plant sebelum diputus otomatis. Dihitung sejak
+    /// giliran diberikan — bukan sejak login — jadi yang dibatasi memang waktu
+    /// pemakaian rig, bukan waktu duduk di depan aplikasi.
+    ///
+    /// <para>Hanya berlaku untuk <see cref="HeQueuePriority.Mahasiswa"/>
+    /// (<see cref="LimitedPriority"/>): merekalah yang memakai rig bergantian.
+    /// Dosen, Asisten, dan Admin ada di sana sebagai pengawas dan justru perlu bisa
+    /// memegang kendali selama yang dibutuhkan saat ada yang tidak beres.</para>
+    /// </summary>
     public static readonly TimeSpan MaxHold = TimeSpan.FromMinutes(30);
+
+    /// <summary>Satu-satunya prioritas yang tunduk pada <see cref="MaxHold"/>.</summary>
+    public const HeQueuePriority LimitedPriority = HeQueuePriority.Mahasiswa;
+
+    /// <summary>Peringatan diberikan pada sisa waktu ini, masing-masing sekali per giliran.</summary>
+    public static readonly TimeSpan[] HoldWarnings =
+        [TimeSpan.FromMinutes(5), TimeSpan.FromMinutes(1)];
+
+    /// <summary>
+    /// Sisa waktu giliran <paramref name="holder"/>, atau <c>null</c> kalau
+    /// gilirannya memang tidak dibatasi waktu (staf) atau tidak ada pemegang.
+    /// </summary>
+    public static TimeSpan? RemainingHold(HeControlHolder? holder)
+    {
+        if (holder is null || holder.Priority != LimitedPriority) return null;
+        var left = MaxHold - holder.HeldFor;
+        return left < TimeSpan.Zero ? TimeSpan.Zero : left;
+    }
 
     /// <summary>Antrian hanya berjalan kalau ada identitas yang bisa dicatat.</summary>
     public static bool Enabled => SessionService.Instance.IsSignedIn;
@@ -524,16 +597,47 @@ public static class HeControlService
         return await HeQueueClient.CancelAsync(cfg.ServerHost, cfg.ServerToken);
     }
 
-    /// <summary>Mencabut paksa kendali orang lain — hanya Admin.</summary>
-    public static async Task<bool> ForceReleaseAsync(string? note = null)
+    /// <summary>
+    /// Melepas giliran karena aplikasi ditutup atau pengguna logout selagi
+    /// memegang kendali — bukan karena percobaannya selesai.
+    ///
+    /// <para>Rig dihentikan dulu, dan giliran hanya dilepas kalau itu berhasil:
+    /// setelah ini tidak ada lagi orang di depan layar yang akan menyadari rig
+    /// masih menyala. Kalau perintah berhentinya gagal, giliran sengaja ditahan
+    /// dan staf bisa mencabutnya paksa — jalur itu memang dibuat untuk ini.</para>
+    /// </summary>
+    public static async Task<HeRigReleaseResult> ReleaseOnExitAsync(string reason)
     {
-        if (!Enabled || !UserRoles.IsAdmin(SessionService.Instance.Role)) return false;
+        if (!Enabled) return HeRigReleaseResult.NotHolder;
 
         if (BuildInfo.IsServer)
-        {
-            await App.HeQueue.ForceReleaseAsync(SessionService.Instance.Username, note);
-            return true;
-        }
+            return await HeRigRelease.ByHolderAsync(
+                SessionService.Instance.Username,
+                HeParameterRunStatus.Aborted,
+                HeRigRelease.InterruptedNote(reason),
+                requireRigStop: true);
+
+        var cfg = AppSettingsService.Load();
+        return await HeQueueClient.ReleaseOnExitAsync(cfg.ServerHost, cfg.ServerToken, reason);
+    }
+
+    /// <summary>
+    /// Mencabut paksa kendali orang lain. Hak ini dipegang seluruh staf — Dosen dan
+    /// Asisten, bukan Admin saja: merekalah yang ada di ruang praktikum ketika satu
+    /// giliran tertinggal, dan menunggu Admin berarti rig menganggur.
+    ///
+    /// <para>Berbeda dari jalur otomatis: giliran <b>tetap</b> dilepas walau rig
+    /// gagal dihentikan, karena ini satu-satunya pintu darurat antrian.
+    /// <see cref="HeRigReleaseResult.RigStopped"/> yang <c>false</c> berarti rig
+    /// mungkin masih menyala dan perlu diperiksa langsung.</para>
+    /// </summary>
+    public static async Task<HeRigReleaseResult> ForceReleaseAsync(string? note = null)
+    {
+        if (!Enabled || !UserRoles.IsStaff(SessionService.Instance.Role))
+            return new HeRigReleaseResult(false, false, null);
+
+        if (BuildInfo.IsServer)
+            return await HeRigRelease.ForceAsync(SessionService.Instance.Username, note);
 
         var cfg = AppSettingsService.Load();
         return await HeQueueClient.ForceReleaseAsync(cfg.ServerHost, cfg.ServerToken, note);
@@ -567,6 +671,26 @@ public static class HeControlService
         if (!Enabled) return new HeRunHistory();
         var cfg = AppSettingsService.Load();
         return await HeQueueClient.GetRecentRunsAsync(cfg.ServerHost, cfg.ServerToken, limit);
+    }
+
+    /// <summary>
+    /// Percobaan milik pengguna yang sedang login saja — isi tabel "Riwayat
+    /// Percobaan Saya".
+    ///
+    /// <para>Penyaringannya selalu dikerjakan Server dari identitas sesi: di
+    /// Server dengan username yang sedang login, di Client lewat
+    /// <c>/he/params/my-runs</c> yang tidak menerima parameter pengguna sama
+    /// sekali. Tidak ada jalan bagi Client untuk meminta data orang lain.</para>
+    /// </summary>
+    public static async Task<IReadOnlyList<HeParameterRun>> GetMyRunsAsync(int limit = 100)
+    {
+        if (!Enabled) return [];
+
+        if (BuildInfo.IsServer)
+            return await App.HeParamCache.ListRunsByUserAsync(SessionService.Instance.Username, limit);
+
+        var cfg = AppSettingsService.Load();
+        return await HeQueueClient.GetMyRunsAsync(cfg.ServerHost, cfg.ServerToken, limit);
     }
 
     /// <summary>
@@ -610,7 +734,7 @@ public static class HeControlService
             Snapshot        = snapshot,
             MyPosition      = await queue.GetPositionAsync(userId, ct),
             IAmHolder       = snapshot.Holder?.UserId == userId,
-            CanForceRelease = UserRoles.IsAdmin(role),
+            CanForceRelease = UserRoles.IsStaff(role),
         };
     }
 }

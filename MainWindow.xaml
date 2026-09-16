@@ -607,6 +607,34 @@
             </InfoBar.Resources>
         </InfoBar>
 
+        <!-- Pemberitahuan antrian plant HE: giliran tiba, sisa waktu menipis, giliran
+             berakhir. Sengaja di jendela utama, bukan di kartu Control halaman
+             Dashboard: justru saat pengguna sedang membuka halaman lain kabar-kabar
+             ini paling perlu sampai. Diisi dari code-behind lewat HeQueueWatcher. -->
+        <InfoBar x:Name="QueueInfoBar"
+                 Grid.Row="0"
+                 HorizontalAlignment="Center"
+                 VerticalAlignment="Top"
+                 MinWidth="320"
+                 MaxWidth="600"
+                 Margin="16,44,16,0"
+                 Canvas.ZIndex="31"
+                 IsOpen="False"
+                 IsClosable="True"
+                 Severity="Informational">
+            <InfoBar.Resources>
+                <Style x:Key="InfoBarTitleStyle" TargetType="TextBlock">
+                    <Setter Property="FontSize" Value="11"/>
+                    <Setter Property="FontWeight" Value="SemiBold"/>
+                    <Setter Property="TextWrapping" Value="Wrap"/>
+                </Style>
+                <Style x:Key="InfoBarBodyStyle" TargetType="TextBlock">
+                    <Setter Property="FontSize" Value="11"/>
+                    <Setter Property="TextWrapping" Value="Wrap"/>
+                </Style>
+            </InfoBar.Resources>
+        </InfoBar>
+
         <!--  Update dialog overlay  -->
         <Grid x:Name="UpdateOverlay"
               Grid.RowSpan="3"

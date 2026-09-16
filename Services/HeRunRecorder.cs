@@ -93,7 +93,14 @@ public sealed class HeRunRecorder
     /// tidak sedang merekam (tidak terjadi apa-apa), dan aman dipanggil dua kali:
     /// yang kedua sudah tidak menemukan run terbuka.
     /// </summary>
-    public async Task FinishAsync(HeParameterRunStatus status, string? note = null)
+    /// <param name="expectedUserId">
+    /// Kalau diisi, run hanya ditutup bila memang milik pengguna itu. Dipakai jalur
+    /// pelepasan giliran (<see cref="HeRigRelease"/>): antara membaca siapa pemegang
+    /// kendali dan benar-benar melepasnya, giliran bisa berpindah tangan — tanpa
+    /// penjagaan ini, percobaan milik orang berikutnya yang justru ikut ditutup.
+    /// </param>
+    public async Task FinishAsync(HeParameterRunStatus status, string? note = null,
+                                  string? expectedUserId = null)
     {
         List<HeParameterRunSample> samples;
         HeParameterInput input;
@@ -103,6 +110,8 @@ public sealed class HeRunRecorder
         lock (_gate)
         {
             if (_samples is null || _input is null) return;
+            if (expectedUserId is not null &&
+                !string.Equals(_userId, expectedUserId, StringComparison.Ordinal)) return;
 
             samples    = _samples;
             input      = _input;

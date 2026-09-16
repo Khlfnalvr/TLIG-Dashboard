@@ -109,7 +109,49 @@ public sealed partial class MainWindow : Window
         _earlyAccess = AppSettingsService.Load().EarlyAccess;
         MenuEarlyAccess.IsChecked = _earlyAccess;
 
+        InitHeQueueNotices();
+
         _ = StartupUpdateCheckAsync();
+    }
+
+    // ── Pemberitahuan antrian plant HE ──────────────────────────────────────
+
+    /// <summary>
+    /// Menyalakan pengamat antrian dan menyambungkan kabarnya ke InfoBar di jendela
+    /// ini. Dipasang di jendela utama supaya peringatan sisa waktu dan kabar giliran
+    /// tiba tetap sampai walau pengguna sedang membuka halaman lain — persis keadaan
+    /// yang membuat kabar itu paling dibutuhkan.
+    /// </summary>
+    private void InitHeQueueNotices()
+    {
+        Services.HeQueueWatcher.Instance.Notice += OnHeQueueNotice;
+
+        // Hanya Server yang punya rig: kabar "rig tidak bisa dihentikan" muncul di
+        // sana, dan operator Server-lah yang bisa menindaklanjutinya.
+        if (Services.BuildInfo.IsServer)
+            Services.HeRigRelease.Trouble += OnHeRigTrouble;
+
+        Services.HeQueueWatcher.Instance.Start();
+    }
+
+    private void OnHeQueueNotice(Services.HeQueueNotice notice) =>
+        DispatcherQueue.TryEnqueue(() => ShowQueueInfoBar(notice.Kind, notice.Title, notice.Message));
+
+    private void OnHeRigTrouble(string message) =>
+        DispatcherQueue.TryEnqueue(() => ShowQueueInfoBar(
+            Services.HeQueueNoticeKind.Error, Lang.HeQ_ExitBlockedTitle, message));
+
+    private void ShowQueueInfoBar(Services.HeQueueNoticeKind kind, string title, string message)
+    {
+        QueueInfoBar.Severity = kind switch
+        {
+            Services.HeQueueNoticeKind.Error   => InfoBarSeverity.Error,
+            Services.HeQueueNoticeKind.Warning => InfoBarSeverity.Warning,
+            _                                  => InfoBarSeverity.Informational,
+        };
+        QueueInfoBar.Title   = title;
+        QueueInfoBar.Message = message;
+        QueueInfoBar.IsOpen  = true;
     }
 
     /// <summary>Exposes ContentFrame so pages can inspect what is currently loaded.</summary>
@@ -134,23 +176,44 @@ public sealed partial class MainWindow : Window
 
         Closed += (_, _) =>
         {
-            // Don't leave the external Python client (PIDtest.py) running after the HMI closes.
-            try { App.PythonBridge.Dispose(); } catch { }
-
-            // Percobaan yang masih terbuka ditutup selagi sampelnya masih ada di
-            // memori — statusnya Aborted, jadi tersimpan sebagai catatan tapi tidak
-            // pernah disodorkan sebagai hasil cache. Sengaja TIDAK melepas giliran:
-            // Server yang tutup tidak berarti orang berikutnya boleh jalan, dan
-            // penjaga batas waktu di App yang akan membereskannya.
+            // Giliran yang masih dipegang dilepas di sini, supaya antrian tidak macet
+            // karena satu orang menutup aplikasinya tanpa menekan BERHENTI — itulah
+            // giliran menggantung yang paling sering terjadi di lab.
+            //
+            // Urutannya penting dua kali:
+            //   1. plant dihentikan DULU, baru gilirannya dilepas — kalau tidak,
+            //      orang berikutnya bisa menerima rig yang masih menyala;
+            //   2. ini berjalan SEBELUM PythonBridge.Dispose(), karena perintah
+            //      berhentinya lewat proses Python itu. Membalik urutannya berarti
+            //      memutus jalurnya sendiri lalu mengeluh perintahnya tidak sampai.
+            //
+            // Kalau plant ternyata tidak bisa dihentikan, gilirannya sengaja TIDAK
+            // dilepas (lihat HeRigRelease): staf yang mencabutnya paksa setelah rig
+            // diperiksa. Rekaman run ikut ditutup di jalur yang sama.
             //
             // Lewat Task.Run lalu ditunggu dengan batas waktu, BUKAN ditunggu
-            // langsung di thread UI: penyimpanannya memakai await biasa, jadi
+            // langsung di thread UI: pekerjaannya memakai await biasa, jadi
             // kelanjutannya akan dijadwalkan kembali ke thread UI yang justru
             // sedang menunggu — dan aplikasi menggantung saat ditutup.
             try
             {
-                Task.Run(() => Services.HeRunRecorder.Instance
-                        .FinishAsync(Models.HeParameterRunStatus.Aborted, "Aplikasi Server ditutup"))
+                Task.Run(() => Services.HeControlService.ReleaseOnExitAsync("Aplikasi ditutup"))
+                    .Wait(TimeSpan.FromSeconds(5));
+            }
+            catch { }
+
+            // Don't leave the external Python client (PIDtest.py) running after the HMI closes.
+            try { App.PythonBridge.Dispose(); } catch { }
+
+            // Jaring pengaman: percobaan yang masih terbuka padahal pemiliknya bukan
+            // pemegang giliran (mis. Server dipakai tanpa login) tetap ditutup selagi
+            // sampelnya masih ada di memori — statusnya Aborted, jadi tersimpan
+            // sebagai catatan tapi tidak pernah disodorkan sebagai hasil cache.
+            try
+            {
+                Task.Run(() => Services.HeRunRecorder.Instance.FinishAsync(
+                        Models.HeParameterRunStatus.Aborted,
+                        Services.HeRigRelease.InterruptedNote("Aplikasi ditutup")))
                     .Wait(TimeSpan.FromSeconds(5));
             }
             catch { }
@@ -1207,7 +1270,7 @@ public sealed partial class MainWindow : Window
         UpdateAccountFlyoutText();
     }
 
-    private void LogoutBtn_Click(object sender, RoutedEventArgs e)
+    private async void LogoutBtn_Click(object sender, RoutedEventArgs e)
     {
         AccountFlyout.Hide();
 
@@ -1216,6 +1279,19 @@ public sealed partial class MainWindow : Window
             ShowLoginOverlay();
             return;
         }
+
+        // Logout selagi memegang kendali = giliran menggantung. Dilepas di sini,
+        // plant dihentikan dulu, dan HARUS dikerjakan sebelum apa pun di bawah:
+        // token sesi dihapus beberapa baris lagi, dan tanpa token permintaan lepas
+        // giliran tidak akan pernah sampai ke Server.
+        //
+        // Kalau plant tidak bisa dihentikan, gilirannya sengaja ditahan — pengguna
+        // diberi tahu apa yang harus dilakukan, bukan dibiarkan mengira gilirannya
+        // sudah beres.
+        var exit = await Services.HeControlService.ReleaseOnExitAsync("Pengguna logout");
+        if (!exit.Released && exit.Problem is { } problem)
+            ShowQueueInfoBar(Services.HeQueueNoticeKind.Error, Lang.HeQ_ExitBlockedTitle,
+                Lang.Format(nameof(Lang.HeQ_ExitBlockedMsg), problem));
 
         if (Services.BuildInfo.IsClient)
         {
@@ -1234,6 +1310,10 @@ public sealed partial class MainWindow : Window
         _loggedInUser = "";
         _loggedInRole = "";
         App.Session.SignOut();
+        // Keadaan antrian milik pengguna lama tidak boleh terbawa ke pengguna
+        // berikutnya, kalau tidak giliran orang lain akan dibaca sebagai peristiwa
+        // baru dan diumumkan ke orang yang salah.
+        Services.HeQueueWatcher.Instance.Reset();
         UpdateAccountFlyoutText();
         ApplyRoleNavVisibility();
         ShowLoginOverlay();

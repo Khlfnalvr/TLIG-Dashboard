@@ -5,7 +5,8 @@
 
     <!-- Strip status antrian plant HE: siapa yang sedang memegang kendali, di
          posisi berapa pengguna ini, dan dua tindakan yang mungkin dilakukannya
-         (keluar antrian; Admin mencabut paksa). Isinya diisi dari code-behind,
+         (keluar antrian; staf mencabut paksa). Untuk giliran yang dibatasi waktu,
+         sisa waktunya ikut dihitung mundur di sini. Isinya diisi dari code-behind,
          bukan x:Bind, mengikuti kontrol lain di folder ini. -->
     <Border x:Name="Root"
             Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
@@ -17,6 +18,7 @@
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
@@ -38,8 +40,21 @@
                            Visibility="Collapsed"/>
             </StackPanel>
 
-            <Button x:Name="LeaveButton"
+            <!-- Hitung mundur sisa giliran; tersembunyi untuk giliran yang tidak dibatasi. -->
+            <Border x:Name="TimeLeftBadge"
                     Grid.Column="2"
+                    VerticalAlignment="Center"
+                    CornerRadius="4"
+                    Padding="6,2"
+                    Visibility="Collapsed"
+                    Background="{ThemeResource SubtleFillColorSecondaryBrush}">
+                <TextBlock x:Name="TimeLeftText"
+                           FontSize="10"
+                           FontWeight="SemiBold"/>
+            </Border>
+
+            <Button x:Name="LeaveButton"
+                    Grid.Column="3"
                     FontSize="10"
                     Height="26"
                     Padding="8,0"
@@ -47,7 +62,7 @@
                     Click="LeaveButton_Click"/>
 
             <Button x:Name="ForceButton"
-                    Grid.Column="3"
+                    Grid.Column="4"
                     FontSize="10"
                     Height="26"
                     Padding="8,0"

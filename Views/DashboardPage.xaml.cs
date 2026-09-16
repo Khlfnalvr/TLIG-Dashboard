@@ -410,9 +410,20 @@ public sealed partial class DashboardPage : Page
         var decision = await HeControlService.RequestAsync(Models.HeRequestType.Run);
         if (decision is not null && !decision.CanRunNow)
         {
+            // Ditolak bukan berarti tidak jelas apa yang terjadi: yang ditanyakan
+            // mahasiswa di lab selalu "sedang dipakai siapa" dan "saya nomor berapa",
+            // jadi keduanya disebut sekaligus, lengkap dengan sudah berapa lama
+            // plant dipegang dan berapa orang yang mengantre.
+            var holder  = decision.Holder;
+            int waiting = Math.Max(decision.Position, await QueueLengthAsync());
+
             ShowControlInfo(InfoBarSeverity.Warning, Lang.HeQ_QueuedTitle,
                 Lang.Format(nameof(Lang.HeQ_QueuedMsg),
-                    decision.Holder?.DisplayName ?? "-", decision.Position));
+                    holder?.DisplayName ?? "-",
+                    holder is null ? "-" : Models.HeQueuePriorityMap.Label(holder.Priority),
+                    holder is null ? "-" : FormatSpan(holder.HeldFor),
+                    decision.Position,
+                    waiting));
             await CtlQueueView.RefreshAsync();
             return;
         }
@@ -477,6 +488,22 @@ public sealed partial class DashboardPage : Page
 
     private static double Safe(double value) => double.IsNaN(value) ? 0 : value;
 
+    /// <summary>Berapa orang yang sedang mengantre — 0 kalau antriannya tidak terbaca.</summary>
+    private static async Task<int> QueueLengthAsync()
+    {
+        try { return (await HeControlService.GetStatusAsync())?.Snapshot.Waiting.Count ?? 0; }
+        catch { return 0; }
+    }
+
+    /// <summary>Durasi dalam bentuk mm:ss (atau h:mm:ss kalau sudah lewat sejam).</summary>
+    private static string FormatSpan(TimeSpan span)
+    {
+        if (span < TimeSpan.Zero) span = TimeSpan.Zero;
+        return span.TotalHours >= 1
+            ? $"{(int)span.TotalHours}:{span.Minutes:00}:{span.Seconds:00}"
+            : $"{span.Minutes:00}:{span.Seconds:00}";
+    }
+
     /// <summary>
     /// Melepas giliran setelah percobaan selesai, sekaligus menutup rekaman
     /// run-nya. Yang bukan pemegang kendali tidak diberi kabar apa-apa: tombol
@@ -500,6 +527,11 @@ public sealed partial class DashboardPage : Page
         // di thread UI membuat dashboard tersendat tepat saat tombol BERHENTI ditekan.
         if (BuildInfo.IsServer && wasHolder)
             await Task.Run(() => HeRunRecorder.Instance.FinishAsync(Models.HeParameterRunStatus.Completed));
+
+        // Pelepasan ini kehendak pengguna sendiri, jadi pengamat antrian tidak perlu
+        // mengumumkannya lagi sebagai "giliran Anda berakhir" — InfoBar di bawah ini
+        // yang memberi kabar, dan dua pesan untuk satu kejadian hanya membingungkan.
+        if (wasHolder) HeQueueWatcher.Instance.ExpectOwnRelease();
 
         await HeControlService.ReleaseAsync();
 

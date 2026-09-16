@@ -266,12 +266,20 @@ public sealed class HeQueueRepository : HeSqliteDatabase
     /// Melepas kendali yang sudah dipegang melebihi <paramref name="maxHold"/>
     /// (mis. klien putus tanpa menekan STOP) supaya antrian tidak macet selamanya.
     /// Panggil berkala dari timer Server. <c>null</c> kalau tidak ada yang perlu dilepas.
+    ///
+    /// <para><paramref name="onlyPriority"/> membatasi pemutusan pada satu tingkat
+    /// prioritas saja — dipakai untuk aturan "yang dibatasi 30 menit hanya
+    /// Mahasiswa". Pemeriksaannya sengaja di dalam transaksi yang sama dengan
+    /// pelepasannya: kalau giliran sempat berpindah tangan sepersekian detik
+    /// sebelumnya, yang dilepas tetap orang yang benar-benar melewati batas.</para>
     /// </summary>
-    public Task<HeQueueItem?> ExpireStaleHolderAsync(TimeSpan maxHold, CancellationToken ct = default) =>
+    public Task<HeQueueItem?> ExpireStaleHolderAsync(
+        TimeSpan maxHold, HeQueuePriority? onlyPriority = null, CancellationToken ct = default) =>
         WriteAsync<HeQueueItem?>(async (conn, tx, token) =>
         {
             var holder = await ReadHolderAsync(conn, tx, token);
             if (holder is null || holder.HeldFor <= maxHold) return null;
+            if (onlyPriority is { } limited && holder.Priority != limited) return null;
 
             var item = await FindItemAsync(conn, tx, holder.UserId, HeQueueItemStatus.Granted, token);
             await EndItemAsync(conn, tx, item?.QueueId ?? holder.QueueId, HeQueueItemStatus.Expired,

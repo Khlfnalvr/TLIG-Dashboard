@@ -58,11 +58,12 @@ public static class ShareProtocol
     public const string HeQueueRequestPath      = "/he/queue/request";       // POST {type} minta giliran
     public const string HeQueueReleasePath      = "/he/queue/release";       // POST lepas kendali
     public const string HeQueueCancelPath       = "/he/queue/cancel";        // POST keluar dari antrian
-    public const string HeQueueForceReleasePath = "/he/queue/force-release"; // POST {note} cabut paksa (Admin)
+    public const string HeQueueForceReleasePath = "/he/queue/force-release"; // POST {note} cabut paksa (staf)
     public const string HeQueueLogPath          = "/he/queue/log";           // GET  ?limit= riwayat (staf)
     public const string HeParamLookupPath       = "/he/params/lookup";       // POST {sp,kc,ti,td,pump} cari hasil cache
     public const string HeParamRunsPath         = "/he/params/runs";         // GET  ?limit= daftar percobaan + ringkasan (staf)
     public const string HeParamRunPath          = "/he/params/run";          // GET  ?id= satu percobaan LENGKAP dengan kurvanya (staf)
+    public const string HeParamMyRunsPath       = "/he/params/my-runs";      // GET  ?limit= percobaan MILIK PEMANGGIL saja (semua peran)
 
     public const string GuidWs            = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 
@@ -320,6 +321,10 @@ public sealed class ShareServer
             else if (method == "GET" && path == ShareProtocol.HeParamRunPath)
             {
                 await HandleHeParamRunGetAsync(stream, rawPath, headers, ct);
+            }
+            else if (method == "GET" && path == ShareProtocol.HeParamMyRunsPath)
+            {
+                await HandleHeParamMyRunsGetAsync(stream, rawPath, headers, ct);
             }
             else if (method == "GET" && path == "/info")
             {
@@ -1500,18 +1505,43 @@ public sealed class ShareServer
             return;
         }
 
-        // Kalau yang melepas memang sedang memegang kendali, rekaman run-nya
-        // ditutup di sini juga — kalau tidak, run itu akan menggantung sampai ada
-        // yang menekan RUN lagi.
-        var holder = (await App.HeQueue.GetSnapshotAsync(ct)).Holder;
-        if (holder?.UserId == session.Username)
-            await HeRunRecorder.Instance.FinishAsync(Models.HeParameterRunStatus.Completed);
+        // Dua rasa pelepasan, dibedakan oleh badan permintaannya:
+        //
+        //   • biasa (tanpa field apa pun) — tombol BERHENTI yang ditekan sendiri.
+        //     Run-nya selesai wajar, dan gilirannya dilepas apa pun yang terjadi;
+        //   • require_stop=true — Client sedang ditutup atau logout selagi memegang
+        //     kendali. Di sini rig HARUS benar-benar berhenti sebelum gilirannya
+        //     boleh berpindah, karena tidak ada lagi orang di depan layar yang
+        //     akan menyadari kalau perintah berhentinya tidak sampai.
+        //
+        // Keduanya lewat HeRigRelease, jadi urutan "hentikan rig dulu, baru lepas
+        // giliran" berlaku sama untuk Server maupun Client.
+        var body = await ReadBodyAsync(stream, headers, ct);
+        bool    requireStop = false;
+        string? reason      = null;
+        try
+        {
+            var node    = JsonNode.Parse(body);
+            requireStop = (bool?)node?["require_stop"] ?? false;
+            reason      = (string?)node?["reason"];
+        }
+        catch { /* badan kosong = pelepasan biasa */ }
 
-        var next = await App.HeQueue.ReleaseControlAsync(session.Username, ct);
+        var result = requireStop
+            ? await HeRigRelease.ByHolderAsync(session.Username,
+                  Models.HeParameterRunStatus.Aborted,
+                  HeRigRelease.InterruptedNote(reason ?? "Client ditutup selagi memegang kendali"),
+                  requireRigStop: true, ct)
+            : await HeRigRelease.ByHolderAsync(session.Username,
+                  Models.HeParameterRunStatus.Completed, reason,
+                  requireRigStop: false, ct);
+
         await WriteJsonAsync(stream, new JsonObject
         {
-            ["ok"]   = true,
-            ["next"] = next is null ? null : HeQueueJson.FromItem(next),
+            ["ok"]          = true,
+            ["released"]    = result.Released,
+            ["rig_stopped"] = result.RigStopped,
+            ["problem"]     = result.Problem,
         }.ToJsonString(), ct);
     }
 
@@ -1535,7 +1565,7 @@ public sealed class ShareServer
     }
 
     /// <summary>
-    /// POST /he/queue/force-release — Admin mencabut paksa kendali yang tertinggal
+    /// POST /he/queue/force-release — staf mencabut paksa kendali yang tertinggal
     /// (klien mati, atau lupa menekan STOP). Peran lain ditolak di sini, bukan
     /// hanya disembunyikan tombolnya di layar.
     /// </summary>
@@ -1548,9 +1578,12 @@ public sealed class ShareServer
             await WriteSimpleAsync(stream, "401 Unauthorized", "text/plain", "Invalid or expired session", ct);
             return;
         }
-        if (!UserRoles.IsAdmin(session.Role))
+        // Dosen dan Asisten ikut memegang hak ini, bukan Admin saja: merekalah yang
+        // ada di ruang praktikum saat sebuah giliran tertinggal, dan menunggu Admin
+        // datang berarti rig menganggur dengan antrian yang tidak bisa maju.
+        if (!UserRoles.IsStaff(session.Role))
         {
-            await WriteSimpleAsync(stream, "403 Forbidden", "text/plain", "Only an Admin can force-release the plant", ct);
+            await WriteSimpleAsync(stream, "403 Forbidden", "text/plain", "Only staff can force-release the plant", ct);
             return;
         }
 
@@ -1558,14 +1591,18 @@ public sealed class ShareServer
         string? note = null;
         try { note = (string?)JsonNode.Parse(body)?["note"]; } catch { }
 
-        await HeRunRecorder.Instance.FinishAsync(Models.HeParameterRunStatus.Aborted,
-            note ?? $"Dicabut paksa oleh {session.DisplayName}");
-        var next = await App.HeQueue.ForceReleaseAsync(session.Username, note, ct);
+        // Giliran tetap dilepas walau rig gagal dihentikan — ini pintu darurat
+        // antrian. Yang gagal dilaporkan lewat rig_stopped supaya stafnya tahu
+        // rig mungkin masih menyala dan perlu dicek langsung.
+        var result = await HeRigRelease.ForceAsync(
+            session.Username, note ?? $"Dicabut paksa oleh {session.DisplayName}", ct);
 
         await WriteJsonAsync(stream, new JsonObject
         {
-            ["ok"]   = true,
-            ["next"] = next is null ? null : HeQueueJson.FromItem(next),
+            ["ok"]          = true,
+            ["released"]    = result.Released,
+            ["rig_stopped"] = result.RigStopped,
+            ["problem"]     = result.Problem,
         }.ToJsonString(), ct);
     }
 
@@ -1705,6 +1742,38 @@ public sealed class ShareServer
         }
 
         await WriteJsonAsync(stream, HeQueueJson.FromRun(run).ToJsonString(), ct);
+    }
+
+    /// <summary>
+    /// GET /he/params/my-runs?limit=N — percobaan <b>milik pemanggil sendiri</b>,
+    /// untuk tabel "Riwayat Percobaan Saya" di halaman Challenge Learning.
+    ///
+    /// <para><b>Penyaringnya identitas sesi, bukan parameter permintaan.</b> Tidak
+    /// ada field "user" yang dibaca dari URL maupun badan permintaan, jadi tidak ada
+    /// yang bisa diubah Client untuk melihat percobaan orang lain — mengubah token
+    /// berarti menjadi orang lain, dan itu sudah dijaga lapisan sesi. Endpoint staf
+    /// untuk melihat semua percobaan tetap terpisah di <c>/he/params/runs</c>.</para>
+    ///
+    /// <para>Kurva respons tidak ikut dikirim: tabel ini hanya butuh parameter,
+    /// status, dan metrik ringkasnya.</para>
+    /// </summary>
+    private async Task HandleHeParamMyRunsGetAsync(
+        NetworkStream stream, string rawPath, Dictionary<string, string> headers, CancellationToken ct)
+    {
+        var session = GetSession(BearerToken(headers));
+        if (session is null)
+        {
+            await WriteSimpleAsync(stream, "401 Unauthorized", "text/plain", "Invalid or expired session", ct);
+            return;
+        }
+
+        int limit = Math.Clamp(QueryInt(rawPath, "limit", 100), 1, 500);
+        var runs  = await App.HeParamCache.ListRunsByUserAsync(session.Username, limit, 0, ct);
+
+        var arr = new JsonArray();
+        foreach (var run in runs) arr.Add((JsonNode)HeQueueJson.FromRun(run));
+
+        await WriteJsonAsync(stream, new JsonObject { ["runs"] = arr }.ToJsonString(), ct);
     }
 
     /// <summary>Nilai integer satu parameter query (mis. <c>?limit=50</c>), atau <paramref name="fallback"/>.</summary>

@@ -187,6 +187,39 @@ public sealed class PythonBridgeService : IDisposable
         WriteParamsFile();
     }
 
+    /// <summary>
+    /// Melatch satu kode tombol (<see cref="CmdStop"/>, <see cref="CmdReset"/>,
+    /// <see cref="CmdEStop"/>) <b>tanpa menyentuh</b> gain, setpoint, maupun
+    /// bukaan valve yang sedang berlaku. Paket 48 byte yang berangkat identik
+    /// dengan yang dikirim tombol BERHENTI di layar — hanya field CMD-nya yang
+    /// berubah — jadi ini jalur berhenti yang sudah terbukti, bukan jalur baru.
+    ///
+    /// <para>Bedanya dengan <see cref="SyncParams"/>: SyncParams menimpa
+    /// <c>_kp/_ki/_kd/_sp</c> dengan apa pun yang dikirim pemanggilnya, dan
+    /// pemutusan otomatis tidak punya nilai-nilai itu untuk dikirim — memakai
+    /// SyncParams di sana akan menulis gain 0 ke plant yang sedang berjalan.</para>
+    ///
+    /// <para>Bedanya dengan <see cref="Stop"/>: Stop mematikan proses Python,
+    /// yang memutus koneksi 6000, dan VI hanya menerima satu koneksi per Run —
+    /// artinya VI harus di-Run ulang secara manual. Di sini prosesnya sengaja
+    /// dibiarkan hidup.</para>
+    /// </summary>
+    /// <returns>
+    /// <c>true</c> kalau perintahnya sudah tertulis di kontrak (Server) atau
+    /// sudah dikirim ke server (Client). <c>false</c> kalau filenya gagal
+    /// ditulis — pemanggil di jalur pemutusan otomatis memakai ini untuk
+    /// memutuskan giliran BOLEH dilepas atau tidak.
+    /// </returns>
+    public bool LatchCommand(int cmd)
+    {
+        _cmd = cmd;
+        // Client tidak punya rig: perintahnya diteruskan ke Server (fire-and-forget,
+        // hasilnya dilaporkan lewat StatusChanged). Jalur pemutusan otomatis selalu
+        // berjalan di Server, jadi nilai balik yang benar-benar dipakai ada di bawah.
+        if (BuildInfo.IsClient) { ForwardToServer("sync"); return true; }
+        return WriteParamsFile();
+    }
+
     // ── Run / Stop ────────────────────────────────────────────────────────────
 
     /// <summary>Writes the given gains with run=true, then launches the script (no-op if already up).</summary>
@@ -270,7 +303,12 @@ public sealed class PythonBridgeService : IDisposable
 
     // ── File writer (atomic) ────────────────────────────────────────────────────
 
-    private void WriteParamsFile()
+    /// <summary>
+    /// Menulis kontrak parameter ke disk. <c>true</c> kalau filenya benar-benar
+    /// tersimpan — dipakai <see cref="LatchCommand"/> supaya pemanggilnya tahu
+    /// perintah BERHENTI sungguh berangkat atau tidak.
+    /// </summary>
+    private bool WriteParamsFile()
     {
         // NumberBox yields NaN when cleared — coerce to 0 so the script always parses a number.
         static string Num(double v) =>
@@ -311,10 +349,13 @@ public sealed class PythonBridgeService : IDisposable
                     catch (IOException) when (attempt < 5) { System.Threading.Thread.Sleep(15); }
                 }
             }
+
+            return true;
         }
         catch (Exception ex)
         {
             StatusChanged?.Invoke($"Gagal menulis parameter ke {ParamsFilePath}: {ex.Message}");
+            return false;
         }
     }
 

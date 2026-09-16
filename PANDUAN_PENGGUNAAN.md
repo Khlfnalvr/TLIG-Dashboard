@@ -139,6 +139,15 @@ Halaman **Users** hanya tampil di Server, untuk akun berperan staf. Di sini staf
 
 Sistem selalu menjaga minimal **satu akun staf yang aktif** — Anda tidak bisa menonaktifkan, menurunkan peran, atau menghapus staf terakhir yang tersisa.
 
+Kolom **Antrian plant** menunjukkan keadaan tiap akun di antrian Heat Exchanger dan
+menyegarkan dirinya sendiri setiap tiga detik, jadi staf bisa melihat siapa yang
+sedang memakai plant (lengkap dengan sudah berapa lama) dan siapa saja yang
+mengantre tanpa perlu membuka halaman lain:
+
+- **Sedang memakai plant · mm:ss** — akun ini yang memegang kendali sekarang.
+- **Mengantre · ke-N** — posisinya di antrian.
+- **—** — tidak sedang di antrian.
+
 ---
 
 ## 6. Panduan untuk Client
@@ -181,9 +190,44 @@ kartu **Control** ada strip status antrian:
   jadi langsung dapat giliran lagi begitu plant bebas.
 - Tombol **BERHENTI** melepas giliran sekaligus menutup percobaan, sehingga
   antrean berikutnya bisa mulai. RESET dan E-STOP tidak melepas giliran.
-- Akun **Admin** punya tombol **Cabut paksa** untuk mengambil kendali yang
-  tertinggal (klien mati atau lupa menekan BERHENTI). Kendali yang dipegang lebih
-  dari 30 menit juga dilepas otomatis oleh Server.
+- **Menutup aplikasi atau logout** selagi memegang kendali juga melepas giliran:
+  plant dihentikan dulu, lalu giliran berpindah ke antrean berikutnya. Kalau
+  plant ternyata tidak bisa dihentikan (jembatan Python mati), giliran sengaja
+  **tidak** dilepas dan pesan di layar meminta Anda menghubungi Dosen/Asisten —
+  lebih baik antrian tertahan sebentar daripada rig panas diserahkan ke orang
+  berikutnya tanpa ada yang tahu.
+- **Dosen, Asisten, dan Admin** punya tombol **Cabut paksa** untuk mengambil
+  kendali yang tertinggal (klien mati atau lupa menekan BERHENTI). Berbeda dengan
+  pelepasan otomatis, cabut paksa **tetap** melepas giliran walau plant gagal
+  dihentikan — ini pintu darurat antrian — dan layar memberi tahu stafnya kalau
+  rig mungkin masih menyala sehingga perlu diperiksa langsung.
+
+#### Batas 30 menit untuk giliran mahasiswa
+Giliran **Mahasiswa** dibatasi **30 menit**, dihitung sejak giliran diberikan
+(bukan sejak login). Dosen, Asisten, dan Admin tidak dibatasi — mereka pengawas,
+dan perlu bisa memegang kendali selama yang dibutuhkan saat ada yang tidak beres.
+
+- Sisa waktu tampil sebagai hitung mundur di strip antrian.
+- Peringatan muncul saat sisa **5 menit** dan **1 menit**, di mana pun halaman
+  yang sedang Anda buka.
+- Kalau waktunya habis, Server **mengirim BERHENTI ke plant lebih dulu**, baru
+  melepas gilirannya ke antrean berikutnya.
+- Percobaan yang terpotong **tetap tersimpan lengkap dengan kurvanya**, ditandai
+  status **Terputus** di tabel Riwayat Percobaan Saya — jadi datanya tetap bisa
+  dipakai untuk laporan.
+
+#### Pemberitahuan antrian
+Kabar antrian muncul sebagai kotak pemberitahuan di bagian atas jendela, jadi
+tetap terlihat walau Anda sedang membuka halaman lain:
+
+- **Giliran Anda sudah tiba** — plant sudah bebas untuk Anda; tekan JALANKAN.
+- **Waktu giliran hampir habis** — sisa 5 menit, lalu sisa 1 menit.
+- **Giliran Anda berakhir** — kendali berpindah bukan atas kehendak Anda (batas
+  waktu habis, dicabut staf, atau diambil alih peran yang lebih tinggi).
+
+Saat JALANKAN ditolak karena plant sedang dipakai, pesannya menyebut **siapa yang
+memegang**, **perannya**, **sudah berapa lama**, dan **posisi antrean Anda** —
+tidak ada perintah apa pun yang dikirim ke LabVIEW.
 
 #### Hasil yang diambil dari database
 Kombinasi **Setpoint, Kp, Ki, Kd, dan Bukaan Valve** yang sama akan memberi
@@ -218,6 +262,16 @@ Challenge adalah tugas praktikum terstruktur (judul, sistem terkait, daftar sub-
 - Lihat daftar challenge berstatus **Aktif**.
 - Buka detail, kerjakan, lalu **unggah/kirim** hasil (submission) lewat pemilih berkas.
 - Pantau status submission dan nilai yang sudah diberikan (badge "Dinilai: skor").
+- Di bawah kartu **Aktivitas Saya** ada tabel **Riwayat Percobaan Saya**: semua
+  percobaan plant yang pernah Anda jalankan, terbaru di atas — parameter
+  (SP/Kc/Ti/Td/Pump), metriknya (rise, settling, overshoot, error akhir, durasi),
+  dan statusnya (**Selesai**, **Gagal**, **Dihentikan**, atau **Terputus** untuk
+  percobaan yang kendalinya dicabut selagi plant berjalan). Tombol **Ekspor CSV**
+  menyimpan tabel itu lewat dialog "simpan sebagai", dengan bentuk file yang sama
+  persis dengan ekspor milik staf.
+- Tabel itu **hanya berisi percobaan Anda sendiri**. Penyaringannya dikerjakan
+  Server berdasarkan identitas login, bukan oleh aplikasi di komputer Anda, jadi
+  tidak ada permintaan yang bisa diubah untuk melihat data mahasiswa lain.
 
 **Sebagai staf (Dosen/Asisten):**
 - Lihat semua challenge apa pun statusnya (Aktif/Draft/Ditutup).

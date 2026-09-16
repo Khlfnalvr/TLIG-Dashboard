@@ -49,21 +49,27 @@
                 Padding="12,8"
                 CornerRadius="6"
                 Background="{ThemeResource LayerFillColorDefaultBrush}">
+            <!-- Lebar kolomnya harus sama persis dengan template baris di bawah,
+                 kalau tidak judulnya berdiri di atas kolom yang salah. -->
             <Grid ColumnSpacing="12">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="1.4*"/>
-                    <ColumnDefinition Width="1.4*"/>
-                    <ColumnDefinition Width="110"/>
+                    <ColumnDefinition Width="1.2*"/>
+                    <ColumnDefinition Width="1.2*"/>
+                    <ColumnDefinition Width="140"/>
                     <ColumnDefinition Width="90"/>
-                    <ColumnDefinition Width="150"/>
+                    <ColumnDefinition Width="130"/>
+                    <ColumnDefinition Width="170"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-                <TextBlock Grid.Column="0" Text="{x:Bind Lang.Um_ColUser, Mode=OneWay}"     FontSize="12" FontWeight="SemiBold" Opacity="0.8"/>
-                <TextBlock Grid.Column="1" Text="{x:Bind Lang.Um_ColName, Mode=OneWay}"     FontSize="12" FontWeight="SemiBold" Opacity="0.8"/>
-                <TextBlock Grid.Column="2" Text="{x:Bind Lang.Um_ColRole, Mode=OneWay}"     FontSize="12" FontWeight="SemiBold" Opacity="0.8"/>
-                <TextBlock Grid.Column="3" Text="{x:Bind Lang.Um_ColStatus, Mode=OneWay}"   FontSize="12" FontWeight="SemiBold" Opacity="0.8"/>
-                <TextBlock Grid.Column="4" Text="{x:Bind Lang.Um_ColLastLogin, Mode=OneWay}" FontSize="12" FontWeight="SemiBold" Opacity="0.8"/>
-                <Border    Grid.Column="5" MinWidth="260"/>
+                <TextBlock Grid.Column="0" Text="{x:Bind Lang.Um_ColUser, Mode=OneWay}"      FontSize="12" FontWeight="SemiBold" Opacity="0.8"/>
+                <TextBlock Grid.Column="1" Text="{x:Bind Lang.Um_ColName, Mode=OneWay}"      FontSize="12" FontWeight="SemiBold" Opacity="0.8"/>
+                <TextBlock Grid.Column="2" Text="NRP · Kelas"                                FontSize="12" FontWeight="SemiBold" Opacity="0.8"/>
+                <TextBlock Grid.Column="3" Text="{x:Bind Lang.Um_ColRole, Mode=OneWay}"      FontSize="12" FontWeight="SemiBold" Opacity="0.8"/>
+                <TextBlock Grid.Column="4" Text="{x:Bind Lang.Um_ColStatus, Mode=OneWay}"    FontSize="12" FontWeight="SemiBold" Opacity="0.8"/>
+                <TextBlock Grid.Column="5" Text="{x:Bind Lang.Um_ColLastLogin, Mode=OneWay}" FontSize="12" FontWeight="SemiBold" Opacity="0.8"/>
+                <TextBlock Grid.Column="6" Text="{x:Bind Lang.Um_ColQueue, Mode=OneWay}"     FontSize="12" FontWeight="SemiBold" Opacity="0.8"/>
+                <Border    Grid.Column="7" MinWidth="260"/>
             </Grid>
         </Border>
 
@@ -83,8 +89,8 @@
                             <ColumnDefinition Width="1.2*"/>
                             <ColumnDefinition Width="140"/>
                             <ColumnDefinition Width="90"/>
-                            <ColumnDefinition Width="80"/>
                             <ColumnDefinition Width="130"/>
+                            <ColumnDefinition Width="170"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
 
@@ -111,8 +117,13 @@
                                    VerticalAlignment="Center" Opacity="0.85"/>
                         <TextBlock Grid.Column="5" Text="{x:Bind LastLoginText}"
                                    VerticalAlignment="Center" Opacity="0.7" FontSize="12"/>
+                        <!-- Status antrian plant. OneWay: isinya diperbarui timer di
+                             code-behind tanpa membangun ulang daftarnya. -->
+                        <TextBlock Grid.Column="6" Text="{x:Bind QueueStatusLabel, Mode=OneWay}"
+                                   VerticalAlignment="Center" FontSize="12"
+                                   TextTrimming="CharacterEllipsis"/>
 
-                        <StackPanel Grid.Column="6" Orientation="Horizontal" Spacing="6"
+                        <StackPanel Grid.Column="7" Orientation="Horizontal" Spacing="6"
                                     VerticalAlignment="Center">
                             <Button FontSize="12" Padding="10,4"
                                     Tag="{x:Bind Username}"
