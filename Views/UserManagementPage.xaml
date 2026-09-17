@@ -57,9 +57,8 @@
                     <ColumnDefinition Width="1.2*"/>
                     <ColumnDefinition Width="1.2*"/>
                     <ColumnDefinition Width="140"/>
-                    <ColumnDefinition Width="90"/>
-                    <ColumnDefinition Width="130"/>
                     <ColumnDefinition Width="170"/>
+                    <ColumnDefinition Width="130"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
                 <TextBlock Grid.Column="0" Text="{x:Bind Lang.Um_ColUser, Mode=OneWay}"      FontSize="12" FontWeight="SemiBold" Opacity="0.8"/>
@@ -68,8 +67,7 @@
                 <TextBlock Grid.Column="3" Text="{x:Bind Lang.Um_ColRole, Mode=OneWay}"      FontSize="12" FontWeight="SemiBold" Opacity="0.8"/>
                 <TextBlock Grid.Column="4" Text="{x:Bind Lang.Um_ColStatus, Mode=OneWay}"    FontSize="12" FontWeight="SemiBold" Opacity="0.8"/>
                 <TextBlock Grid.Column="5" Text="{x:Bind Lang.Um_ColLastLogin, Mode=OneWay}" FontSize="12" FontWeight="SemiBold" Opacity="0.8"/>
-                <TextBlock Grid.Column="6" Text="{x:Bind Lang.Um_ColQueue, Mode=OneWay}"     FontSize="12" FontWeight="SemiBold" Opacity="0.8"/>
-                <Border    Grid.Column="7" MinWidth="260"/>
+                <Border    Grid.Column="6" MinWidth="260"/>
             </Grid>
         </Border>
 
@@ -88,9 +86,8 @@
                             <ColumnDefinition Width="1.2*"/>
                             <ColumnDefinition Width="1.2*"/>
                             <ColumnDefinition Width="140"/>
-                            <ColumnDefinition Width="90"/>
-                            <ColumnDefinition Width="130"/>
                             <ColumnDefinition Width="170"/>
+                            <ColumnDefinition Width="130"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
 
@@ -113,15 +110,14 @@
                         </StackPanel>
                         <TextBlock Grid.Column="3" Text="{x:Bind RoleLabel}"
                                    VerticalAlignment="Center" Opacity="0.85"/>
-                        <TextBlock Grid.Column="4" Text="{x:Bind StatusLabel}"
-                                   VerticalAlignment="Center" Opacity="0.85"/>
-                        <TextBlock Grid.Column="5" Text="{x:Bind LastLoginText}"
-                                   VerticalAlignment="Center" Opacity="0.7" FontSize="12"/>
-                        <!-- Kehadiran + aktivitas plant: baris utama (Aktif / Tidak aktif /
-                             Dalam antrean) dan sub-keterangan (Simulasi berjalan /
-                             Memegang giliran / Antrean ke-N). OneWay: diperbarui
-                             timer di code-behind tanpa membangun ulang daftarnya. -->
-                        <StackPanel Grid.Column="6" VerticalAlignment="Center" Spacing="0">
+                        <!-- Status = kehadiran + aktivitas plant: baris utama (Aktif /
+                             Tidak aktif / Dalam antrean) dan sub-keterangan (Simulasi
+                             berjalan / Memegang giliran / Antrean ke-N). OneWay:
+                             diperbarui timer di code-behind tanpa membangun ulang
+                             daftarnya. Akun yang diblokir tetap terbaca Tidak aktif
+                             (tidak bisa login = tidak ada denyut); status blokirnya
+                             terlihat di tombol Aktifkan/Nonaktifkan. -->
+                        <StackPanel Grid.Column="4" VerticalAlignment="Center" Spacing="0">
                             <TextBlock Text="{x:Bind QueueStatusLabel, Mode=OneWay}"
                                        FontSize="12"
                                        TextTrimming="CharacterEllipsis"/>
@@ -130,8 +126,10 @@
                                        FontSize="11" Opacity="0.65"
                                        TextTrimming="CharacterEllipsis"/>
                         </StackPanel>
+                        <TextBlock Grid.Column="5" Text="{x:Bind LastLoginText}"
+                                   VerticalAlignment="Center" Opacity="0.7" FontSize="12"/>
 
-                        <StackPanel Grid.Column="7" Orientation="Horizontal" Spacing="6"
+                        <StackPanel Grid.Column="6" Orientation="Horizontal" Spacing="6"
                                     VerticalAlignment="Center">
                             <Button FontSize="12" Padding="10,4"
                                     Tag="{x:Bind Username}"

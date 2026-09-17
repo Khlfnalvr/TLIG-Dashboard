@@ -727,7 +727,6 @@ public sealed class LocalizationManager : INotifyPropertyChanged
     public string Um_ColRole         => T(nameof(Um_ColRole));
     public string Um_ColStatus       => T(nameof(Um_ColStatus));
     public string Um_ColLastLogin    => T(nameof(Um_ColLastLogin));
-    public string Um_ColQueue        => T(nameof(Um_ColQueue));
     // Kehadiran di User Management: empat status + dua sub-keterangan.
     public string Um_PresActive      => T(nameof(Um_PresActive));
     public string Um_PresInactive    => T(nameof(Um_PresInactive));
@@ -735,8 +734,6 @@ public sealed class LocalizationManager : INotifyPropertyChanged
     public string Um_PresSimulating  => T(nameof(Um_PresSimulating)); // sub: simulasi berjalan
     public string Um_PresHolding     => T(nameof(Um_PresHolding));    // sub: memegang giliran
     public string Um_PresQueuePos    => T(nameof(Um_PresQueuePos));   // sub: {0} posisi antrean
-    public string Um_Enabled         => T(nameof(Um_Enabled));
-    public string Um_Disabled        => T(nameof(Um_Disabled));
     public string Um_Enable          => T(nameof(Um_Enable));
     public string Um_Disable         => T(nameof(Um_Disable));
     public string Um_ResetPassword   => T(nameof(Um_ResetPassword));
@@ -1249,15 +1246,12 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             [nameof(Um_ColRole)]    = "Role",
             [nameof(Um_ColStatus)]  = "Status",
             [nameof(Um_ColLastLogin)] = "Last login",
-            [nameof(Um_ColQueue)]   = "Plant queue",
             [nameof(Um_PresActive)] = "Active",
             [nameof(Um_PresInactive)] = "Inactive",
             [nameof(Um_PresInLine)] = "In line",
             [nameof(Um_PresSimulating)] = "Simulating",
             [nameof(Um_PresHolding)] = "Holding turn",
             [nameof(Um_PresQueuePos)] = "Queue #{0}",
-            [nameof(Um_Enabled)]    = "Enabled",
-            [nameof(Um_Disabled)]   = "Disabled",
             [nameof(Um_Enable)]     = "Enable",
             [nameof(Um_Disable)]    = "Disable",
             [nameof(Um_ResetPassword)] = "Reset password",
@@ -1927,15 +1921,12 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             [nameof(Um_ColRole)]    = "Peran",
             [nameof(Um_ColStatus)]  = "Status",
             [nameof(Um_ColLastLogin)] = "Masuk terakhir",
-            [nameof(Um_ColQueue)]   = "Antrian plant",
             [nameof(Um_PresActive)] = "Aktif",
             [nameof(Um_PresInactive)] = "Tidak aktif",
             [nameof(Um_PresInLine)] = "Dalam antrean",
             [nameof(Um_PresSimulating)] = "Simulasi berjalan",
             [nameof(Um_PresHolding)] = "Memegang giliran",
             [nameof(Um_PresQueuePos)] = "Antrean ke-{0}",
-            [nameof(Um_Enabled)]    = "Aktif",
-            [nameof(Um_Disabled)]   = "Nonaktif",
             [nameof(Um_Enable)]     = "Aktifkan",
             [nameof(Um_Disable)]    = "Nonaktifkan",
             [nameof(Um_ResetPassword)] = "Atur ulang sandi",

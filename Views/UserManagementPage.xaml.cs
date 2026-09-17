@@ -10,9 +10,15 @@ namespace TLIGDashboard.Views;
 /// Flattened, fully-localized view of a <see cref="UserAccount"/> for the list.
 ///
 /// <para>Sebagian besar isinya dibangun sekali lalu tidak berubah, jadi dibiarkan
-/// <c>init</c>. Yang berubah sendiri hanya <see cref="QueueStatusLabel"/>: antrian
-/// plant bergerak karena orang lain, dan membangun ulang seluruh daftar tiap tiga
-/// detik akan mengacaukan gulir serta tombol yang sedang ditekan staf.</para>
+/// <c>init</c>. Yang berubah sendiri hanya <see cref="QueueStatusLabel"/> (+
+/// <see cref="QueueStatusDetail"/>): kehadiran bergerak karena orang lain, dan
+/// membangun ulang seluruh daftar tiap tiga detik akan mengacaukan gulir serta
+/// tombol yang sedang ditekan staf.</para>
+///
+/// <para>Kolom Status diisi kehadiran + aktivitas plant (Aktif / Tidak aktif /
+/// Dalam antrean). Status blokir akun tidak punya teks sendiri: akun yang
+/// diblokir tidak bisa login sehingga denyutnya padam dan terbaca Tidak aktif —
+/// keadaan blokirnya tetap terlihat di tombol Aktifkan/Nonaktifkan.</para>
 /// </summary>
 public sealed class UserRow : INotifyPropertyChanged
 {
@@ -22,13 +28,12 @@ public sealed class UserRow : INotifyPropertyChanged
     public string Kelas         { get; init; } = "";
     public string NrpKelasLabel { get; init; } = "";   // combined display string
     public string RoleLabel     { get; init; } = "";
-    public string StatusLabel   { get; init; } = "";   // aktif / dinonaktifkan (akun)
     public string LastLoginText { get; init; } = "";
 
     /// <summary>
     /// Kehadiran + aktivitas plant HE pengguna ini: Aktif, Tidak aktif, Dalam
-    /// antrean, atau Aktif dengan sub-keterangan Simulasi berjalan. Dinamai
-    /// terpisah dari <see cref="StatusLabel"/> yang sudah dipakai status akun.
+    /// antrean, atau Aktif dengan sub-keterangan Simulasi berjalan. Inilah isi
+    /// kolom Status.
     /// </summary>
     public string QueueStatusLabel
     {
@@ -253,7 +258,6 @@ public sealed partial class UserManagementPage : Page
                 KelasVisible          = hasKelas ? Visibility.Visible : Visibility.Collapsed,
                 EmptyNrpKelasVisible  = (!hasNrp && !hasKelas) ? Visibility.Visible : Visibility.Collapsed,
                 RoleLabel     = RoleLabel(u.Role),
-                StatusLabel   = u.Enabled ? Lang.Um_Enabled : Lang.Um_Disabled,
                 LastLoginText = u.LastLoginUtc is null
                     ? Lang.Um_Never
                     : u.LastLoginUtc.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm"),
