@@ -201,6 +201,16 @@ public sealed partial class MainWindow : Window
             }
             catch { }
 
+            // Pamit kehadiran di sisi Server (Client ikut lewat flag goodbye di
+            // atas). Pola tunggu yang sama: cepat, dan tidak boleh menggantung tutup.
+            try
+            {
+                var who = _loggedInUser;
+                if (Services.BuildInfo.IsServer && !string.IsNullOrWhiteSpace(who))
+                    Task.Run(() => App.HeQueue.MarkOfflineAsync(who)).Wait(TimeSpan.FromSeconds(5));
+            }
+            catch { }
+
             // Don't leave the external Python client (PIDtest.py) running after the HMI closes.
             try { App.PythonBridge.Dispose(); } catch { }
 
@@ -1287,6 +1297,15 @@ public sealed partial class MainWindow : Window
         if (!exit.Released && exit.Problem is { } problem)
             ShowQueueInfoBar(Services.HeQueueNoticeKind.Error, Lang.HeQ_ExitBlockedTitle,
                 Lang.Format(nameof(Lang.HeQ_ExitBlockedMsg), problem));
+
+        // Pamit kehadiran di sisi Server: tanpa ini pengguna yang logout tetap
+        // terbaca Aktif sampai jendela presence habis. Client tidak perlu ini —
+        // pamitnya sudah ikut terkirim lewat ReleaseOnExitAsync (flag goodbye).
+        if (Services.BuildInfo.IsServer && !string.IsNullOrWhiteSpace(_loggedInUser))
+        {
+            try { await App.HeQueue.MarkOfflineAsync(_loggedInUser); }
+            catch { }
+        }
 
         if (Services.BuildInfo.IsClient)
         {

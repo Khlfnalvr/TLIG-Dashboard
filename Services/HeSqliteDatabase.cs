@@ -62,7 +62,7 @@ public abstract class HeSqliteDatabase
     /// Memasang skema kalau belum ada (semua DDL memakai <c>IF NOT EXISTS</c>, jadi
     /// aman dipanggil setiap kali aplikasi start). Panggil sekali di startup Server.
     /// </summary>
-    public async Task InitializeAsync(CancellationToken ct = default)
+    public virtual async Task InitializeAsync(CancellationToken ct = default)
     {
         await _writeGate.WaitAsync(ct);
         try

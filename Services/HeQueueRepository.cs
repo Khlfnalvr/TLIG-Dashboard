@@ -41,6 +41,39 @@ public sealed class HeQueueRepository : HeSqliteDatabase
     private const string ItemColumns =
         "queue_id, user_id, display_name, priority, request_type, requested_at_utc, granted_at_utc, ended_at_utc, status";
 
+    /// <summary>
+    /// Jendela kehadiran: terlihat dalam selang ini = Aktif. Isinya disegarkan
+    /// tiap poll status antrian (~3 detik), jadi 1 menit memberi jeda yang lega
+    /// untuk satu-dua poll yang hilang tanpa membuat orang berkedip.
+    /// </summary>
+    public static readonly TimeSpan PresenceWindow = TimeSpan.FromMinutes(1);
+
+    /// <summary>Apakah <paramref name="lastSeenUtc"/> masih di dalam <see cref="PresenceWindow"/>.</summary>
+    public static bool IsPresent(DateTime? lastSeenUtc, DateTime? nowUtc = null) =>
+        lastSeenUtc is not null && (nowUtc ?? DateTime.UtcNow) - lastSeenUtc.Value <= PresenceWindow;
+
+    /// <summary>
+    /// Menambal database lama yang dibuat sebelum kolom kehadiran ada. Skema .sql
+    /// hanya memakai <c>IF NOT EXISTS</c> sehingga aman diulang, tapi tidak bisa
+    /// menambah kolom ke tabel yang sudah ada — itu dikerjakan di sini, sekali per
+    /// startup, idempoten.
+    /// </summary>
+    public override async Task InitializeAsync(CancellationToken ct = default)
+    {
+        await base.InitializeAsync(ct);
+        await WriteAsync<object?>(async (conn, tx, token) =>
+        {
+            await using var pragma = Command(conn, tx, "PRAGMA table_info(he_queue_users);");
+            await using var reader = await pragma.ExecuteReaderAsync(token);
+            while (await reader.ReadAsync(token))
+                if (string.Equals(reader.GetString(1), "last_seen_utc", StringComparison.OrdinalIgnoreCase))
+                    return null;
+            await using var alter = Command(conn, tx, "ALTER TABLE he_queue_users ADD COLUMN last_seen_utc TEXT;");
+            await alter.ExecuteNonQueryAsync(token);
+            return null;
+        }, ct);
+    }
+
     // ── Baca keadaan ────────────────────────────────────────────────────────
 
     /// <summary>Pemegang kendali saat ini + seluruh antrian yang menunggu (sudah terurut).</summary>
@@ -94,6 +127,54 @@ public sealed class HeQueueRepository : HeSqliteDatabase
                 });
             }
             return rows;
+        }, ct);
+
+    // ── Kehadiran (denyut) ──────────────────────────────────────────────────
+
+    /// <summary>
+    /// Mencatat "pengguna ini masih hidup". Dipanggil dari tiap poll status
+    /// antrian (~3 detik) dan tiap permintaan/lepas — itulah denyutnya, tanpa
+    /// endpoint atau traffic baru. Baris identitas dibuat kalau belum ada.
+    /// </summary>
+    public Task TouchPresenceAsync(string userId, string displayName, string role,
+        CancellationToken ct = default) =>
+        WriteAsync<object?>(async (conn, tx, token) =>
+        {
+            await UpsertUserAsync(conn, tx, userId, displayName, role,
+                HeQueuePriorityMap.FromRole(role), token);
+            return null;
+        }, ct);
+
+    /// <summary>
+    /// Pamit eksplisit (tutup aplikasi / logout): kehadiran langsung padam tanpa
+    /// menunggu jendela <see cref="PresenceWindow"/> habis. Baris antrean miliknya
+    /// TIDAK ikut dihapus — kalau ia sedang mengantre lalu menutup aplikasi,
+    /// statusnya tetap "Dalam antrean", hanya kehadirannya yang padam.
+    /// </summary>
+    public Task MarkOfflineAsync(string userId, CancellationToken ct = default) =>
+        WriteAsync<object?>(async (conn, tx, token) =>
+        {
+            await using var cmd = Command(conn, tx, """
+                UPDATE he_queue_users SET last_seen_utc = NULL WHERE user_id = $userId;
+                """);
+            Bind(cmd, "$userId", userId);
+            await cmd.ExecuteNonQueryAsync(token);
+            return null;
+        }, ct);
+
+    /// <summary>Denyut terakhir semua pengguna yang dikenal — untuk kolom kehadiran.</summary>
+    public Task<IReadOnlyDictionary<string, DateTime?>> GetLastSeenAsync(
+        CancellationToken ct = default) =>
+        ReadAsync<IReadOnlyDictionary<string, DateTime?>>(async (conn, token) =>
+        {
+            var map = new Dictionary<string, DateTime?>(StringComparer.OrdinalIgnoreCase);
+            await using var cmd = Command(conn, null, """
+                SELECT user_id, last_seen_utc FROM he_queue_users;
+                """);
+            await using var reader = await cmd.ExecuteReaderAsync(token);
+            while (await reader.ReadAsync(token))
+                map[reader.GetString(0)] = ReadTime(reader, 1);
+            return map;
         }, ct);
 
     // ── Meminta giliran ─────────────────────────────────────────────────────
@@ -219,6 +300,7 @@ public sealed class HeQueueRepository : HeSqliteDatabase
     public Task<HeQueueItem?> ReleaseControlAsync(string userId, CancellationToken ct = default) =>
         WriteAsync<HeQueueItem?>(async (conn, tx, token) =>
         {
+            await TouchInternalAsync(conn, tx, userId, token);
             var holder = await ReadHolderAsync(conn, tx, token);
             if (holder is null || holder.UserId != userId) return null;
 
@@ -234,6 +316,7 @@ public sealed class HeQueueRepository : HeSqliteDatabase
     public Task<bool> CancelRequestAsync(string userId, CancellationToken ct = default) =>
         WriteAsync<bool>(async (conn, tx, token) =>
         {
+            await TouchInternalAsync(conn, tx, userId, token);
             var item = await FindItemAsync(conn, tx, userId, HeQueueItemStatus.Waiting, token);
             if (item is null) return false;
 
@@ -294,18 +377,36 @@ public sealed class HeQueueRepository : HeSqliteDatabase
 
     // ── Internal: pengguna ──────────────────────────────────────────────────
 
+    /// <summary>
+    /// Menyegarkan denyut tanpa mengubah identitas. Dipakai jalur yang hanya
+    /// membawa <c>userId</c> (lepas/cancel): barisnya pasti sudah ada dari
+    /// permintaan sebelumnya, dan kalau belum ada pun UPDATE ini sekadar tidak
+    /// mengenai baris apa pun — tidak pernah gagal karena kolom NOT NULL.
+    /// </summary>
+    private static async Task TouchInternalAsync(
+        SqliteConnection conn, SqliteTransaction? tx, string userId, CancellationToken ct)
+    {
+        await using var cmd = Command(conn, tx, """
+            UPDATE he_queue_users SET last_seen_utc = $now WHERE user_id = $userId;
+            """);
+        Bind(cmd, "$now", ToDbTime(DateTime.UtcNow));
+        Bind(cmd, "$userId", userId);
+        await cmd.ExecuteNonQueryAsync(ct);
+    }
+
     private static async Task UpsertUserAsync(
         SqliteConnection conn, SqliteTransaction? tx,
         string userId, string displayName, string role, HeQueuePriority priority, CancellationToken ct)
     {
         await using var cmd = Command(conn, tx, """
-            INSERT INTO he_queue_users (user_id, display_name, role, priority, updated_at_utc)
-            VALUES ($userId, $displayName, $role, $priority, $now)
+            INSERT INTO he_queue_users (user_id, display_name, role, priority, updated_at_utc, last_seen_utc)
+            VALUES ($userId, $displayName, $role, $priority, $now, $now)
             ON CONFLICT(user_id) DO UPDATE SET
                 display_name   = excluded.display_name,
                 role           = excluded.role,
                 priority       = excluded.priority,
-                updated_at_utc = excluded.updated_at_utc;
+                updated_at_utc = excluded.updated_at_utc,
+                last_seen_utc  = excluded.last_seen_utc;
             """);
         Bind(cmd, "$userId", userId);
         Bind(cmd, "$displayName", displayName);

@@ -32,7 +32,13 @@ CREATE TABLE IF NOT EXISTS he_queue_users (
     display_name    TEXT NOT NULL,
     role            TEXT NOT NULL,                   -- peran asli: Admin/Dosen/Asisten/Mahasiswa
     priority        INTEGER NOT NULL CHECK (priority BETWEEN 1 AND 3),
-    updated_at_utc  TEXT NOT NULL
+    updated_at_utc  TEXT NOT NULL,
+    last_seen_utc   TEXT                             -- denyut terakhir: poll status / request / lepas.
+                                                     -- NULL = pamit (tutup/logout) atau belum pernah terlihat.
+                                                     -- Dipakai kolom status kehadiran di User Management:
+                                                     -- terlihat dalam ~1 menit terakhir = Aktif.
+                                                     -- DB lama yang belum punya kolom ini ditambal saat
+                                                     -- startup (lihat HeQueueRepository.InitializeAsync).
 );
 
 -- ── Status kendali HE saat ini — SELALU tepat satu baris (id = 1) ───────────

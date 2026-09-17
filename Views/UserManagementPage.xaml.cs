@@ -26,9 +26,9 @@ public sealed class UserRow : INotifyPropertyChanged
     public string LastLoginText { get; init; } = "";
 
     /// <summary>
-    /// Keadaan pengguna ini di antrian plant HE: sedang memakai plant, mengantre di
-    /// posisi berapa, atau tidak sedang di antrian. Dinamai terpisah dari
-    /// <see cref="StatusLabel"/> yang sudah dipakai untuk status akun.
+    /// Kehadiran + aktivitas plant HE pengguna ini: Aktif, Tidak aktif, Dalam
+    /// antrean, atau Aktif dengan sub-keterangan Simulasi berjalan. Dinamai
+    /// terpisah dari <see cref="StatusLabel"/> yang sudah dipakai status akun.
     /// </summary>
     public string QueueStatusLabel
     {
@@ -41,6 +41,37 @@ public sealed class UserRow : INotifyPropertyChanged
         }
     }
     private string _queueStatusLabel = "";
+
+    /// <summary>
+    /// Keterangan di bawah <see cref="QueueStatusLabel"/>: "Simulasi berjalan" /
+    /// "Memegang giliran" untuk Aktif yang memegang giliran, "Antrean ke-N" untuk
+    /// Dalam antrean. Kosong untuk Aktif polosan dan Tidak aktif — baris keduanya
+    /// disembunyikan lewat <see cref="QueueStatusDetailVisible"/>.
+    /// </summary>
+    public string QueueStatusDetail
+    {
+        get => _queueStatusDetail;
+        set
+        {
+            if (_queueStatusDetail == value) return;
+            _queueStatusDetail = value;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(QueueStatusDetail)));
+            QueueStatusDetailVisible = string.IsNullOrEmpty(value) ? Visibility.Collapsed : Visibility.Visible;
+        }
+    }
+    private string _queueStatusDetail = "";
+
+    public Visibility QueueStatusDetailVisible
+    {
+        get => _queueStatusDetailVisible;
+        private set
+        {
+            if (_queueStatusDetailVisible == value) return;
+            _queueStatusDetailVisible = value;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(QueueStatusDetailVisible)));
+        }
+    }
+    private Visibility _queueStatusDetailVisible = Visibility.Collapsed;
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -118,9 +149,14 @@ public sealed partial class UserManagementPage : Page
     private void OnQueueTick(object? sender, object e) => _ = RefreshQueueColumnAsync();
 
     /// <summary>
-    /// Mengisi ulang kolom antrian di tempat — barisnya tidak dibangun ulang,
+    /// Mengisi ulang kolom kehadiran di tempat — barisnya tidak dibangun ulang,
     /// supaya gulir dan tombol yang sedang dipakai staf tidak tersentak tiap tiga
     /// detik.
+    ///
+    /// Aturannya empat status: pemegang giliran selalu Aktif (sub-nya membedakan
+    /// "Simulasi berjalan" dari sekadar "Memegang giliran"), pengantre tampil
+    /// "Dalam antrean" + nomornya, sisanya Aktif kalau denyutnya segar (terlihat
+    /// dalam semenit terakhir) dan Tidak aktif kalau tidak.
     /// </summary>
     private async Task RefreshQueueColumnAsync()
     {
@@ -128,21 +164,55 @@ public sealed partial class UserManagementPage : Page
         _queueRefreshing = true;
         try
         {
+            // Denyut penampil sendiri: staf yang membuka halaman ini juga sedang
+            // "di dashboard", jadi kehadirannya ikut tercatat.
+            try
+            {
+                var me = App.Session;
+                if (me.IsSignedIn)
+                    await App.HeQueue.TouchPresenceAsync(me.Username, me.DisplayName, me.Role);
+            }
+            catch { }
+
             var snapshot = await App.HeQueue.GetSnapshotAsync();
+            var seen     = await App.HeQueue.GetLastSeenAsync();
+            var now      = DateTime.UtcNow;
 
             var holder = snapshot.Holder;
+            string? simulatingUser = HeRunRecorder.Instance.RecordingUserId;
             var positions = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
             for (int i = 0; i < snapshot.Waiting.Count; i++)
                 positions[snapshot.Waiting[i].UserId] = i + 1;
 
             foreach (var row in _rows)
             {
-                row.QueueStatusLabel =
-                    holder is not null && string.Equals(holder.UserId, row.Username, StringComparison.OrdinalIgnoreCase)
-                        ? Lang.Format(nameof(Lang.Um_QueueHolding), FormatDuration(holder.HeldFor))
-                    : positions.TryGetValue(row.Username, out int pos)
-                        ? Lang.Format(nameof(Lang.Um_QueueWaiting), pos)
-                        : Lang.Um_QueueIdle;
+                bool isHolder = holder is not null &&
+                    string.Equals(holder.UserId, row.Username, StringComparison.OrdinalIgnoreCase);
+                if (isHolder)
+                {
+                    row.QueueStatusLabel = Lang.Um_PresActive;
+                    row.QueueStatusDetail =
+                        simulatingUser is not null &&
+                        string.Equals(simulatingUser, row.Username, StringComparison.OrdinalIgnoreCase)
+                            ? Lang.Um_PresSimulating
+                            : Lang.Um_PresHolding;
+                }
+                else if (positions.TryGetValue(row.Username, out int pos))
+                {
+                    row.QueueStatusLabel  = Lang.Um_PresInLine;
+                    row.QueueStatusDetail = Lang.Format(nameof(Lang.Um_PresQueuePos), pos);
+                }
+                else if (seen.TryGetValue(row.Username, out var lastSeen) &&
+                         HeQueueRepository.IsPresent(lastSeen, now))
+                {
+                    row.QueueStatusLabel  = Lang.Um_PresActive;
+                    row.QueueStatusDetail = "";
+                }
+                else
+                {
+                    row.QueueStatusLabel  = Lang.Um_PresInactive;
+                    row.QueueStatusDetail = "";
+                }
             }
         }
         catch
@@ -155,15 +225,6 @@ public sealed partial class UserManagementPage : Page
         {
             _queueRefreshing = false;
         }
-    }
-
-    /// <summary>Lama pegang dalam bentuk mm:ss (atau h:mm:ss kalau sudah lewat sejam).</summary>
-    private static string FormatDuration(TimeSpan span)
-    {
-        if (span < TimeSpan.Zero) span = TimeSpan.Zero;
-        return span.TotalHours >= 1
-            ? $"{(int)span.TotalHours}:{span.Minutes:00}:{span.Seconds:00}"
-            : $"{span.Minutes:00}:{span.Seconds:00}";
     }
 
     private void OnStoreChanged() => DispatcherQueue.TryEnqueue(Refresh);
@@ -196,7 +257,7 @@ public sealed partial class UserManagementPage : Page
                 LastLoginText = u.LastLoginUtc is null
                     ? Lang.Um_Never
                     : u.LastLoginUtc.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm"),
-                QueueStatusLabel = Lang.Um_QueueIdle,
+                QueueStatusLabel = Lang.Um_PresInactive,
                 ResetLabel    = Lang.Um_ResetPassword,
                 EditLabel     = Lang.Um_Edit,
                 ToggleLabel   = u.Enabled ? Lang.Um_Disable : Lang.Um_Enable,

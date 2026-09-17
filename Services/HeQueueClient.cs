@@ -53,6 +53,9 @@ public static class HeQueueClient
         {
             ["require_stop"] = true,
             ["reason"]       = reason,
+            // Pamit eksplisit: Server memadamkan kehadiran pengirim seketika
+            // (lihat MarkOfflineAsync), tanpa menunggu jendela presence habis.
+            ["goodbye"]      = true,
         });
         return ToReleaseResult(node);
     }
@@ -513,7 +516,14 @@ public static class HeControlService
 
         var s = SessionService.Instance;
         if (BuildInfo.IsServer)
+        {
+            // Denyut kehadiran menumpang poll status ini (~3 detik): tidak ada
+            // endpoint atau traffic baru. Kegagalannya diabaikan — status antrian
+            // tetap dibaca walau pencatatan denyutnya sedang terkunci.
+            try { await App.HeQueue.TouchPresenceAsync(s.Username, s.DisplayName, s.Role); }
+            catch { }
             return await BuildStatusAsync(App.HeQueue, s.Username, s.Role);
+        }
 
         var cfg = AppSettingsService.Load();
         return await HeQueueClient.GetStatusAsync(cfg.ServerHost, cfg.ServerToken);

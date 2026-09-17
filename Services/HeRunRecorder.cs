@@ -61,6 +61,13 @@ public sealed class HeRunRecorder
     public HeParameterInput? Input { get { lock (_gate) return _input; } }
 
     /// <summary>
+    /// Pemilik run yang sedang direkam (username), atau <c>null</c> kalau tidak
+    /// sedang merekam. Dipakai kolom kehadiran untuk membedakan "Simulasi
+    /// berjalan" dari sekadar "memegang giliran".
+    /// </summary>
+    public string? RecordingUserId { get { lock (_gate) return _samples is null ? null : _userId; } }
+
+    /// <summary>
     /// Mulai merekam. Kalau masih ada run sebelumnya yang belum ditutup, run itu
     /// ditutup dulu sebagai <see cref="HeParameterRunStatus.Aborted"/> — tetap
     /// tersimpan sebagai catatan, tapi tidak akan dipakai ulang.

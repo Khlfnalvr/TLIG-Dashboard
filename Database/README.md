@@ -42,7 +42,7 @@ mendahului siapa pun.
 
 | Tabel | Isi |
 |---|---|
-| `he_queue_users` | salinan ringan identitas pengguna (nama + peran + prioritas) supaya baris antrian & log tetap terbaca walau akunnya dihapus |
+| `he_queue_users` | salinan ringan identitas pengguna (nama + peran + prioritas) supaya baris antrian & log tetap terbaca walau akunnya dihapus; kolom `last_seen_utc` mencatat denyut terakhir untuk status kehadiran (Aktif = terlihat dalam semenit terakhir, NULL = pamit) |
 | `he_control_state` | satu baris tunggal: siapa pemegang kendali sekarang dan sejak kapan |
 | `he_queue_items` | satu baris = satu permintaan giliran; statusnya berjalan `Waiting → Granted → Released/Cancelled/Overridden/Expired`, barisnya tidak pernah dihapus sehingga sekaligus jadi riwayat |
 | `he_queue_log` | audit: siapa melakukan apa, kapan, dan mengambil alih giliran siapa |

@@ -1443,6 +1443,11 @@ public sealed class ShareServer
             return;
         }
 
+        // Denyut kehadiran menumpang poll status Client (~3 detik): tidak ada
+        // endpoint atau traffic baru. Diabaikan kalau gagal — statusnya tetap dibaca.
+        try { await App.HeQueue.TouchPresenceAsync(session.Username, session.DisplayName, session.Role, ct); }
+        catch { }
+
         var status = await HeControlService.BuildStatusAsync(App.HeQueue, session.Username, session.Role, ct);
         await WriteJsonAsync(stream, HeQueueJson.FromStatus(status).ToJsonString(), ct);
     }
@@ -1503,11 +1508,13 @@ public sealed class ShareServer
         // giliran" berlaku sama untuk Server maupun Client.
         var body = await ReadBodyAsync(stream, headers, ct);
         bool    requireStop = false;
+        bool    goodbye     = false;
         string? reason      = null;
         try
         {
             var node    = JsonNode.Parse(body);
             requireStop = (bool?)node?["require_stop"] ?? false;
+            goodbye     = (bool?)node?["goodbye"] ?? false;
             reason      = (string?)node?["reason"];
         }
         catch { /* badan kosong = pelepasan biasa */ }
@@ -1520,6 +1527,15 @@ public sealed class ShareServer
             : await HeRigRelease.ByHolderAsync(session.Username,
                   Models.HeParameterRunStatus.Completed, reason,
                   requireRigStop: false, ct);
+
+        // Pamit eksplisit dari Client yang ditutup / logout: kehadirannya padam
+        // seketika tanpa menunggu jendela presence habis. Baris antreannya tidak
+        // ikut diapa-apakan (lihat MarkOfflineAsync).
+        if (goodbye)
+        {
+            try { await App.HeQueue.MarkOfflineAsync(session.Username, ct); }
+            catch { }
+        }
 
         await WriteJsonAsync(stream, new JsonObject
         {
