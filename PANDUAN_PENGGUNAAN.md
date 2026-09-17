@@ -229,13 +229,11 @@ Saat JALANKAN ditolak karena plant sedang dipakai, pesannya menyebut **siapa yan
 memegang**, **perannya**, **sudah berapa lama**, dan **posisi antrean Anda** —
 tidak ada perintah apa pun yang dikirim ke LabVIEW.
 
-#### Hasil yang diambil dari database
-Kombinasi **Setpoint, Kp, Ki, Kd, dan Bukaan Valve** yang sama akan memberi
-respons yang sama, jadi kalau kombinasi itu sudah pernah dijalankan, hasilnya
-ditampilkan dari database dan **plant tidak dijalankan ulang** — lengkap dengan
-kapan dan oleh siapa percobaan itu dilakukan. Kalau memang ingin mengulang di
-plant (misalnya alat baru dikalibrasi), tekan **Tetap jalankan di plant** pada
-pemberitahuan tersebut.
+#### Setiap JALANKAN benar-benar menjalankan plant
+Tidak ada mekanisme yang menjawab JALANKAN dengan hasil percobaan sebelumnya:
+kombinasi parameter yang sama pun tetap dijalankan ke plant. Yang menentukan
+urutannya hanya antrian. Hasil tiap percobaan tetap disimpan — itulah yang mengisi
+tabel **Riwayat Percobaan Saya** di halaman Challenge Learning.
 
 ### 7.2 Parameter
 Tempat mengatur dan menjalankan proses PID di HMI LabVIEW lewat koneksi PLC TCP:
@@ -267,8 +265,11 @@ Challenge adalah tugas praktikum terstruktur (judul, sistem terkait, daftar sub-
   (SP/Kc/Ti/Td/Pump), metriknya (rise, settling, overshoot, error akhir, durasi),
   dan statusnya (**Selesai**, **Gagal**, **Dihentikan**, atau **Terputus** untuk
   percobaan yang kendalinya dicabut selagi plant berjalan). Tombol **Ekspor CSV**
-  menyimpan tabel itu lewat dialog "simpan sebagai", dengan bentuk file yang sama
-  persis dengan ekspor milik staf.
+  menyimpan tabel itu lewat dialog "simpan sebagai" — tinggal buka dengan Excel,
+  kolomnya sudah terpecah benar dan angkanya sudah memakai desimal Indonesia. Nama
+  kolom di file sengaja dibiarkan dalam bahasa Inggris (`started_at_local`, `sp`,
+  `kc`, …) supaya rumus atau skrip yang sudah dibuat tidak patah saat bahasa
+  aplikasi diganti.
 - Tabel itu **hanya berisi percobaan Anda sendiri**. Penyaringannya dikerjakan
   Server berdasarkan identitas login, bukan oleh aplikasi di komputer Anda, jadi
   tidak ada permintaan yang bisa diubah untuk melihat data mahasiswa lain.
@@ -285,18 +286,6 @@ Chat berbasis AI untuk membantu analisis sistem kontrol:
 - Dropdown **provider + model** di bagian atas untuk memilih AI yang dipakai — hanya menampilkan provider/model yang sudah diaktifkan staf (lihat [5.4](#54-mengonfigurasi-ai)).
 - Staf bisa membuka konfigurasi provider langsung dari ikon gerigi di sebelah dropdown ini, baik di Server maupun Client.
 - Jika belum ada provider yang diaktifkan/diberi kunci API, chat menampilkan pesan error alih-alih mencoba mengirim.
-
-### 7.7 Riwayat Antrian & Percobaan HE (staf)
-Menu **Riwayat** hanya muncul untuk akun staf (Admin/Dosen/Asisten), di Server maupun Client. Isinya dua tabel:
-
-- **Riwayat percobaan** — kombinasi parameter apa saja yang sudah pernah dijalankan, oleh siapa, berapa lama, statusnya (Selesai/Gagal/Dihentikan), metrik ringkasnya, dan berapa kali hasilnya dipakai ulang tanpa menjalankan plant. Percobaan yang gagal ikut tercatat di sini walaupun tidak pernah dipakai sebagai hasil cache.
-- **Riwayat antrian** — siapa memegang plant kapan, siapa mengantre, siapa mengambil alih giliran siapa, dan kendali mana yang dicabut paksa atau lewat batas waktu.
-
-Empat kartu di atasnya meringkas isi database: jumlah percobaan tercatat, yang selesai, berapa kali hasil diambil dari database (plant tidak perlu dijalankan ulang), dan kapan percobaan terakhir. Tombol **Segarkan** membaca ulang datanya.
-
-**Klik satu baris di tabel percobaan** untuk membuka detailnya: grafik respons percobaan itu, parameter yang dipakai, metrik hasilnya, dan tombol **Ekspor kurva (CSV)** — satu baris per titik waktu, tinggal diplot sendiri di Excel untuk lampiran laporan. Percobaan lama yang tidak menyimpan kurva tetap bisa dibuka; dialognya berkata apa adanya bahwa kurvanya tidak ada.
-
-Tombol **Ekspor percobaan (CSV)** dan **Ekspor antrian (CSV)** menyimpan tabel yang sedang tampil sebagai file CSV untuk lampiran laporan praktikum — tinggal buka dengan Excel, kolomnya sudah terpecah benar dan angkanya sudah memakai desimal Indonesia. Nama kolom di file sengaja dibiarkan dalam bahasa Inggris (`started_at_local`, `sp`, `kc`, …) supaya rumus atau skrip yang sudah dibuat tidak patah saat bahasa aplikasi diganti.
 
 ---
 

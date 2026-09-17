@@ -53,7 +53,6 @@ public sealed partial class MainWindow : Window
         // GradingStudent and GradingLecturer pages removed from nav (merged into LearningAnalyticPage)
         { "Broadcast", typeof(BroadcastSettingsPage) },
         { "UserManagement", typeof(UserManagementPage) },
-        { "HeHistory", typeof(HeQueueHistoryPage) },
         // "Logging" page removed from nav — LoggingPage kept for potential future use
     };
 
@@ -986,17 +985,13 @@ public sealed partial class MainWindow : Window
 
         bool showBroadcast = Services.BuildInfo.IsServer && signedIn;
         bool showUm        = Services.BuildInfo.IsServer && signedIn && isStaff;
-        bool showHistory   = signedIn && isStaff;
 
         NavBroadcast.Visibility      = showBroadcast ? Visibility.Visible : Visibility.Collapsed;
         NavUserManagement.Visibility = showUm        ? Visibility.Visible : Visibility.Collapsed;
-        NavHeHistory.Visibility      = showHistory   ? Visibility.Visible : Visibility.Collapsed;
 
         if (!showBroadcast && ReferenceEquals(NavView.SelectedItem, NavBroadcast))
             NavView.SelectedItem = FirstVisibleNavItem();
         if (!showUm && ReferenceEquals(NavView.SelectedItem, NavUserManagement))
-            NavView.SelectedItem = FirstVisibleNavItem();
-        if (!showHistory && ReferenceEquals(NavView.SelectedItem, NavHeHistory))
             NavView.SelectedItem = FirstVisibleNavItem();
     }
 

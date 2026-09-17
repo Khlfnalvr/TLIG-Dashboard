@@ -526,11 +526,6 @@ public sealed class LocalizationManager : INotifyPropertyChanged
     public string HeQ_QueuedMsg    => T(nameof(HeQ_QueuedMsg));     // {0} pemegang, {1} posisi
     public string HeQ_OverrideMsg  => T(nameof(HeQ_OverrideMsg));   // {0} yang diambil alih
     public string HeQ_ReleasedMsg  => T(nameof(HeQ_ReleasedMsg));
-    public string HeQ_CacheTitle   => T(nameof(HeQ_CacheTitle));
-    public string HeQ_CacheMsg     => T(nameof(HeQ_CacheMsg));      // {0} waktu, {1} nama
-    public string HeQ_CacheMetrics => T(nameof(HeQ_CacheMetrics));  // {0} rise, {1} settling, {2} overshoot, {3} error
-    public string HeQ_RunAnyway    => T(nameof(HeQ_RunAnyway));
-    public string HeQ_MeasuredCaption => T(nameof(HeQ_MeasuredCaption)); // {0} waktu, {1} nama
     public string HeQ_TurnArrivedTitle => T(nameof(HeQ_TurnArrivedTitle));
     public string HeQ_TurnArrivedMsg   => T(nameof(HeQ_TurnArrivedMsg));
     public string HeQ_HoldEndedTitle   => T(nameof(HeQ_HoldEndedTitle));
@@ -552,36 +547,13 @@ public sealed class LocalizationManager : INotifyPropertyChanged
     public string HeQ_TroubleForced    => T(nameof(HeQ_TroubleForced));    // {0} alasan
 
     // ── Riwayat antrian & percobaan HE ────────────────────────────────────
-    public string HeH_Title             => T(nameof(HeH_Title));
-    public string HeH_Subtitle          => T(nameof(HeH_Subtitle));
     public string HeH_Refresh           => T(nameof(HeH_Refresh));
-    public string HeH_ExportRuns        => T(nameof(HeH_ExportRuns));
-    public string HeH_ExportLog         => T(nameof(HeH_ExportLog));
     public string HeH_ExportSaved       => T(nameof(HeH_ExportSaved));
     public string HeH_ExportFailed      => T(nameof(HeH_ExportFailed));
-    public string HeH_ExportCurve       => T(nameof(HeH_ExportCurve));
-    public string HeH_DetailTitle       => T(nameof(HeH_DetailTitle));
-    public string HeH_DetailNoCurve     => T(nameof(HeH_DetailNoCurve));
-    public string HeH_DetailNotFound    => T(nameof(HeH_DetailNotFound));
     public string HeH_Unreachable       => T(nameof(HeH_Unreachable));
-    public string HeH_StatTotalRuns     => T(nameof(HeH_StatTotalRuns));
-    public string HeH_StatCompleted     => T(nameof(HeH_StatCompleted));
-    public string HeH_StatReuses        => T(nameof(HeH_StatReuses));
-    public string HeH_StatLastRun       => T(nameof(HeH_StatLastRun));
-    public string HeH_RunsTitle         => T(nameof(HeH_RunsTitle));
-    public string HeH_RunsEmpty         => T(nameof(HeH_RunsEmpty));
-    public string HeH_LogTitle          => T(nameof(HeH_LogTitle));
-    public string HeH_LogEmpty          => T(nameof(HeH_LogEmpty));
     public string HeH_ColWhen           => T(nameof(HeH_ColWhen));
-    public string HeH_ColUser           => T(nameof(HeH_ColUser));
     public string HeH_ColParams         => T(nameof(HeH_ColParams));
-    public string HeH_ColDuration       => T(nameof(HeH_ColDuration));
     public string HeH_ColStatus         => T(nameof(HeH_ColStatus));
-    public string HeH_ColMetrics        => T(nameof(HeH_ColMetrics));
-    public string HeH_ColReuse          => T(nameof(HeH_ColReuse));
-    public string HeH_ColEvent          => T(nameof(HeH_ColEvent));
-    public string HeH_ColNote           => T(nameof(HeH_ColNote));
-    public string HeH_ReuseTimes        => T(nameof(HeH_ReuseTimes));   // {0} berapa kali
     public string HeH_StatusCompleted   => T(nameof(HeH_StatusCompleted));
     public string HeH_StatusFailed      => T(nameof(HeH_StatusFailed));
     public string HeH_StatusAborted     => T(nameof(HeH_StatusAborted));
@@ -590,15 +562,6 @@ public sealed class LocalizationManager : INotifyPropertyChanged
     public string HeMy_Subtitle         => T(nameof(HeMy_Subtitle));
     public string HeMy_Empty            => T(nameof(HeMy_Empty));
     public string HeMy_Export           => T(nameof(HeMy_Export));
-    public string HeH_EvGranted         => T(nameof(HeH_EvGranted));
-    public string HeH_EvGrantedFromQueue => T(nameof(HeH_EvGrantedFromQueue));
-    public string HeH_EvGrantedByOverride => T(nameof(HeH_EvGrantedByOverride));
-    public string HeH_EvQueued          => T(nameof(HeH_EvQueued));
-    public string HeH_EvReleased        => T(nameof(HeH_EvReleased));
-    public string HeH_EvCancelled       => T(nameof(HeH_EvCancelled));
-    public string HeH_EvOverridden      => T(nameof(HeH_EvOverridden));
-    public string HeH_EvExpired         => T(nameof(HeH_EvExpired));
-    public string HeH_EvForceReleased   => T(nameof(HeH_EvForceReleased));
 
     // ── Status system & alarm ─────────────────────────────────────────────
     public string Sys_StatusTitle  => T(nameof(Sys_StatusTitle));
@@ -756,7 +719,6 @@ public sealed class LocalizationManager : INotifyPropertyChanged
 
     // ── User Management page ───────────────────────────────────────────────
     public string Nav_UserManagement => T(nameof(Nav_UserManagement));
-    public string Nav_HeHistory      => T(nameof(Nav_HeHistory));
     public string Um_Title           => T(nameof(Um_Title));
     public string Um_Subtitle        => T(nameof(Um_Subtitle));
     public string Um_AddUser         => T(nameof(Um_AddUser));
@@ -1275,7 +1237,6 @@ public sealed class LocalizationManager : INotifyPropertyChanged
 
             // ── User Management ──
             [nameof(Nav_UserManagement)] = "Users",
-            [nameof(Nav_HeHistory)]      = "History",
             [nameof(Um_Title)]      = "User Management",
             [nameof(Um_Subtitle)]   = "Manage the accounts that can sign in to this server.",
             [nameof(Um_AddUser)]    = "Add user",
@@ -1479,11 +1440,6 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             [nameof(HeQ_QueuedMsg)]    = "The plant is in use by {0} ({1}), for {2} now. You are #{3} of {4} in the queue. Nothing was sent to the plant — you will be notified when your turn starts.",
             [nameof(HeQ_OverrideMsg)]  = "Control taken over from {0}.",
             [nameof(HeQ_ReleasedMsg)]  = "Control released — the next person in the queue can run now.",
-            [nameof(HeQ_CacheTitle)]   = "Result from the database",
-            [nameof(HeQ_CacheMsg)]     = "This combination was already run on {0} by {1} — the result comes from the database, the plant was not run again.",
-            [nameof(HeQ_CacheMetrics)] = "Rise {0} s · Settling {1} s · Overshoot {2} % · Final error {3} °C",
-            [nameof(HeQ_RunAnyway)]    = "Run on the plant anyway",
-            [nameof(HeQ_MeasuredCaption)] = "Measured curve from a stored plant run ({0}, by {1}) — not a simulation. Final error is in \u00B0C.",
             [nameof(HeQ_TurnArrivedTitle)] = "Your turn has started",
             [nameof(HeQ_TurnArrivedMsg)]   = "The plant is yours now — press RUN on the Dashboard to start your experiment.",
             [nameof(HeQ_HoldEndedTitle)]   = "Your turn has ended",
@@ -1504,36 +1460,13 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             [nameof(HeQ_TroubleExpired)]   = "{0} is over the time limit but the turn was NOT released because the plant could not be stopped ({1}). Check the rig, then force-release from the queue panel.",
             [nameof(HeQ_TroubleForced)]    = "The force release went through, but the plant may still be running ({0}). Check the rig and LabVIEW directly.",
 
-            [nameof(HeH_Title)]             = "HE Queue & Run History",
-            [nameof(HeH_Subtitle)]          = "Which parameter combinations were run, by whom, and who held the plant when",
             [nameof(HeH_Refresh)]           = "Refresh",
-            [nameof(HeH_ExportRuns)]        = "Export runs (CSV)",
-            [nameof(HeH_ExportLog)]         = "Export queue (CSV)",
             [nameof(HeH_ExportSaved)]       = "CSV saved",
             [nameof(HeH_ExportFailed)]      = "Could not save the CSV",
-            [nameof(HeH_ExportCurve)]       = "Export curve (CSV)",
-            [nameof(HeH_DetailTitle)]       = "Run detail",
-            [nameof(HeH_DetailNoCurve)]     = "This run has no recorded curve — only its parameters and metrics were kept.",
-            [nameof(HeH_DetailNotFound)]    = "The run could not be read. It may have been deleted, or the server is unreachable.",
             [nameof(HeH_Unreachable)]       = "History could not be read — the server is unreachable, or this account is not allowed to read it.",
-            [nameof(HeH_StatTotalRuns)]     = "Runs recorded",
-            [nameof(HeH_StatCompleted)]     = "Completed",
-            [nameof(HeH_StatReuses)]        = "Served from database",
-            [nameof(HeH_StatLastRun)]       = "Last run",
-            [nameof(HeH_RunsTitle)]         = "Run history",
-            [nameof(HeH_RunsEmpty)]         = "No run has been recorded yet.",
-            [nameof(HeH_LogTitle)]          = "Queue history",
-            [nameof(HeH_LogEmpty)]          = "Nothing has happened in the queue yet.",
             [nameof(HeH_ColWhen)]           = "Time",
-            [nameof(HeH_ColUser)]           = "User",
             [nameof(HeH_ColParams)]         = "Parameters",
-            [nameof(HeH_ColDuration)]       = "Duration",
             [nameof(HeH_ColStatus)]         = "Status",
-            [nameof(HeH_ColMetrics)]        = "Metrics",
-            [nameof(HeH_ColReuse)]          = "Reused",
-            [nameof(HeH_ColEvent)]          = "Event",
-            [nameof(HeH_ColNote)]           = "Note",
-            [nameof(HeH_ReuseTimes)]        = "{0}\u00D7",
             [nameof(HeH_StatusCompleted)]   = "Completed",
             [nameof(HeH_StatusFailed)]      = "Failed",
             [nameof(HeH_StatusAborted)]     = "Aborted",
@@ -1542,15 +1475,6 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             [nameof(HeMy_Subtitle)]         = "Every plant run you have made, newest first — your own runs only.",
             [nameof(HeMy_Empty)]            = "You have not run the plant yet. Press RUN on the Dashboard to start one.",
             [nameof(HeMy_Export)]           = "Export CSV",
-            [nameof(HeH_EvGranted)]         = "Granted",
-            [nameof(HeH_EvGrantedFromQueue)] = "Granted from queue",
-            [nameof(HeH_EvGrantedByOverride)] = "Taken over",
-            [nameof(HeH_EvQueued)]          = "Queued",
-            [nameof(HeH_EvReleased)]        = "Released",
-            [nameof(HeH_EvCancelled)]       = "Left queue",
-            [nameof(HeH_EvOverridden)]      = "Control taken",
-            [nameof(HeH_EvExpired)]         = "Timed out",
-            [nameof(HeH_EvForceReleased)]   = "Force-released",
 
             [nameof(Sys_StatusTitle)]  = "STATUS SYSTEM",
             [nameof(Sys_Plc)]          = "PLC",
@@ -1988,7 +1912,6 @@ public sealed class LocalizationManager : INotifyPropertyChanged
 
             // ── Manajemen Pengguna ──
             [nameof(Nav_UserManagement)] = "Pengguna",
-            [nameof(Nav_HeHistory)]      = "Riwayat",
             [nameof(Um_Title)]      = "Manajemen Pengguna",
             [nameof(Um_Subtitle)]   = "Kelola akun yang dapat masuk ke server ini.",
             [nameof(Um_AddUser)]    = "Tambah pengguna",
@@ -2192,11 +2115,6 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             [nameof(HeQ_QueuedMsg)]    = "Plant sedang dipakai {0} ({1}), sudah {2}. Anda antrean ke-{3} dari {4}. Tidak ada perintah yang dikirim ke plant — Anda akan diberi tahu begitu giliran Anda tiba.",
             [nameof(HeQ_OverrideMsg)]  = "Kendali diambil alih dari {0}.",
             [nameof(HeQ_ReleasedMsg)]  = "Kendali dilepas — antrean berikutnya sudah boleh menjalankan plant.",
-            [nameof(HeQ_CacheTitle)]   = "Hasil dari database",
-            [nameof(HeQ_CacheMsg)]     = "Kombinasi ini sudah pernah dijalankan {0} oleh {1} — hasilnya diambil dari database, plant tidak dijalankan ulang.",
-            [nameof(HeQ_CacheMetrics)] = "Rise {0} s · Settling {1} s · Overshoot {2} % · Error akhir {3} °C",
-            [nameof(HeQ_RunAnyway)]    = "Tetap jalankan di plant",
-            [nameof(HeQ_MeasuredCaption)] = "Kurva terukur dari percobaan plant yang tersimpan ({0}, oleh {1}) — bukan hasil simulasi. Error akhir dalam \u00B0C.",
             [nameof(HeQ_TurnArrivedTitle)] = "Giliran Anda sudah tiba",
             [nameof(HeQ_TurnArrivedMsg)]   = "Plant sekarang milik Anda — tekan JALANKAN di Dashboard untuk memulai percobaan.",
             [nameof(HeQ_HoldEndedTitle)]   = "Giliran Anda berakhir",
@@ -2217,36 +2135,13 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             [nameof(HeQ_TroubleExpired)]   = "{0} sudah melewati batas waktu tetapi gilirannya TIDAK dilepas karena plant tidak bisa dihentikan ({1}). Periksa rig, lalu cabut paksa dari panel antrian.",
             [nameof(HeQ_TroubleForced)]    = "Cabut paksa tetap diteruskan, tetapi plant mungkin masih menyala ({0}). Periksa rig dan LabVIEW langsung.",
 
-            [nameof(HeH_Title)]             = "Riwayat Antrian & Percobaan HE",
-            [nameof(HeH_Subtitle)]          = "Kombinasi parameter apa saja yang sudah dijalankan, oleh siapa, dan siapa memegang plant kapan",
             [nameof(HeH_Refresh)]           = "Segarkan",
-            [nameof(HeH_ExportRuns)]        = "Ekspor percobaan (CSV)",
-            [nameof(HeH_ExportLog)]         = "Ekspor antrian (CSV)",
             [nameof(HeH_ExportSaved)]       = "CSV tersimpan",
             [nameof(HeH_ExportFailed)]      = "Gagal menyimpan CSV",
-            [nameof(HeH_ExportCurve)]       = "Ekspor kurva (CSV)",
-            [nameof(HeH_DetailTitle)]       = "Detail percobaan",
-            [nameof(HeH_DetailNoCurve)]     = "Percobaan ini tidak menyimpan kurva — yang tercatat hanya parameter dan metriknya.",
-            [nameof(HeH_DetailNotFound)]    = "Percobaan ini tidak terbaca. Mungkin sudah dihapus, atau server tidak terjangkau.",
             [nameof(HeH_Unreachable)]       = "Riwayat tidak terbaca — server tidak terjangkau, atau akun ini tidak berhak membacanya.",
-            [nameof(HeH_StatTotalRuns)]     = "Percobaan tercatat",
-            [nameof(HeH_StatCompleted)]     = "Selesai",
-            [nameof(HeH_StatReuses)]        = "Diambil dari database",
-            [nameof(HeH_StatLastRun)]       = "Percobaan terakhir",
-            [nameof(HeH_RunsTitle)]         = "Riwayat percobaan",
-            [nameof(HeH_RunsEmpty)]         = "Belum ada percobaan yang tercatat.",
-            [nameof(HeH_LogTitle)]          = "Riwayat antrian",
-            [nameof(HeH_LogEmpty)]          = "Belum ada kejadian di antrian.",
             [nameof(HeH_ColWhen)]           = "Waktu",
-            [nameof(HeH_ColUser)]           = "Pengguna",
             [nameof(HeH_ColParams)]         = "Parameter",
-            [nameof(HeH_ColDuration)]       = "Durasi",
             [nameof(HeH_ColStatus)]         = "Status",
-            [nameof(HeH_ColMetrics)]        = "Metrik",
-            [nameof(HeH_ColReuse)]          = "Dipakai ulang",
-            [nameof(HeH_ColEvent)]          = "Kejadian",
-            [nameof(HeH_ColNote)]           = "Keterangan",
-            [nameof(HeH_ReuseTimes)]        = "{0}\u00D7",
             [nameof(HeH_StatusCompleted)]   = "Selesai",
             [nameof(HeH_StatusFailed)]      = "Gagal",
             [nameof(HeH_StatusAborted)]     = "Dihentikan",
@@ -2255,15 +2150,6 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             [nameof(HeMy_Subtitle)]         = "Semua percobaan plant yang pernah Anda jalankan, terbaru di atas — hanya milik Anda sendiri.",
             [nameof(HeMy_Empty)]            = "Belum ada percobaan. Tekan JALANKAN di Dashboard untuk memulai.",
             [nameof(HeMy_Export)]           = "Ekspor CSV",
-            [nameof(HeH_EvGranted)]         = "Dapat giliran",
-            [nameof(HeH_EvGrantedFromQueue)] = "Giliran dari antrian",
-            [nameof(HeH_EvGrantedByOverride)] = "Mengambil alih",
-            [nameof(HeH_EvQueued)]          = "Masuk antrian",
-            [nameof(HeH_EvReleased)]        = "Melepas kendali",
-            [nameof(HeH_EvCancelled)]       = "Keluar antrian",
-            [nameof(HeH_EvOverridden)]      = "Kendali diambil",
-            [nameof(HeH_EvExpired)]         = "Lewat batas waktu",
-            [nameof(HeH_EvForceReleased)]   = "Dicabut paksa",
 
             [nameof(Sys_StatusTitle)]  = "STATUS SISTEM",
             [nameof(Sys_Plc)]          = "PLC",

@@ -5,7 +5,7 @@ using TLIGDashboard.Models;
 namespace TLIGDashboard.Services;
 
 /// <summary>
-/// Merakit isi halaman riwayat HE menjadi CSV untuk lampiran laporan praktikum.
+/// Merakit riwayat percobaan HE menjadi CSV untuk lampiran laporan praktikum.
 /// Murni teks — tidak menyentuh file maupun UI, jadi bisa diuji apa adanya.
 ///
 /// <para><b>Dibuat supaya langsung benar saat dibuka Excel.</b> Pemisah kolom
@@ -44,7 +44,7 @@ public static class HeCsvExport
             "steady_state_error_c", "ise", "iae", "itae",
             "final_pv_shell_out", "final_pv_shell_in", "final_flow_tube",
             "final_flow_shell", "final_signal_percent",
-            "sample_count", "reuse_count", "last_reused_at_local", "note");
+            "sample_count", "note");
 
         foreach (var run in runs)
         {
@@ -66,73 +66,7 @@ public static class HeCsvExport
                 Num(m?.FinalPvShellOut, c), Num(m?.FinalPvShellIn, c), Num(m?.FinalFlowTube, c),
                 Num(m?.FinalFlowShell, c), Num(m?.FinalSignalPercent, c),
                 run.Samples.Count.ToString(CultureInfo.InvariantCulture),
-                run.ReuseCount.ToString(CultureInfo.InvariantCulture),
-                Time(run.LastReusedAtUtc),
                 run.Note ?? "");
-        }
-
-        return sb.ToString();
-    }
-
-    /// <summary>
-    /// Kurva respons satu percobaan — satu baris per titik waktu, siap diplot
-    /// langsung di Excel. Ini bentuk yang paling sering dibutuhkan laporan
-    /// praktikum: grafik respons buatan sendiri, bukan tangkapan layar.
-    ///
-    /// Kolom mengikuti tujuh kanal yang disimpan cache. Kanal yang tidak diukur
-    /// dibiarkan kosong, jadi Excel menggambarnya sebagai garis putus, bukan
-    /// menariknya ke nol.
-    /// </summary>
-    public static string RunSamples(HeParameterRun run, CultureInfo? culture = null)
-    {
-        var c   = culture ?? CultureInfo.CurrentCulture;
-        var sep = Separator(c);
-        var sb  = new StringBuilder();
-
-        sb.Append("sep=").Append(sep).Append(NewLine);
-        Row(sb, sep,
-            "run_id", "t_seconds", "flow_tube", "flow_shell", "signal_ma",
-            "signal_percent", "pv_shell_in", "set_point", "pv_shell_out");
-
-        var id = run.RunId.ToString(CultureInfo.InvariantCulture);
-        foreach (var s in run.Samples)
-            Row(sb, sep,
-                id,
-                Num(s.TSeconds, c),
-                Num(s.FlowTube, c), Num(s.FlowShell, c),
-                Num(s.SignalMa, c), Num(s.SignalPercent, c),
-                Num(s.PvShellIn, c), Num(s.SetPoint, c), Num(s.PvShellOut, c));
-
-        return sb.ToString();
-    }
-
-    /// <summary>Riwayat antrian: siapa memegang plant kapan, dan siapa mengambil alih siapa.</summary>
-    public static string QueueLog(IEnumerable<HeQueueLogEntry> entries, CultureInfo? culture = null)
-    {
-        var c   = culture ?? CultureInfo.CurrentCulture;
-        var sep = Separator(c);
-        var sb  = new StringBuilder();
-
-        sb.Append("sep=").Append(sep).Append(NewLine);
-        Row(sb, sep,
-            "log_id", "occurred_at_local", "event_type", "user_id", "display_name",
-            "priority", "priority_label", "request_type", "queue_id",
-            "related_user_id", "note");
-
-        foreach (var e in entries)
-        {
-            Row(sb, sep,
-                e.LogId.ToString(CultureInfo.InvariantCulture),
-                Time(e.OccurredAtUtc),
-                e.EventType,
-                e.UserId,
-                e.DisplayName ?? "",
-                e.Priority is { } p ? ((int)p).ToString(CultureInfo.InvariantCulture) : "",
-                e.Priority is { } pl ? HeQueuePriorityMap.Label(pl) : "",
-                e.RequestType ?? "",
-                e.QueueId?.ToString(CultureInfo.InvariantCulture) ?? "",
-                e.RelatedUserId ?? "",
-                e.Note ?? "");
         }
 
         return sb.ToString();

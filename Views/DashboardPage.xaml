@@ -356,15 +356,6 @@
                             <StackPanel Grid.Row="0" Spacing="3">
                                 <TextBlock Text="{x:Bind Lang.Panel_ResponSistem, Mode=OneWay}"
                                            Style="{StaticResource DashCardTitleStyle}"/>
-                                <!-- Muncul HANYA saat yang tergambar adalah kurva terukur dari
-                                     percobaan plant yang tersimpan, bukan hasil simulasi. Tanpa
-                                     penanda ini, dua hal yang sangat berbeda akan terlihat sama
-                                     persis di kartu yang sama. -->
-                                <TextBlock x:Name="RespMeasuredCaption"
-                                           FontSize="10"
-                                           Opacity="0.75"
-                                           TextWrapping="Wrap"
-                                           Visibility="Collapsed"/>
                             </StackPanel>
                             <Border Grid.Row="1"
                                     x:Name="ResponSistemChart"
@@ -509,19 +500,12 @@
                                  kalau belum ada yang login (lihat HeQueueStatusView). -->
                             <controls:HeQueueStatusView x:Name="CtlQueueView"/>
 
-                            <!-- Kabar dari RUN: masuk antrian, kendali diambil alih, atau hasil
-                                 yang diambil dari cache parameter. Tombol aksinya hanya muncul
-                                 untuk kasus cache ("tetap jalankan di plant"). -->
+                            <!-- Kabar dari RUN: masuk antrian, kendali diambil alih, atau
+                                 giliran yang baru saja dilepas. -->
                             <InfoBar x:Name="CtlQueueInfoBar"
                                      IsOpen="False"
                                      IsClosable="True"
-                                     Severity="Informational">
-                                <InfoBar.ActionButton>
-                                    <Button x:Name="CtlRunAnywayButton"
-                                            Visibility="Collapsed"
-                                            Click="CtlRunAnyway_Click"/>
-                                </InfoBar.ActionButton>
-                            </InfoBar>
+                                     Severity="Informational"/>
 
                             <Grid ColumnSpacing="8">
                                 <Grid.ColumnDefinitions>

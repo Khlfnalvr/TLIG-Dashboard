@@ -119,15 +119,17 @@ public sealed class HeParameterRun
     public double?  DurationSeconds   { get; init; }
     public string?  Note              { get; init; }
 
-    /// <summary>Berapa kali hasil ini dipakai ulang tanpa menjalankan plant.</summary>
+    /// <summary>
+    /// Jejak dari mekanisme lama yang menjawab RUN dengan hasil simpanan alih-alih
+    /// menjalankan plant. Mekanisme itu sudah dihapus, jadi tidak ada lagi yang
+    /// menaikkan angka ini; kolomnya tetap dibaca supaya data percobaan lama tidak
+    /// hilang begitu saja. Tidak ditampilkan di layar dan tidak ikut ke CSV.
+    /// </summary>
     public int       ReuseCount       { get; init; }
     public DateTime? LastReusedAtUtc  { get; init; }
 
     public HeParameterRunMetrics?     Metrics { get; set; }
     public List<HeParameterRunSample> Samples { get; init; } = [];
-
-    /// <summary>True kalau run ini datang dari cache, bukan baru saja dijalankan.</summary>
-    public bool IsFromCache => ReuseCount > 0;
 
     /// <summary>
     /// Penanda di awal <see cref="Note"/> untuk percobaan yang <b>terputus</b>:
@@ -147,10 +149,3 @@ public sealed class HeParameterRun
         Status == HeParameterRunStatus.Aborted &&
         (Note?.StartsWith(InterruptedMarker, StringComparison.Ordinal) ?? false);
 }
-
-/// <summary>Ringkasan isi cache — untuk panel status/pengaturan di Server.</summary>
-public sealed record HeParameterCacheStats(
-    int       TotalRuns,
-    int       CompletedRuns,
-    int       TotalReuses,
-    DateTime? LastRunUtc);

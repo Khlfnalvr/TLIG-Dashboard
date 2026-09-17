@@ -5,34 +5,32 @@ using TLIGDashboard.Models;
 namespace TLIGDashboard.Services;
 
 /// <summary>
-/// Cache hasil percobaan parameter HE, disimpan di SQLite
+/// Arsip hasil percobaan parameter HE, disimpan di SQLite
 /// (<c>%LOCALAPPDATA%\TLIGDashboard\heParamCache.db</c>).
 ///
-/// Menjalankan satu kombinasi parameter ke plant fisik itu mahal: harus antre,
-/// menunggu prosesnya stabil, dan hasilnya toh sama saja kalau parameternya
-/// sama. Karena itu setiap run yang selesai disimpan utuh di sini — parameter
-/// masukan, metrik ringkasan, dan seluruh kurva responsnya. Sebelum menjalankan
-/// RUN berikutnya, tanyakan dulu ke <see cref="FindCachedRunAsync"/>:
+/// Setiap run yang selesai disimpan utuh di sini — parameter masukan, metrik
+/// ringkasan, dan seluruh kurva responsnya — supaya mahasiswa bisa membaca lagi
+/// percobaannya sendiri dan melampirkannya ke laporan:
 ///
 /// <code>
-/// var input  = new HeParameterInput { Sp = sp, Kc = kc, Ti = ti, Td = td, Pump = pump };
-/// var cached = await App.HeParamCache.FindCachedRunAsync(input);
-/// if (cached is not null)
-/// {
-///     TampilkanHasil(cached.Metrics, cached.Samples);   // tidak menyentuh plant sama sekali
-///     return;
-/// }
-///
-/// // belum pernah dicoba → jalankan seperti biasa, kumpulkan sample, lalu:
+/// // sesudah satu run selesai
 /// await App.HeParamCache.SaveRunAsync(run);
+///
+/// // tabel "Riwayat Percobaan Saya" (disaring Server dari identitas sesi)
+/// var milikSaya = await App.HeParamCache.ListRunsByUserAsync(username);
+/// var detail    = await App.HeParamCache.GetRunAsync(runId);   // lengkap dengan kurvanya
 /// </code>
 ///
-/// Cache ini milik Server (satu untuk semua pengguna), jadi percobaan yang sudah
-/// dilakukan seorang mahasiswa langsung bisa dipakai mahasiswa lain.
+/// <para><b>Arsip ini tidak pernah menggantikan percobaan baru.</b> Dulu ada
+/// mekanisme yang menjawab RUN dengan hasil simpanan ketika kombinasi
+/// parameternya sama persis, sehingga plant tidak dijalankan ulang. Mekanisme itu
+/// sudah dihapus: RUN selalu benar-benar menjalankan plant. Kolom
+/// <c>reuse_count</c> dan <c>last_reused_at_utc</c> masih ada di skema sebagai
+/// jejak data lama, tapi tidak ada lagi yang menaikkannya.</para>
 ///
-/// Hanya run berstatus <see cref="HeParameterRunStatus.Completed"/> yang pernah
-/// dikembalikan sebagai hasil cache — run yang gagal atau dihentikan di tengah
-/// tetap disimpan sebagai catatan, tapi tidak akan disodorkan sebagai hasil.
+/// Run berstatus <see cref="HeParameterRunStatus.Failed"/> maupun
+/// <see cref="HeParameterRunStatus.Aborted"/> ikut tersimpan: riwayat memang
+/// mencatat yang gagal juga.
 /// </summary>
 public sealed class HeParameterCacheRepository : HeSqliteDatabase
 {
@@ -46,69 +44,7 @@ public sealed class HeParameterCacheRepository : HeSqliteDatabase
         "run_id, sp, kc, ti, td, pump, source, status, requested_by_user_id, requested_by_name, " +
         "started_at_utc, finished_at_utc, duration_seconds, reuse_count, last_reused_at_utc, note";
 
-    // ── Ambil dari cache ────────────────────────────────────────────────────
-
-    /// <summary>
-    /// Mencari run yang sudah pernah dijalankan dengan kombinasi parameter yang
-    /// sama (lihat <see cref="HeParameterInput.ParamKey"/>). Yang dikembalikan
-    /// adalah run <b>terbaru</b> yang selesai wajar, lengkap dengan metrik dan
-    /// kurva responsnya. <c>null</c> berarti kombinasi ini memang belum pernah
-    /// dicoba — plant harus dijalankan.
-    /// </summary>
-    /// <param name="countReuse">
-    /// Menaikkan penghitung pemakaian ulang run tersebut (dipakai untuk laporan
-    /// "berapa kali plant tidak perlu dijalankan"). Set <c>false</c> kalau hanya
-    /// ingin mengintip isi cache, mis. saat menampilkan daftar.
-    /// </param>
-    public Task<HeParameterRun?> FindCachedRunAsync(
-        HeParameterInput input, bool countReuse = true, CancellationToken ct = default) =>
-        WriteAsync<HeParameterRun?>(async (conn, tx, token) =>
-        {
-            HeParameterRun? run;
-            await using (var cmd = Command(conn, tx, $"""
-                SELECT {RunColumns}
-                FROM he_parameter_runs
-                WHERE param_key = $paramKey AND status = 'Completed'
-                ORDER BY started_at_utc DESC, run_id DESC
-                LIMIT 1;
-                """))
-            {
-                Bind(cmd, "$paramKey", input.ParamKey);
-                await using var reader = await cmd.ExecuteReaderAsync(token);
-                run = await reader.ReadAsync(token) ? ReadRun(reader) : null;
-            }
-
-            if (run is null) return null;
-
-            if (countReuse)
-            {
-                await using (var bump = Command(conn, tx, """
-                    UPDATE he_parameter_runs
-                    SET reuse_count = reuse_count + 1, last_reused_at_utc = $now
-                    WHERE run_id = $runId;
-                    """))
-                {
-                    Bind(bump, "$now", ToDbTime(DateTime.UtcNow));
-                    Bind(bump, "$runId", run.RunId);
-                    await bump.ExecuteNonQueryAsync(token);
-                }
-
-                // Dibaca ulang setelah dinaikkan supaya yang dikembalikan sudah
-                // menghitung pemakaian ulang kali ini juga. Kalau tidak, hasil
-                // yang baru saja diambil dari cache akan melaporkan
-                // reuse_count = 0 — dan HeParameterRun.IsFromCache, yang justru
-                // dipakai layar untuk berkata "ini dari database", ikut salah.
-                await using var reread = Command(conn, tx,
-                    $"SELECT {RunColumns} FROM he_parameter_runs WHERE run_id = $runId;");
-                Bind(reread, "$runId", run.RunId);
-                await using var rereader = await reread.ExecuteReaderAsync(token);
-                if (await rereader.ReadAsync(token)) run = ReadRun(rereader);
-            }
-
-            run.Metrics = await ReadMetricsAsync(conn, tx, run.RunId, token);
-            run.Samples.AddRange(await ReadSamplesAsync(conn, tx, run.RunId, token));
-            return run;
-        }, ct);
+    // ── Membaca percobaan ───────────────────────────────────────────────────
 
     /// <summary>Satu run berdasarkan id, lengkap dengan metrik dan kurva. <c>null</c> kalau sudah dihapus.</summary>
     public Task<HeParameterRun?> GetRunAsync(long runId, CancellationToken ct = default) =>
@@ -127,33 +63,6 @@ public sealed class HeParameterCacheRepository : HeSqliteDatabase
             run.Metrics = await ReadMetricsAsync(conn, null, runId, token);
             run.Samples.AddRange(await ReadSamplesAsync(conn, null, runId, token));
             return run;
-        }, ct);
-
-    /// <summary>
-    /// Daftar run terbaru <b>tanpa</b> kurva respons (kurva bisa ribuan baris) —
-    /// untuk tabel riwayat. Ambil detailnya dengan <see cref="GetRunAsync"/>.
-    /// </summary>
-    public Task<IReadOnlyList<HeParameterRun>> ListRunsAsync(
-        int limit = 100, int offset = 0, CancellationToken ct = default) =>
-        ReadAsync<IReadOnlyList<HeParameterRun>>(async (conn, token) =>
-        {
-            var runs = new List<HeParameterRun>();
-            await using var cmd = Command(conn, null, $"""
-                SELECT {RunColumns}
-                FROM he_parameter_runs
-                ORDER BY started_at_utc DESC, run_id DESC
-                LIMIT $limit OFFSET $offset;
-                """);
-            Bind(cmd, "$limit", limit);
-            Bind(cmd, "$offset", offset);
-
-            await using var reader = await cmd.ExecuteReaderAsync(token);
-            while (await reader.ReadAsync(token)) runs.Add(ReadRun(reader));
-
-            foreach (var run in runs)
-                run.Metrics = await ReadMetricsAsync(conn, null, run.RunId, token);
-
-            return runs;
         }, ct);
 
     /// <summary>
@@ -191,27 +100,6 @@ public sealed class HeParameterCacheRepository : HeSqliteDatabase
                 run.Metrics = await ReadMetricsAsync(conn, null, run.RunId, token);
 
             return runs;
-        }, ct);
-
-    /// <summary>Ringkasan isi cache untuk panel status Server.</summary>
-    public Task<HeParameterCacheStats> GetStatsAsync(CancellationToken ct = default) =>
-        ReadAsync<HeParameterCacheStats>(async (conn, token) =>
-        {
-            await using var cmd = Command(conn, null, """
-                SELECT COUNT(*),
-                       COALESCE(SUM(CASE WHEN status = 'Completed' THEN 1 ELSE 0 END), 0),
-                       COALESCE(SUM(reuse_count), 0),
-                       MAX(started_at_utc)
-                FROM he_parameter_runs;
-                """);
-            await using var reader = await cmd.ExecuteReaderAsync(token);
-            if (!await reader.ReadAsync(token)) return new HeParameterCacheStats(0, 0, 0, null);
-
-            return new HeParameterCacheStats(
-                reader.GetInt32(0),
-                reader.GetInt32(1),
-                reader.GetInt32(2),
-                ReadTime(reader, 3));
         }, ct);
 
     // ── Simpan hasil run ────────────────────────────────────────────────────

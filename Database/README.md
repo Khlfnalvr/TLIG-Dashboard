@@ -1,4 +1,4 @@
-# Database HE — Antrian Giliran & Cache Parameter
+# Database HE — Antrian Giliran & Arsip Percobaan
 
 Dua database SQLite di sisi **Server** yang menopang pemakaian plant Heat
 Exchanger secara bersama-sama:
@@ -6,7 +6,7 @@ Exchanger secara bersama-sama:
 | Database | File | Isi |
 |---|---|---|
 | Antrian giliran | `%LOCALAPPDATA%\TLIGDashboard\heQueue.db` | siapa yang sedang memegang plant, siapa yang mengantre, dan riwayat lengkapnya |
-| Cache hasil parameter | `%LOCALAPPDATA%\TLIGDashboard\heParamCache.db` | hasil tiap kombinasi parameter yang pernah dijalankan, supaya tidak perlu dijalankan ulang |
+| Arsip hasil percobaan | `%LOCALAPPDATA%\TLIGDashboard\heParamCache.db` | hasil tiap percobaan yang pernah dijalankan: parameter, metrik, dan kurva responsnya |
 
 Skemanya ada di folder ini (`HeQueueSchema.sql`, `HeParameterCacheSchema.sql`),
 ditanam sebagai *embedded resource* di dalam `.exe`. Aplikasi memasang skema
@@ -94,51 +94,40 @@ merasa mendapat giliran.
 
 ---
 
-## 2. Cache hasil parameter (`heParamCache.db`)
+## 2. Arsip hasil percobaan (`heParamCache.db`)
 
 ### Konsep
 
-Kombinasi parameter yang sama akan menghasilkan respons yang sama, jadi tidak
-ada gunanya menjalankan plant dua kali untuk pertanyaan yang sama. Setiap run
-yang selesai disimpan utuh: parameter masukan, metrik ringkasan, dan seluruh
-kurva responsnya. Percobaan yang sudah dilakukan satu mahasiswa langsung bisa
-dipakai mahasiswa lain — cache ini milik Server, bukan per-pengguna.
+Setiap run yang selesai disimpan utuh: parameter masukan, metrik ringkasan, dan
+seluruh kurva responsnya. Gunanya satu — supaya mahasiswa bisa membaca lagi
+percobaannya sendiri dan melampirkannya ke laporan.
 
-Yang dianggap "kombinasi sama" adalah **SP, Kc, Ti, Td, dan Pump** yang
-dibulatkan ke 3 desimal lalu digabung jadi satu kunci (`param_key`), mis.
-`60.000|2.500|10.000|0.500|75.000`. Pembulatan ini yang membuat selisih
-floating point (0.1 + 0.2 ≠ 0.3) tidak dianggap kombinasi baru. Toleransinya
-diatur lewat `HeParameterInput.MatchDecimals`.
+**Arsip ini tidak pernah menggantikan percobaan baru.** Dulu ada mekanisme yang
+menjawab RUN dengan hasil simpanan ketika kombinasi parameternya sama persis,
+sehingga plant tidak dijalankan ulang; mekanisme itu sudah dihapus. Setiap RUN
+benar-benar menjalankan plant, dan yang mengatur urutannya hanya antrian.
+
+Kolom `param_key` masih diisi saat menyimpan — **SP, Kc, Ti, Td, dan Pump**
+dibulatkan ke 3 desimal lalu digabung, mis. `60.000|2.500|10.000|0.500|75.000`
+(toleransinya di `HeParameterInput.MatchDecimals`) — tapi tidak ada lagi yang
+mencarinya. Begitu pula `reuse_count` dan `last_reused_at_utc`: keduanya tetap
+ada sebagai jejak data lama, dan tidak ada lagi yang menaikkannya.
 
 ### Tabel
 
 | Tabel | Isi |
 |---|---|
-| `he_parameter_runs` | 1 baris = 1 percobaan: parameter masukan, siapa yang menjalankan, kapan, berapa lama, dan berapa kali hasilnya sudah dipakai ulang |
+| `he_parameter_runs` | 1 baris = 1 percobaan: parameter masukan, siapa yang menjalankan, kapan, berapa lama, dan statusnya |
 | `he_parameter_run_metrics` | ringkasan kualitas respons (rise time, settling time, overshoot, ISE/IAE/ITAE) — 1:1 dengan run |
 | `he_parameter_run_samples` | kurva respons per waktu, 7 kanal mengikuti `CHART_FIELDS` di `PIDtest.py` (Flow Tube, Flow Shell, Sinyal mA, Sinyal %, PV Shell in, Set Point, PV Shell out) — 1:N dengan run |
 
 ### Cara memakai dari kode
 
 ```csharp
-var input = new HeParameterInput { Sp = sp, Kc = kc, Ti = ti, Td = td, Pump = pump };
-
-// 1. Cek dulu sebelum menyentuh plant.
-var cached = await App.HeParamCache.FindCachedRunAsync(input);
-if (cached is not null)
-{
-    TampilkanHasil(cached.Metrics, cached.Samples);
-    Info.Message = $"Kombinasi ini sudah pernah dijalankan " +
-                   $"{cached.StartedAtUtc.ToLocalTime():g} oleh {cached.RequestedByName} — " +
-                   "hasil diambil dari database, plant tidak dijalankan ulang.";
-    return;
-}
-
-// 2. Belum pernah → jalankan seperti biasa, kumpulkan sample selama run berjalan.
-// 3. Setelah selesai, simpan supaya berikutnya tinggal ambil.
+// Sesudah satu run selesai — simpan apa adanya, termasuk yang gagal.
 var run = new HeParameterRun
 {
-    Input             = input,
+    Input             = new HeParameterInput { Sp = sp, Kc = kc, Ti = ti, Td = td, Pump = pump },
     Status            = HeParameterRunStatus.Completed,
     RequestedByUserId = App.Session.Username,
     RequestedByName   = App.Session.DisplayName,
@@ -150,19 +139,26 @@ var run = new HeParameterRun
 run.Samples.AddRange(sampleTerkumpul);
 
 await App.HeParamCache.SaveRunAsync(run);
+
+// Membacanya lagi: tabel "Riwayat Percobaan Saya". Siapa "saya" ditentukan
+// Server dari identitas sesi, bukan dari permintaan Client.
+var milikSaya = await App.HeParamCache.ListRunsByUserAsync(username);
 ```
 
 Catatan penting:
 
 - Run yang gagal atau dihentikan di tengah **tetap disimpan** (status `Failed` /
-  `Aborted`) sebagai catatan, tapi tidak pernah disodorkan sebagai hasil cache.
-  Jadi simpan apa adanya — jangan takut mencemari cache.
-- Menjalankan ulang kombinasi yang sama tidak menimpa run lama; yang dipakai
-  selalu yang **terbaru**. Kalau plant baru dikalibrasi, cukup jalankan sekali
-  lagi untuk memperbarui hasilnya (atau `ClearAsync()` untuk mengosongkan cache).
-- `FindCachedRunAsync` menaikkan penghitung `reuse_count`, jadi bisa dilaporkan
-  berapa kali plant tidak perlu dijalankan. Pakai `countReuse: false` kalau hanya
-  mengintip isi cache untuk daftar/tabel.
+  `Aborted`): riwayat memang mencatat yang gagal juga.
+- Run yang kendalinya dicabut selagi plant berjalan disimpan sebagai `Aborted`
+  dengan catatan berawalan `[terputus]` (`HeParameterRun.InterruptedMarker`) —
+  kolom `status` dikunci `CHECK` pada tiga nilai, jadi nilai baru berarti
+  membangun ulang tabelnya. Layar menampilkannya sebagai "Terputus".
+- Menjalankan ulang kombinasi yang sama tidak menimpa run lama; keduanya
+  tersimpan sebagai dua baris riwayat.
+- `ListRunsByUserAsync` menyaring di SQL, bukan dengan menyaring daftar lengkap
+  di memori: mahasiswa tidak boleh bisa melihat percobaan mahasiswa lain, dan
+  data yang tidak pernah dibaca dari disk tidak bisa bocor karena salah tulis di
+  lapisan atasnya.
 
 ---
 
@@ -185,16 +181,11 @@ sqlite3 %LOCALAPPDATA%\TLIGDashboard\heParamCache.db "SELECT run_id, param_key, 
    memanggil `HeControlService.RequestAsync(HeRequestType.Run)`. Kalau plant
    sedang dipakai orang lain, penekan RUN masuk antrian, sebuah InfoBar
    memberitahu posisinya, dan **tidak ada apa pun yang dikirim ke LabVIEW**.
-2. **Cek cache.** Sebelum plant disentuh, `FindCachedRunAsync` dicari lebih
-   dulu. Kalau kombinasi SP/Kc/Ti/Td/Pump-nya sudah pernah dijalankan, hasilnya
-   ditampilkan dari database dan plant tidak dijalankan ulang: kurva terukurnya
-   digambar ke chart respons (suhu shell out + flow tube, dijarangkan ≤1500
-   titik) dan kartu metriknya diisi dari run itu, dengan keterangan di atas
-   chart bahwa yang tampil kurva terukur — bukan simulasi. Tombol "tetap
-   jalankan di plant" pada InfoBar itu melewati cache satu kali.
-3. **Jalan + direkam.** Baru setelah itu perintah berangkat ke bridge, dan
-   `HeRunRecorder` mulai mengumpulkan kurva responsnya dari `HmiDataService`.
-4. **Selesai.** Tombol STOP menutup rekaman (tersimpan ke cache) lalu melepas
+2. **Jalan + direkam.** Begitu giliran didapat, perintahnya berangkat ke bridge
+   dan `HeRunRecorder` mulai mengumpulkan kurva responsnya dari `HmiDataService`.
+   Tidak ada pemeriksaan "sudah pernah dijalankan atau belum": setiap RUN
+   benar-benar menjalankan plant.
+3. **Selesai.** Tombol STOP menutup rekaman (tersimpan ke arsip) lalu melepas
    giliran, sehingga antrean berikutnya langsung bisa jalan. RESET dan E-STOP
    sengaja tidak melepas giliran — keduanya dipakai justru saat ada yang tidak
    beres.
@@ -204,41 +195,23 @@ sqlite3 %LOCALAPPDATA%\TLIGDashboard\heParamCache.db "SELECT run_id, param_key, 
 memanggil endpoint di bawah. Panel statusnya `Controls/HeQueueStatusView`,
 menyegarkan diri tiap 3 detik.
 
-### Halaman riwayat
+### Riwayat percobaan mahasiswa
 
-`Views/HeQueueHistoryPage` (menu **Riwayat**, staf saja di kedua flavor)
-menampilkan dua tabel yang menjawab dua pertanyaan berbeda:
+Tabel **Riwayat Percobaan Saya** di `Views/ChallengeLearningPage` (di bawah kartu
+"Aktivitas Saya", hanya untuk mahasiswa) membaca `he_parameter_runs` lewat
+`ListRunsByUserAsync`: parameter, metrik ringkas, dan status tiap percobaan —
+`Completed`, `Failed`, `Aborted`, atau "Terputus" untuk `Aborted` yang catatannya
+berawalan `[terputus]`. Kurva responsnya tidak ikut dibawa (satu run bisa ribuan
+titik) dan tidak ada layar yang membukanya.
 
-* **Riwayat percobaan** (dari `he_parameter_runs`) — kombinasi parameter apa saja
-  yang pernah dijalankan, oleh siapa, berapa lama, statusnya, metrik ringkasnya,
-  dan berapa kali hasilnya dipakai ulang tanpa menjalankan plant. Run `Failed` /
-  `Aborted` ikut terdaftar: riwayat memang mencatat yang gagal juga, cuma cache
-  yang tidak pernah menyodorkannya.
-* **Riwayat antrian** (dari `he_queue_log`) — siapa memegang plant kapan, siapa
-  mengantre, dan siapa mengambil alih giliran siapa.
+Penyaringan per pengguna **selalu** dikerjakan Server dari identitas sesi: di
+Server memakai username yang sedang login, di Client lewat `/he/params/my-runs`
+yang tidak menerima parameter pengguna sama sekali. Tidak ada permintaan yang
+bisa diubah Client untuk melihat percobaan orang lain.
 
-Kartu ringkasan di atasnya membaca `GetStatsAsync`, termasuk "berapa kali plant
-tidak perlu dijalankan".
+Tabelnya bisa diekspor ke **CSV** untuk lampiran laporan praktikum
+(`Services/HeCsvExport.Runs`). Yang masuk file persis baris yang sedang tampil.
 
-Klik satu baris riwayat percobaan untuk membuka **detail**-nya
-(`Controls/HeRunDetailDialog`): kurva responsnya digambar di sana, berikut
-parameter dan metriknya, dan ada tombol ekspor kurva ke CSV (satu baris per titik
-waktu, siap diplot sendiri di Excel). Kurvanya baru diambil saat itu lewat
-`GET /he/params/run` — daftar riwayatnya sendiri sengaja tidak membawanya.
-
-Kedua tabel bisa diekspor ke **CSV** untuk lampiran laporan praktikum
-(`Services/HeCsvExport`). Yang masuk file persis baris yang sedang tampil.
-Filenya dibuat supaya langsung benar saat dibuka Excel: pemisah kolom mengikuti
-setelan wilayah Windows (di Indonesia titik-koma), angkanya diformat dengan
-budaya yang sama, diawali petunjuk `sep=` supaya tetap terpecah benar di
-komputer dengan setelan lain, dan ditulis UTF-8 **dengan BOM** — tanpa BOM Excel
-merusak "°C" dan huruf beraksen. Nama kolomnya sengaja tidak diterjemahkan:
-isinya data yang diolah lagi, dan nama kolom yang berubah saat bahasa aplikasi
-diganti akan mematahkan rumus serta skrip yang sudah dibuat mahasiswa. Waktu
-ditulis dalam waktu lokal, dan nama kolomnya diakhiri `_local` supaya tidak ada
-yang mengira UTC. Halaman ini staf saja karena isinya memperlihatkan siapa
-mengerjakan apa — dan yang menegakkannya Server (`/he/queue/log` dan
-`/he/params/runs` menolak selain staf), bukan penyembunyian menunya.
 
 ### Endpoint (Server)
 
@@ -248,11 +221,9 @@ mengerjakan apa — dan yang menegakkannya Server (`/he/queue/log` dan
 | `POST /he/queue/request` | minta giliran; `200` = boleh jalan, `409` = masuk antrian (berisi posisi) |
 | `POST /he/queue/release` | lepas kendali, rekaman run ditutup, giliran lanjut |
 | `POST /he/queue/cancel` | keluar dari antrian |
-| `POST /he/queue/force-release` | cabut paksa — **Admin saja** (ditolak di server, bukan sekadar tombolnya disembunyikan) |
+| `POST /he/queue/force-release` | cabut paksa — **staf saja** (ditolak di server, bukan sekadar tombolnya disembunyikan) |
 | `GET  /he/queue/log?limit=` | riwayat antrian — staf saja |
-| `POST /he/params/lookup` | hasil cache untuk satu kombinasi parameter (kurvanya dijarangkan ≤1200 titik) |
-| `GET  /he/params/runs?limit=` | daftar percobaan terbaru + ringkasan cache, tanpa kurva — staf saja |
-| `GET  /he/params/run?id=` | satu percobaan **lengkap dengan kurvanya** — staf saja |
+| `GET  /he/params/my-runs?limit=` | percobaan **milik pemanggil sendiri**, tanpa kurva — disaring Server dari identitas sesi |
 
 `POST /sim/pid/run` — jalur yang benar-benar menggerakkan plant — ikut dijaga
 antrian yang sama, jadi Client yang melewati layar tetap tidak bisa menyerobot:
@@ -266,14 +237,19 @@ antrian yang sama, jadi Client yang melewati layar tetap tidak bisa menyerobot:
 
 ### Penjaga di Server
 
-`App.WatchStaleHolderAsync` berjalan tiap menit dan melepas kendali yang sudah
-dipegang lebih dari `HeControlService.MaxHold` (30 menit) — klien yang mati atau
-lupa menekan STOP tidak membuat antrian macet semalaman. Rekaman run yang ikut
-menggantung ditutup sebagai `Aborted`, jadi tidak pernah dipakai ulang.
+`App.WatchStaleHolderAsync` berjalan tiap menit dan memutus kendali **Mahasiswa**
+yang sudah dipegang lebih dari `HeControlService.MaxHold` (30 menit) — klien yang
+mati atau lupa menekan BERHENTI tidak membuat antrian macet semalaman. Dosen,
+Asisten, dan Admin tidak dibatasi.
+
+Urutannya selalu **hentikan rig dulu, baru lepas giliran** (`HeRigRelease`), dan
+kalau perintah berhentinya gagal sampai, gilirannya sengaja tidak dilepas. Rekaman
+run yang ikut menggantung ditutup sebagai `Aborted` dengan catatan `[terputus]`,
+jadi datanya tetap tersimpan lengkap untuk laporan.
 
 ### Kanal yang terekam
 
-Model cache menyediakan tujuh kanal, tapi VI yang dipakai sekarang mengirim
+Model arsip menyediakan tujuh kanal, tapi VI yang dipakai sekarang mengirim
 empat nama (`Flow Tube`, `PV`, `Flow Shell`, `Temp. Shell out` — lihat
 `HmiDataService.DataLineFields`). Yang tidak dikirim disimpan **NULL**, bukan 0,
 supaya "tidak diukur" tidak tertukar dengan "terukur nol"; `HeRunRecorder` sudah
@@ -282,8 +258,11 @@ diambil dari nilai yang sedang diperintahkan, bukan dari balasan VI.
 
 ## 5. Yang belum dikerjakan
 
-* Halaman Cascade belum ikut menggambar kurva cache — pencarian cache memang
-  hanya terjadi di kartu Control halaman Dashboard.
-* Lapisan non-UI diuji lewat 72 skenario otomatis; kompilasi WinUI-nya
+* Kurva respons tersimpan lengkap di `he_parameter_run_samples`, tapi belum ada
+  layar yang membukanya kembali — `GetRunAsync` ada di repository sebagai satu-
+  satunya jalan membacanya kalau suatu saat dibutuhkan.
+* `he_queue_log` masih bisa dibaca lewat `GET /he/queue/log`, tapi untuk sementara
+  tidak ada layar yang menampilkannya.
+* Lapisan non-UI diuji lewat 92 skenario otomatis; kompilasi WinUI-nya
   diverifikasi oleh workflow `Build` di GitHub Actions (net10-windows tidak bisa
   dibangun di Linux).

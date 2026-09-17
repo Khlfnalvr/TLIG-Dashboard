@@ -93,25 +93,7 @@ public static class HeQueueClient
         return list;
     }
 
-    // ── Cache hasil parameter ───────────────────────────────────────────────
-
-    public static async Task<HeRunHistory> GetRecentRunsAsync(string host, string token, int limit)
-    {
-        var node = await GetAsync(host, token, $"{ShareProtocol.HeParamRunsPath}?limit={limit}");
-        if (node is null) return new HeRunHistory();
-
-        var runs = new List<HeParameterRun>();
-        if (node["runs"] is JsonArray arr)
-            foreach (var item in arr)
-                if (item is not null) runs.Add(HeQueueJson.ToRun(item));
-
-        return new HeRunHistory
-        {
-            Runs  = runs,
-            Stats = node["stats"] is { } stats ? HeQueueJson.ToStats(stats) : null,
-            Ok    = true,
-        };
-    }
+    // ── Arsip hasil percobaan ───────────────────────────────────────────────
 
     /// <summary>Percobaan milik pemanggil sendiri — Server yang menentukan "sendiri" itu siapa.</summary>
     public static async Task<IReadOnlyList<HeParameterRun>> GetMyRunsAsync(string host, string token, int limit)
@@ -123,27 +105,6 @@ public static class HeQueueClient
         foreach (var item in arr)
             if (item is not null) runs.Add(HeQueueJson.ToRun(item));
         return runs;
-    }
-
-    public static async Task<HeParameterRun?> GetRunAsync(string host, string token, long runId)
-    {
-        var node = await GetAsync(host, token, $"{ShareProtocol.HeParamRunPath}?id={runId}");
-        return node is null ? null : HeQueueJson.ToRun(node);
-    }
-
-    public static async Task<HeParameterRun?> FindCachedRunAsync(string host, string token, HeParameterInput input)
-    {
-        var node = await PostAsync(host, token, ShareProtocol.HeParamLookupPath, new JsonObject
-        {
-            ["sp"]   = input.Sp,
-            ["kc"]   = input.Kc,
-            ["ti"]   = input.Ti,
-            ["td"]   = input.Td,
-            ["pump"] = input.Pump,
-        });
-
-        if (node is null || (bool?)node["found"] != true) return null;
-        return node["run"] is { } run ? HeQueueJson.ToRun(run) : null;
     }
 
     // ── Internals ───────────────────────────────────────────────────────────
@@ -326,14 +287,6 @@ public static class HeQueueJson
         ["itae"]               = m.Itae,
     };
 
-    public static JsonObject FromStats(HeParameterCacheStats stats) => new()
-    {
-        ["totalRuns"]     = stats.TotalRuns,
-        ["completedRuns"] = stats.CompletedRuns,
-        ["totalReuses"]   = stats.TotalReuses,
-        ["lastRunUtc"]    = stats.LastRunUtc is { } last ? Time(last) : null,
-    };
-
     private static JsonObject FromSample(HeParameterRunSample s) => new()
     {
         ["t"]             = s.TSeconds,
@@ -454,12 +407,6 @@ public static class HeQueueJson
 
         return run;
     }
-
-    public static HeParameterCacheStats ToStats(JsonNode node) => new(
-        (int?)node["totalRuns"]     ?? 0,
-        (int?)node["completedRuns"] ?? 0,
-        (int?)node["totalReuses"]   ?? 0,
-        node["lastRunUtc"] is { } last ? ParseTime(last) : null);
 
     private static HeControlHolder ToHolder(JsonNode node) => new()
     {
@@ -655,25 +602,6 @@ public static class HeControlService
     }
 
     /// <summary>
-    /// Daftar percobaan terbaru beserta ringkasan cache — isi halaman riwayat.
-    /// Di Server dibaca langsung dari repository, di Client lewat HTTP.
-    /// </summary>
-    public static async Task<HeRunHistory> GetRecentRunsAsync(int limit = 100)
-    {
-        if (BuildInfo.IsServer)
-            return new HeRunHistory
-            {
-                Runs  = await App.HeParamCache.ListRunsAsync(limit),
-                Stats = await App.HeParamCache.GetStatsAsync(),
-                Ok    = true,
-            };
-
-        if (!Enabled) return new HeRunHistory();
-        var cfg = AppSettingsService.Load();
-        return await HeQueueClient.GetRecentRunsAsync(cfg.ServerHost, cfg.ServerToken, limit);
-    }
-
-    /// <summary>
     /// Percobaan milik pengguna yang sedang login saja — isi tabel "Riwayat
     /// Percobaan Saya".
     ///
@@ -691,33 +619,6 @@ public static class HeControlService
 
         var cfg = AppSettingsService.Load();
         return await HeQueueClient.GetMyRunsAsync(cfg.ServerHost, cfg.ServerToken, limit);
-    }
-
-    /// <summary>
-    /// Satu percobaan lengkap dengan kurvanya — untuk layar detail dan ekspor
-    /// kurva. <c>null</c> kalau run-nya sudah dihapus atau tidak terbaca.
-    /// </summary>
-    public static async Task<HeParameterRun?> GetRunAsync(long runId)
-    {
-        if (BuildInfo.IsServer) return await App.HeParamCache.GetRunAsync(runId);
-
-        if (!Enabled) return null;
-        var cfg = AppSettingsService.Load();
-        return await HeQueueClient.GetRunAsync(cfg.ServerHost, cfg.ServerToken, runId);
-    }
-
-    /// <summary>
-    /// Hasil yang sudah pernah dijalankan untuk kombinasi parameter ini, atau
-    /// <c>null</c> kalau memang belum pernah dicoba (plant harus dijalankan).
-    /// </summary>
-    public static async Task<HeParameterRun?> FindCachedRunAsync(HeParameterInput input)
-    {
-        if (BuildInfo.IsServer)
-            return await App.HeParamCache.FindCachedRunAsync(input);
-
-        if (!Enabled) return null;
-        var cfg = AppSettingsService.Load();
-        return await HeQueueClient.FindCachedRunAsync(cfg.ServerHost, cfg.ServerToken, input);
     }
 
     /// <summary>

@@ -126,19 +126,6 @@
                     toggled Visible later); ApplyRoleNavVisibility() hides it at load
                     (behind the login overlay) and reveals it after an admin signs in.
                 -->
-                <!--
-                    Riwayat antrian & percobaan HE — staf saja, di KEDUA flavor
-                    (Server membaca databasenya langsung, Client lewat HTTP).
-                    Sama seperti dua item di atas: dideklarasikan Visible lalu
-                    disembunyikan ApplyRoleNavVisibility() saat memuat.
-                -->
-                <NavigationViewItem x:Name="NavHeHistory" Tag="HeHistory" MinWidth="0" MinHeight="32" Height="32" Padding="0,0,0,2" VerticalContentAlignment="Center">
-                    <TextBlock Text="{x:Bind Lang.Nav_HeHistory, Mode=OneWay}" FontSize="12" VerticalAlignment="Center">
-                        <TextBlock.RenderTransform>
-                            <TranslateTransform Y="-3"/>
-                        </TextBlock.RenderTransform>
-                    </TextBlock>
-                </NavigationViewItem>
                 <NavigationViewItem x:Name="NavUserManagement" Tag="UserManagement" MinWidth="0" MinHeight="32" Height="32" Padding="0,0,0,2" VerticalContentAlignment="Center">
                     <TextBlock Text="{x:Bind Lang.Nav_UserManagement, Mode=OneWay}" FontSize="12" VerticalAlignment="Center">
                         <TextBlock.RenderTransform>

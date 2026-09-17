@@ -49,7 +49,7 @@ public static class ShareProtocol
     public const string ChallengeGradePath     = "/challenge/grade";     // POST dosen grade (staff only)
     public const string StudentsPath           = "/students";            // GET student roster (staff only)
 
-    // ── Antrian giliran plant HE + cache hasil parameter ─────────────────────
+    // ── Antrian giliran plant HE + arsip hasil percobaan ─────────────────────
     // Databasenya milik Server (hanya Server yang tersambung ke plant), jadi
     // Client tidak memutuskan apa pun sendiri: ia meminta lewat endpoint ini dan
     // memakai jawabannya apa adanya. /sim/pid/run juga dijaga antrian yang sama,
@@ -59,10 +59,7 @@ public static class ShareProtocol
     public const string HeQueueReleasePath      = "/he/queue/release";       // POST lepas kendali
     public const string HeQueueCancelPath       = "/he/queue/cancel";        // POST keluar dari antrian
     public const string HeQueueForceReleasePath = "/he/queue/force-release"; // POST {note} cabut paksa (staf)
-    public const string HeQueueLogPath          = "/he/queue/log";           // GET  ?limit= riwayat (staf)
-    public const string HeParamLookupPath       = "/he/params/lookup";       // POST {sp,kc,ti,td,pump} cari hasil cache
-    public const string HeParamRunsPath         = "/he/params/runs";         // GET  ?limit= daftar percobaan + ringkasan (staf)
-    public const string HeParamRunPath          = "/he/params/run";          // GET  ?id= satu percobaan LENGKAP dengan kurvanya (staf)
+    public const string HeQueueLogPath          = "/he/queue/log";           // GET  ?limit= riwayat antrian (staf)
     public const string HeParamMyRunsPath       = "/he/params/my-runs";      // GET  ?limit= percobaan MILIK PEMANGGIL saja (semua peran)
 
     public const string GuidWs            = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
@@ -309,18 +306,6 @@ public sealed class ShareServer
             else if (method == "GET" && path == ShareProtocol.HeQueueLogPath)
             {
                 await HandleHeQueueLogGetAsync(stream, rawPath, headers, ct);
-            }
-            else if (method == "POST" && path == ShareProtocol.HeParamLookupPath)
-            {
-                await HandleHeParamLookupAsync(stream, headers, ct);
-            }
-            else if (method == "GET" && path == ShareProtocol.HeParamRunsPath)
-            {
-                await HandleHeParamRunsGetAsync(stream, rawPath, headers, ct);
-            }
-            else if (method == "GET" && path == ShareProtocol.HeParamRunPath)
-            {
-                await HandleHeParamRunGetAsync(stream, rawPath, headers, ct);
             }
             else if (method == "GET" && path == ShareProtocol.HeParamMyRunsPath)
             {
@@ -1628,120 +1613,6 @@ public sealed class ShareServer
         var arr = new JsonArray();
         foreach (var entry in entries) arr.Add((JsonNode)HeQueueJson.FromLogEntry(entry));
         await WriteJsonAsync(stream, new JsonObject { ["entries"] = arr }.ToJsonString(), ct);
-    }
-
-    /// <summary>
-    /// POST /he/params/lookup — hasil yang sudah pernah dijalankan untuk kombinasi
-    /// SP/Kc/Ti/Td/Pump ini. Ada isinya berarti plant tidak perlu dijalankan lagi.
-    /// </summary>
-    private async Task HandleHeParamLookupAsync(
-        NetworkStream stream, Dictionary<string, string> headers, CancellationToken ct)
-    {
-        var session = GetSession(BearerToken(headers));
-        if (session is null)
-        {
-            await WriteSimpleAsync(stream, "401 Unauthorized", "text/plain", "Invalid or expired session", ct);
-            return;
-        }
-
-        var body = await ReadBodyAsync(stream, headers, ct);
-        Models.HeParameterInput input;
-        try
-        {
-            var node = JsonNode.Parse(body) ?? throw new Exception("Invalid input");
-            input = new Models.HeParameterInput
-            {
-                Sp   = (double?)node["sp"]   ?? 0,
-                Kc   = (double?)node["kc"]   ?? 0,
-                Ti   = (double?)node["ti"]   ?? 0,
-                Td   = (double?)node["td"]   ?? 0,
-                Pump = (double?)node["pump"] ?? 0,
-            };
-        }
-        catch
-        {
-            await WriteSimpleAsync(stream, "400 Bad Request", "application/json",
-                "{\"error\":\"malformed_input\"}", ct);
-            return;
-        }
-
-        var run = await App.HeParamCache.FindCachedRunAsync(input, countReuse: true, ct);
-        await WriteJsonAsync(stream, new JsonObject
-        {
-            ["found"] = run is not null,
-            ["run"]   = run is null ? null : HeQueueJson.FromRun(run),
-        }.ToJsonString(), ct);
-    }
-
-    /// <summary>
-    /// GET /he/params/runs?limit=N — daftar percobaan terbaru beserta ringkasan
-    /// cache, untuk halaman riwayat. Staf saja, sama seperti log antrian:
-    /// keduanya memperlihatkan siapa mengerjakan apa.
-    ///
-    /// Kurva respons tidak ikut (<see cref="HeParameterCacheRepository.ListRunsAsync"/>
-    /// memang tidak membacanya) — satu run bisa ribuan titik, dan halaman riwayat
-    /// hanya butuh parameter serta metrik ringkasnya.
-    /// </summary>
-    private async Task HandleHeParamRunsGetAsync(
-        NetworkStream stream, string rawPath, Dictionary<string, string> headers, CancellationToken ct)
-    {
-        var session = GetSession(BearerToken(headers));
-        if (session is null)
-        {
-            await WriteSimpleAsync(stream, "401 Unauthorized", "text/plain", "Invalid or expired session", ct);
-            return;
-        }
-        if (!UserRoles.IsStaff(session.Role))
-        {
-            await WriteSimpleAsync(stream, "403 Forbidden", "text/plain", "Only staff can read the run history", ct);
-            return;
-        }
-
-        int limit = Math.Clamp(QueryInt(rawPath, "limit", 100), 1, 500);
-        var runs  = await App.HeParamCache.ListRunsAsync(limit, 0, ct);
-        var stats = await App.HeParamCache.GetStatsAsync(ct);
-
-        var arr = new JsonArray();
-        foreach (var run in runs) arr.Add((JsonNode)HeQueueJson.FromRun(run));
-
-        await WriteJsonAsync(stream, new JsonObject
-        {
-            ["runs"]  = arr,
-            ["stats"] = HeQueueJson.FromStats(stats),
-        }.ToJsonString(), ct);
-    }
-
-    /// <summary>
-    /// GET /he/params/run?id=N — satu percobaan LENGKAP dengan kurva responsnya,
-    /// untuk layar detail dan ekspor kurva. Kebalikan dari <c>/he/params/runs</c>
-    /// yang sengaja tanpa kurva: di sini kurvanya justru yang dicari, jadi ikut
-    /// dikirim (dijarangkan seperlunya oleh <see cref="HeQueueJson.FromRun"/>).
-    /// Staf saja, sama seperti daftar dan log.
-    /// </summary>
-    private async Task HandleHeParamRunGetAsync(
-        NetworkStream stream, string rawPath, Dictionary<string, string> headers, CancellationToken ct)
-    {
-        var session = GetSession(BearerToken(headers));
-        if (session is null)
-        {
-            await WriteSimpleAsync(stream, "401 Unauthorized", "text/plain", "Invalid or expired session", ct);
-            return;
-        }
-        if (!UserRoles.IsStaff(session.Role))
-        {
-            await WriteSimpleAsync(stream, "403 Forbidden", "text/plain", "Only staff can read a run", ct);
-            return;
-        }
-
-        long runId = QueryInt(rawPath, "id", 0);
-        var run = runId > 0 ? await App.HeParamCache.GetRunAsync(runId, ct) : null;
-        if (run is null)
-        {
-            await WriteSimpleAsync(stream, "404 Not Found", "application/json", "{\"error\":\"run_not_found\"}", ct);
-            return;
-        }
-
-        await WriteJsonAsync(stream, HeQueueJson.FromRun(run).ToJsonString(), ct);
     }
 
     /// <summary>
