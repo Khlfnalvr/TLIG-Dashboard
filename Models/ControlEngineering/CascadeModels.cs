@@ -11,24 +11,25 @@ namespace TLIGDashboard.Models.ControlEngineering;
 public class CascadeInput
 {
     // ── Outer loop — Temperature (PID, primary) ──────────────────────────────
-    // SIMC for the identified Gp1 (K=1.909, τ=176.21 s, θ=0), taking the inner loop's
-    // closed-loop response (~9.35 s) as the effective delay and τc = 3× that. Kd is 0: with
-    // no dead time left on the temperature plant, derivative action only stretches settling
-    // (measured — 93 s at Kd=0 against 197 s at Kd=4) without trimming the 1.7% overshoot.
-    public float OuterKp { get; set; } = 2.468f;
-    public float OuterKi { get; set; } = 0.0165f;
+    // SIMC for the identified Gp1 (K=1.2, τ=267.3 s, θ=0), taking the inner loop's
+    // closed-loop response (~33.9 s = τc2+θ2) as the effective delay and τc = 4× that,
+    // then verified by grid scan on the simulator: Kp=1.8, Ki=0.007 settles in ~315 s
+    // with ~0.8% overshoot. Kd is 0: with no dead time on the temperature plant,
+    // derivative action only stretches settling without trimming the overshoot.
+    public float OuterKp { get; set; } = 1.8f;
+    public float OuterKi { get; set; } = 0.007f;
     public float OuterKd { get; set; } = 0f;
 
     // ── Inner loop — Flow (PI, secondary) ────────────────────────────────────
-    // SIMC for the identified Gp2 (K=2.2, τ=5.36 s, θ=3.74 s) at τc = 1.5θ. The flow plant
-    // is now lag-dominated (θ/τ ≈ 0.70), so unlike the previous identification the inner PI
-    // does not have to be gentle — its speed is what keeps the outer loop's delay small.
-    public float InnerKp { get; set; } = 0.2606f;
-    public float InnerKi { get; set; } = 0.0486f;
+    // SIMC for the identified Gp2 (K=1.0, τ=1.34 s, θ=13.56 s) at τc = 1.5θ. The flow
+    // plant is strongly dead-time-dominant (θ/τ ≈ 10.1), so the inner PI must stay
+    // gentle — its closed-loop speed is the effective delay the outer loop feels.
+    public float InnerKp { get; set; } = 0.0395f;
+    public float InnerKi { get; set; } = 0.0295f;
 
     /// <summary>Temperature setpoint (°C) the outer loop drives to.</summary>
     public float Setpoint { get; set; } = 60f;
-    // Default 60 °C needs ~31.4 L/min of flow (60 / K1), which is what sizes the disturbance below.
+    // Default 60 °C needs ~50 L/min of flow (60 / K1), which is what sizes the disturbance below.
 
     /// <summary>
     /// Step change in the flow path (e.g. a supply-pressure drop), in flow units, injected once
@@ -37,7 +38,7 @@ public class CascadeInput
     /// does not — this is what makes cascade shine. Zero disables the disturbance entirely (no
     /// injection, and the disturbance-rejection cards read "--") for a pure setpoint-tracking view.
     /// </summary>
-    public float Disturbance { get; set; } = -13f;
+    public float Disturbance { get; set; } = -21f;
 }
 
 /// <summary>Time series produced by <see cref="Services.ControlEngineering.CascadeSimulator"/>.</summary>

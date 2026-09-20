@@ -61,6 +61,7 @@ public static class ShareProtocol
     public const string HeQueueForceReleasePath = "/he/queue/force-release"; // POST {note} cabut paksa (staf)
     public const string HeQueueLogPath          = "/he/queue/log";           // GET  ?limit= riwayat antrian (staf)
     public const string HeParamMyRunsPath       = "/he/params/my-runs";      // GET  ?limit= percobaan MILIK PEMANGGIL saja (semua peran)
+    public const string HeParamNearestPath      = "/he/params/nearest";     // GET  ?sp=&kc=&ti=&td=&pump=&limit= tetangga terdekat MILIK PEMANGGIL (semua peran)
 
     public const string GuidWs            = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 
@@ -310,6 +311,10 @@ public sealed class ShareServer
             else if (method == "GET" && path == ShareProtocol.HeParamMyRunsPath)
             {
                 await HandleHeParamMyRunsGetAsync(stream, rawPath, headers, ct);
+            }
+            else if (method == "GET" && path == ShareProtocol.HeParamNearestPath)
+            {
+                await HandleHeParamNearestGetAsync(stream, rawPath, headers, ct);
             }
             else if (method == "GET" && path == "/info")
             {
@@ -1661,6 +1666,68 @@ public sealed class ShareServer
         foreach (var run in runs) arr.Add((JsonNode)HeQueueJson.FromRun(run));
 
         await WriteJsonAsync(stream, new JsonObject { ["runs"] = arr }.ToJsonString(), ct);
+    }
+
+    /// <summary>
+    /// GET /he/params/nearest?sp=&amp;kc=&amp;ti=&amp;td=&amp;pump=&amp;limit=N — run
+    /// <see cref="Models.HeParameterRunStatus.Completed"/> milik pemanggil, diurutkan
+    /// dari yang parameternya paling dekat ke titik query.
+    ///
+    /// <para>Identitas pemilik = sesi (seperti <c>/he/params/my-runs</c>): tidak ada
+    /// parameter user yang dibaca, jadi Client tidak bisa mengintip run orang lain.
+    /// Parameter yang tidak dikirim dianggap tidak diketahui (diabaikan dalam jarak,
+    /// bukan 0). Kurva tidak ikut dikirim — hanya parameter, status, metrik, dan
+    /// jaraknya.</para>
+    /// </summary>
+    private async Task HandleHeParamNearestGetAsync(
+        NetworkStream stream, string rawPath, Dictionary<string, string> headers, CancellationToken ct)
+    {
+        var session = GetSession(BearerToken(headers));
+        if (session is null)
+        {
+            await WriteSimpleAsync(stream, "401 Unauthorized", "text/plain", "Invalid or expired session", ct);
+            return;
+        }
+
+        var target = new Models.HeParameterInput
+        {
+            Sp   = QueryDouble(rawPath, "sp", double.NaN),
+            Kc   = QueryDouble(rawPath, "kc", double.NaN),
+            Ti   = QueryDouble(rawPath, "ti", double.NaN),
+            Td   = QueryDouble(rawPath, "td", double.NaN),
+            Pump = QueryDouble(rawPath, "pump", double.NaN),
+        };
+        int limit = Math.Clamp(QueryInt(rawPath, "limit", 3), 1, 10);
+        var nearest = await App.HeParamCache.FindNearestAsync(session.Username, target, limit, ct);
+
+        var arr = new JsonArray();
+        foreach (var n in nearest)
+        {
+            var node = (JsonNode)HeQueueJson.FromRun(n.Run);
+            node["distance"] = n.Distance;
+            arr.Add(node);
+        }
+
+        await WriteJsonAsync(stream, new JsonObject { ["runs"] = arr }.ToJsonString(), ct);
+    }
+
+    /// <summary>Nilai double satu parameter query, atau <paramref name="fallback"/> (terima koma maupun titik).</summary>
+    private static double QueryDouble(string rawPath, string name, double fallback)
+    {
+        int q = rawPath.IndexOf('?');
+        if (q < 0) return fallback;
+
+        foreach (var pair in rawPath[(q + 1)..].Split('&', StringSplitOptions.RemoveEmptyEntries))
+        {
+            int eq = pair.IndexOf('=');
+            if (eq <= 0) continue;
+            if (!pair[..eq].Equals(name, StringComparison.OrdinalIgnoreCase)) continue;
+            string raw = Uri.UnescapeDataString(pair[(eq + 1)..]).Trim().Replace(',', '.');
+            if (double.TryParse(raw, System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out double value))
+                return value;
+        }
+        return fallback;
     }
 
     /// <summary>Nilai integer satu parameter query (mis. <c>?limit=50</c>), atau <paramref name="fallback"/>.</summary>

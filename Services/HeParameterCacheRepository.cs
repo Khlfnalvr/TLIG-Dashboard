@@ -32,6 +32,9 @@ namespace TLIGDashboard.Services;
 /// <see cref="HeParameterRunStatus.Aborted"/> ikut tersimpan: riwayat memang
 /// mencatat yang gagal juga.
 /// </summary>
+/// <summary>Satu run tetangga beserta jarak parameternya terhadap titik query.</summary>
+public sealed record NearestRun(HeParameterRun Run, double Distance);
+
 public sealed class HeParameterCacheRepository : HeSqliteDatabase
 {
     /// <summary>Instance yang dipakai aplikasi Server (lihat <c>App.HeParamCache</c>).</summary>
@@ -101,6 +104,72 @@ public sealed class HeParameterCacheRepository : HeSqliteDatabase
 
             return runs;
         }, ct);
+
+    /// <summary>
+    /// Run <see cref="HeParameterRunStatus.Completed"/> milik <b>satu</b> pengguna,
+    /// diurutkan dari yang parameternya paling dekat ke <paramref name="target"/>.
+    ///
+    /// <para>Jarak = Euclidean ternormalisasi atas (SP, Kc, Ti, Td, Pump). Skala tetap
+    /// mengikuti batas aman gain (<see cref="ControlEngineering.GainValidator"/>) supaya satu
+    /// dimensi tidak mendominasi: SP/100, Kc/50, Ti/10, Td/100, Pump/100. Dimensi yang
+    /// <see cref="double.NaN"/> pada target (mis. Pump tidak diketahui di halaman AI)
+    /// diabaikan (bobot 0).</para>
+    ///
+    /// <para>Hanya <c>Completed</c> yang dikembalikan: <c>Failed/Aborted/[terputus]</c>
+    /// tetap tersimpan sebagai riwayat tapi tidak valid sebagai acuan respon real.</para>
+    /// </summary>
+    public Task<IReadOnlyList<NearestRun>> FindNearestAsync(
+        string userId, HeParameterInput target, int limit = 3, CancellationToken ct = default) =>
+        ReadAsync<IReadOnlyList<NearestRun>>(async (conn, token) =>
+        {
+            if (string.IsNullOrWhiteSpace(userId)) return [];
+            limit = Math.Clamp(limit, 1, 10);
+
+            // Pool kandidat: 200 Completed terbaru milik user, jarak dihitung di C#.
+            // (SQLite tidak punya fungsi jarak vektor; pool terbatas menjaga baca tetap murah.)
+            var pool = new List<HeParameterRun>();
+            await using var cmd = Command(conn, null, $"""
+                SELECT {RunColumns}
+                FROM he_parameter_runs
+                WHERE requested_by_user_id = $userId AND status = 'Completed'
+                ORDER BY started_at_utc DESC, run_id DESC
+                LIMIT 200;
+                """);
+            Bind(cmd, "$userId", userId);
+
+            await using var reader = await cmd.ExecuteReaderAsync(token);
+            while (await reader.ReadAsync(token)) pool.Add(ReadRun(reader));
+            if (pool.Count == 0) return [];
+
+            var scored = new List<NearestRun>(pool.Count);
+            foreach (var run in pool)
+                scored.Add(new NearestRun(run, Distance(run.Input, target)));
+            scored.Sort((a, b) => a.Distance.CompareTo(b.Distance));
+
+            var top = scored.Count > limit ? scored.GetRange(0, limit) : scored;
+            foreach (var n in top)
+                n.Run.Metrics = await ReadMetricsAsync(conn, null, n.Run.RunId, token);
+
+            return top;
+        }, ct);
+
+    private static double Distance(HeParameterInput a, HeParameterInput b)
+    {
+        double d2 = 0;
+        d2 += Dim(a.Sp, b.Sp, 100.0);
+        d2 += Dim(a.Kc, b.Kc, 50.0);
+        d2 += Dim(a.Ti, b.Ti, 10.0);
+        d2 += Dim(a.Td, b.Td, 100.0);
+        d2 += Dim(a.Pump, b.Pump, 100.0);
+        return Math.Sqrt(d2);
+    }
+
+    private static double Dim(double a, double b, double scale)
+    {
+        if (double.IsNaN(a) || double.IsNaN(b)) return 0;
+        double d = (a - b) / scale;
+        return d * d;
+    }
 
     // ── Simpan hasil run ────────────────────────────────────────────────────
 

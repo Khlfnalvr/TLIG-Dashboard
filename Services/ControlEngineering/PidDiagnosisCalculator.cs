@@ -42,11 +42,11 @@ public static class PidDiagnosisCalculator
 
     /// Both slow temperature plants in the app settle in several hundred seconds open-loop
     /// (θ + 4τ): ~458 s for the single-loop designer's plant (<see cref="PidSimulator"/>, still
-    /// on the earlier identification) and ~705 s for the cascade's current Gp1
+    /// on the earlier identification) and ~1069 s for the cascade's current Gp1
     /// (<see cref="CascadeSimulator"/>). A closed loop still taking longer than ~400 s is
     /// barely improving on doing nothing on either — a concrete, plant-derived anchor rather
     /// than an arbitrary "feels slow" number, and the stricter of the two bars. A well-tuned
-    /// cascade on the current plant reaches ~95 s.
+    /// cascade on the current plant reaches ~315 s.
     public const double SlowSettlingSeconds = 400.0;
 
     /// <summary>

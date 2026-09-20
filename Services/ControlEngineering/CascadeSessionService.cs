@@ -17,17 +17,17 @@ public sealed class CascadeSessionService
     private CascadeSessionService() { }
 
     // SIMC defaults for the identified FOPDT plants, verified on the simulator itself:
-    // overshoot 1.7%, rise 55 s, settling 93 s, no steady-state offset. Kept identical to
+    // overshoot 0.8%, rise 183 s, settling 315 s, no steady-state offset. Kept identical to
     // CascadeInput's defaults — see the derivation there. The disturbance is sized at ~42%
-    // of the operating flow (~31.4 L/min at the default 60 °C setpoint), the same relative
-    // upset the previous identification's -40 represented on its own larger flow scale.
-    public double OuterKp     { get; set; } = 2.468;
-    public double OuterKi     { get; set; } = 0.0165;
+    // of the operating flow (~50 L/min at the default 60 °C setpoint), the same relative
+    // upset the previous identification's -13 represented on its own smaller flow scale.
+    public double OuterKp     { get; set; } = 1.8;
+    public double OuterKi     { get; set; } = 0.007;
     public double OuterKd     { get; set; } = 0;
-    public double InnerKp     { get; set; } = 0.2606;
-    public double InnerKi     { get; set; } = 0.0486;
+    public double InnerKp     { get; set; } = 0.0395;
+    public double InnerKi     { get; set; } = 0.0295;
     public double Setpoint    { get; set; } = 60;
-    public double Disturbance { get; set; } = -13;
+    public double Disturbance { get; set; } = -21;
 
     public CascadeDesignResult? LastResult { get; private set; }
     public CascadeRecommendation? PendingRecommendation { get; private set; }

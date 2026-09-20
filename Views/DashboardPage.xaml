@@ -477,7 +477,7 @@
                                      (see CascadeSimulator.cs): Gp1 outer temperature loop, Gp2 inner flow
                                      loop — decoupled from the System Model selector above. -->
                                 <TextBlock x:Name="TransferFunctionText"
-                                           Text="Gp1 (suhu) = 1,909090909 / (176,21s + 1)&#x0A;Gp2 (flow) = 2,2 / (5,36s + 1) · e^(−3,74s)"
+                                           Text="Gp1 (suhu) = 1,2 / (267,3s + 1)&#x0A;Gp2 (flow) = 1 / (1,34s + 1) · e^(−13,56s)"
                                            FontFamily="Consolas"
                                            FontSize="11"
                                            Opacity="0.72"

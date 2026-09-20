@@ -10,8 +10,8 @@ namespace TLIGDashboard.Services.ControlEngineering;
 /// using the <b>lab-identified FOPDT plants</b> (open-loop step test, validated against
 /// experiment):
 /// <code>
-///   Gp1(s) = 1.909090909 / (176.21 s + 1)              primary : temperature (shell out), input = flow
-///   Gp2(s) = 2.2          / (5.36 s + 1) · e^(-3.74 s)  secondary: flow (tube),            input = valve
+///   Gp1(s) = 1.2 / (267.3 s + 1)                          primary : temperature (shell out), input = flow
+///   Gp2(s) = 1.0 / (1.34 s + 1) · e^(-13.56 s)             secondary: flow (tube),            input = valve
 /// </code>
 ///
 /// <para><b>Structure</b></para>
@@ -19,7 +19,7 @@ namespace TLIGDashboard.Services.ControlEngineering;
 ///  Tsp ─►(+)─► [PID temperature, OUTER] ─► Fsp ─►(+)─► [PI flow, INNER] ─► valve u
 ///        ▲ −                                       ▲ −                          │
 ///        │  T                                      │  F        ┌────────────────┘
-///        │       Gp1 (τ=176.2s, θ=0)     Gp2 (τ=5.36s, θ=3.7s) │   + disturbance
+///        │       Gp1 (τ=267.3s, θ=0)     Gp2 (τ=1.34s, θ=13.6s) │   + disturbance
 ///        └──────── temperature ◄── F ◄──── flow ◄──────────────┴───────────┘
 /// </code>
 ///
@@ -34,17 +34,23 @@ namespace TLIGDashboard.Services.ControlEngineering;
 /// The outer PID uses derivative-on-measurement (−Kd·dT/dt) to avoid derivative kick,
 /// and both integrators use conditional (clamping) anti-windup so the response stays
 /// well-behaved when the valve or flow setpoint saturates. Default gains were tuned by
-/// SIMC for these FOPDT plants and verified on this simulator. The flow plant is now
-/// lag-dominated (θ/τ ≈ 0.70, against ≈ 8.5 in the previous identification), so the inner
-/// PI no longer has to be gentle — it is what keeps the outer loop's effective delay small.
+/// SIMC for these FOPDT plants and verified on this simulator. The flow plant is strongly
+/// dead-time-dominant (θ/τ ≈ 10.1), so the inner PI must stay gentle (SIMC τc = 1.5θ) —
+/// its closed loop (≈ τc2+θ2 ≈ 33.9 s) is the effective delay the outer loop is tuned against.
 /// </summary>
 public class CascadeSimulator
 {
     // ── Identified FOPDT plant constants ─────────────────────────────────────
+    // Lab open-loop step test (Sundaresan-Krishnaswamy 35.3%/85.3%): secondary step
+    // 0%→0.5% valve ⇒ 3.25→3.75 L/min flow; primary step 3.25→3.75 L/min flow ⇒
+    // 39.2→39.8 °C. The primary's raw θ came out negative (noise, t2/t1 ≈ 45 ≫ 4.48
+    // positivity limit), so θ1 = 0. The secondary is strongly dead-time-dominant
+    // (θ/τ ≈ 10.1), so the inner PI must stay gentle — its closed loop is what the
+    // outer loop feels as delay.
     /// Primary (temperature) plant Gp1: gain, time constant (s), dead time (s). Input = flow.
-    public const double K1 = 1.909090909, Tau1 = 176.21, Theta1 = 0.0;
+    public const double K1 = 1.2, Tau1 = 267.3, Theta1 = 0.0;
     /// Secondary (flow) plant Gp2: gain, time constant (s), dead time (s). Input = valve.
-    public const double K2 = 2.2,         Tau2 = 5.36,   Theta2 = 3.74;
+    public const double K2 = 1.0, Tau2 = 1.34, Theta2 = 13.56;
 
     // ── Actuator / setpoint saturation ───────────────────────────────────────
     public const double FlowSpMin = 0.0, FlowSpMax = 300.0;   // outer output (inner SP)
@@ -77,7 +83,7 @@ public class CascadeSimulator
     // target (tiny Ki) can look "flat" while still far below the setpoint, and overshoot
     // (measured against that last sample) would be badly overstated. Same rule now also
     // implemented in PidSimulator; here scaled for the slow temperature plant
-    // (Gp1 τ≈176 s, Gp2 τ≈5.4 s + 3.7 s dead time).
+    // (Gp1 τ≈267 s, Gp2 τ≈1.34 s + 13.6 s dead time).
     private const double MaxDuration         = 8000.0;  // hard cap on total simulated time (s)
     private const double MinStepSeconds      = 80.0;    // θ1 is 0 now, but a slow start is still nearly flat — don't read it as "settled"
     private const double MinRecoverSeconds   = 120.0;   // after injection, long enough for the disturbance dip to develop
@@ -98,7 +104,7 @@ public class CascadeSimulator
     /// fully-settled step, so overshoot/settling are measured against the real steady state rather
     /// than a truncated sample, and disturbance rejection is measured on a settled system. A
     /// positive <paramref name="duration"/> forces a fixed-length run with the disturbance at 60%
-    /// of it (legacy/testing). dt=0.1 s resolves the fast flow plant and its 3.1 s delay.
+    /// of it (legacy/testing). dt=0.1 s resolves the fast flow plant and its 13.6 s delay.
     /// </para>
     /// </summary>
     public CascadeSimulationResult Simulate(

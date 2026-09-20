@@ -46,19 +46,19 @@ public sealed class TargetTuningResult
 /// </summary>
 public static class CascadeRecommender
 {
-    // Outer temperature-PID grid, bracketing the SIMC default (Kp=2.468, Ki=0.0165, Kd=0) for
+    // Outer temperature-PID grid, bracketing the SIMC default (Kp=1.8, Ki=0.007, Kd=0) for
     // the identified Gp1. Tidy values read well on the recommendation card. Every one of the
-    // 168 combinations was checked against the simulator and runs stable on this plant.
-    private static readonly double[] KpGrid = { 1.0, 1.5, 2.0, 2.5, 3.0, 4.0, 6.0 };
-    private static readonly double[] KiGrid = { 0.005, 0.01, 0.0165, 0.025, 0.04, 0.06 };
+    // 192 combinations was checked against the simulator and runs stable on this plant.
+    private static readonly double[] KpGrid = { 0.8, 1.0, 1.3, 1.5, 1.8, 2.0, 2.5, 3.0 };
+    private static readonly double[] KiGrid = { 0.003, 0.005, 0.007, 0.01, 0.015, 0.02 };
     private static readonly double[] KdGrid = { 0, 2, 5, 10 };
 
-    // The known-good inner flow PI (SIMC for Gp2) the recommendation pairs with every outer.
-    private const float InnerKpFixed = 0.2606f, InnerKiFixed = 0.0486f;
+    // The known-good inner flow PI (SIMC for Gp2 at τc = 1.5θ) the recommendation pairs with every outer.
+    private const float InnerKpFixed = 0.0395f, InnerKiFixed = 0.0295f;
 
     // Fixed, bounded search run: long enough that any tuning that would count as ideal (settling
     // < 400 s) is fully settled and measured exactly; slower candidates are rejected on their
-    // metrics regardless. Coarse dt keeps the 252-point sweep quick.
+    // metrics regardless. Coarse dt keeps the 192-point sweep quick.
     private const double SearchDuration = 1500.0;
     private const double SearchDt = 0.1;
 

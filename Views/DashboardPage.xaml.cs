@@ -1282,6 +1282,11 @@ public sealed partial class DashboardPage : Page
         if (!string.IsNullOrEmpty(liveContext))
             _ai.SystemPrompt += "\n\n" + liveContext;
 
+        // Riwayat real plant milik pengguna (heParamCache.db / endpoint nearest).
+        string realContext = await Services.ControlEngineering.RealHistoryService.BuildRealContextAsync();
+        if (!string.IsNullOrEmpty(realContext))
+            _ai.SystemPrompt += "\n\n" + realContext;
+
         if (string.IsNullOrEmpty(_ai.ApiKey))
         {
             AddChatBubble("ai", Lang.Ai_ErrorNoKey);
@@ -1298,6 +1303,7 @@ public sealed partial class DashboardPage : Page
         // A question about the simulation-vs-LabVIEW error is answered the same way, from the
         // computed comparison — checked second so an ambiguous tuning phrasing still wins.
         var routed = Services.ControlEngineering.TuningChat.TryAnswerTargetRequest(text, (float)App.CascadeSession.Setpoint)
+                  ?? await Services.ControlEngineering.RealHistoryService.TryAnswerRealRequestAsync(text)
                   ?? Services.ControlEngineering.ProcessErrorService.TryAnswerErrorRequest(text);
         if (routed is not null)
         {

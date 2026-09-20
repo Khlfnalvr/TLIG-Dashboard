@@ -110,6 +110,30 @@ public static class HeQueueClient
         return runs;
     }
 
+    /// <summary>
+    /// Run <c>Completed</c> milik pemanggil, diurutkan dari yang parameternya paling dekat
+    /// ke <paramref name="target"/> — Server yang menghitung jaraknya dari identitas sesi.
+    /// NaN pada target = dimensi diabaikan (mis. Pump tidak diketahui di halaman AI).
+    /// </summary>
+    public static async Task<IReadOnlyList<HeParameterRun>> GetNearestRunsAsync(
+        string host, string token, HeParameterInput target, int limit)
+    {
+        static string Num(double v) => double.IsNaN(v)
+            ? ""
+            : v.ToString("0.###############", CultureInfo.InvariantCulture);
+        string path = $"{ShareProtocol.HeParamNearestPath}" +
+            $"?sp={Num(target.Sp)}&kc={Num(target.Kc)}&ti={Num(target.Ti)}&td={Num(target.Td)}&pump={Num(target.Pump)}" +
+            $"&limit={Math.Clamp(limit, 1, 10)}";
+
+        var node = await GetAsync(host, token, path);
+        if (node?["runs"] is not JsonArray arr) return [];
+
+        var runs = new List<HeParameterRun>();
+        foreach (var item in arr)
+            if (item is not null) runs.Add(HeQueueJson.ToRun(item));
+        return runs;
+    }
+
     // ── Internals ───────────────────────────────────────────────────────────
 
     private static async Task<JsonNode?> GetAsync(string host, string token, string path)

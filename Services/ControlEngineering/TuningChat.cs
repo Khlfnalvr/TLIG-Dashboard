@@ -86,7 +86,7 @@ public static class TuningChat
             sb.AppendLine($"**Tidak ada tuning yang memenuhi {targetStr}** di rentang pencarian.");
             sb.AppendLine();
             sb.AppendLine($"Paling mendekati: OUTER Kp = {g.OuterKp:0.###}, Ki = {g.OuterKi:0.###}, Kd = {g.OuterKd:0.###} → overshoot {m.Overshoot:0.0}%, settling {m.SettlingTime:0}s.");
-            sb.Append("Coba longgarkan targetnya — loop suhu plant ini lag-dominan (Gp1 τ≈176 s, tanpa dead time) dan loop flow punya dead time ~3,7 s, jadi settling yang sangat kecil memang tak tercapai.");
+            sb.Append("Coba longgarkan targetnya — loop suhu plant ini lag-dominan (Gp1 τ≈267 s, tanpa dead time) dan loop flow sangat dead-time-dominan (θ≈13,6 s lawan τ≈1,3 s), jadi settling yang sangat kecil memang tak tercapai.");
         }
         return sb.ToString();
     }
