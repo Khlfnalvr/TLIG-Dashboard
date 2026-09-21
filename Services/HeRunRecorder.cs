@@ -67,6 +67,40 @@ public sealed class HeRunRecorder
     /// </summary>
     public string? RecordingUserId { get { lock (_gate) return _samples is null ? null : _userId; } }
 
+    /// <summary>Waktu mulai (UTC) run yang sedang direkam, atau <c>null</c> kalau tidak merekam.</summary>
+    public DateTime? StartedUtc { get { lock (_gate) return _samples is null ? null : _startedUtc; } }
+
+    /// <summary>Jumlah sampel LabVIEW yang sudah terekam di run berjalan (0 kalau tidak merekam).</summary>
+    public int SampleCount { get { lock (_gate) return _samples?.Count ?? 0; } }
+
+    /// <summary>Detik berjalan sejak <see cref="Start"/> dipanggil (0 kalau tidak merekam).</summary>
+    public double ElapsedSeconds
+    {
+        get
+        {
+            lock (_gate)
+            {
+                if (_samples is null) return 0;
+                return (DateTime.UtcNow - _startedUtc).TotalSeconds;
+            }
+        }
+    }
+
+    /// <summary>Suhu shell-out terakhir yang terekam (null kalau belum ada sampel ber-PV).</summary>
+    public double? LatestPvShellOut
+    {
+        get
+        {
+            lock (_gate)
+            {
+                if (_samples is null) return null;
+                for (int i = _samples.Count - 1; i >= 0; i--)
+                    if (_samples[i].PvShellOut is { } v) return v;
+                return null;
+            }
+        }
+    }
+
     /// <summary>
     /// Mulai merekam. Kalau masih ada run sebelumnya yang belum ditutup, run itu
     /// ditutup dulu sebagai <see cref="HeParameterRunStatus.Aborted"/> — tetap

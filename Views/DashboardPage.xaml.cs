@@ -1287,6 +1287,11 @@ public sealed partial class DashboardPage : Page
         if (!string.IsNullOrEmpty(realContext))
             _ai.SystemPrompt += "\n\n" + realContext;
 
+        // Progres live (opsi 1, tanpa CSV): elapsed recorder vs prediksi settling RK4.
+        string progressContext = Services.ControlEngineering.LiveProgressService.BuildChatContext();
+        if (!string.IsNullOrEmpty(progressContext))
+            _ai.SystemPrompt += "\n\n" + progressContext;
+
         if (string.IsNullOrEmpty(_ai.ApiKey))
         {
             AddChatBubble("ai", Lang.Ai_ErrorNoKey);
@@ -1302,9 +1307,10 @@ public sealed partial class DashboardPage : Page
         // the verified simulator search, not the LLM (which can't compute this plant's overshoot).
         // A question about the simulation-vs-LabVIEW error is answered the same way, from the
         // computed comparison — checked second so an ambiguous tuning phrasing still wins.
-        var routed = Services.ControlEngineering.TuningChat.TryAnswerTargetRequest(text, (float)App.CascadeSession.Setpoint)
-                  ?? await Services.ControlEngineering.RealHistoryService.TryAnswerRealRequestAsync(text)
-                  ?? Services.ControlEngineering.ProcessErrorService.TryAnswerErrorRequest(text);
+        var routed = Services.ControlEngineering.LiveProgressService.TryAnswerProgressRequest(text)
+                   ?? Services.ControlEngineering.TuningChat.TryAnswerTargetRequest(text, (float)App.CascadeSession.Setpoint)
+                   ?? await Services.ControlEngineering.RealHistoryService.TryAnswerRealRequestAsync(text)
+                   ?? Services.ControlEngineering.ProcessErrorService.TryAnswerErrorRequest(text);
         if (routed is not null)
         {
             var (rBorder, _) = AddChatBubble("ai", routed);
