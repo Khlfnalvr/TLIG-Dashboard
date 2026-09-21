@@ -20,16 +20,22 @@ public sealed class LiveProgress
 /// <summary>
 /// Tracker progres live opsi 1: tanpa CSV, langsung dari aliran TCP 6001.
 ///
-/// <para>Sumber: <c>HeRunRecorder</c> (t0 + sampel, Server saja) untuk elapsed,
+/// <para>Server: sumbernya <c>HeRunRecorder</c> (t0 + sampel) untuk elapsed,
 /// snapshot <c>HmiDataService</c> untuk suhu terkini, dan metrik run RK4 terakhir
 /// (<c>CascadeSessionService.LastResult</c>) sebagai prediksi settling ideal.
+/// Client mahasiswa: datanya diambil dari endpoint <c>/he/live/progress</c> milik
+/// Server (rig global), jadi angkanya sama dengan yang dilihat di PC Server.
 /// Kalau VI di-RUN manual tanpa lewat dashboard, t0 tidak diketahui — dilaporkan
 /// sebagai manual tanpa elapsed, bukan dikarang.</para>
 /// </summary>
 public static class LiveProgressService
 {
-    /// <summary>Potret progres saat ini, atau null kalau tidak ada live maupun simulasi.</summary>
-    public static LiveProgress? Build()
+    /// <summary>
+    /// Potret progres dari state lokal (Server saja). Dipakai Server secara langsung
+    /// dan oleh handler <c>/he/live/progress</c> untuk melayani Client.
+    /// Null = tidak ada live maupun simulasi yang bisa dilaporkan.
+    /// </summary>
+    public static LiveProgress? BuildLocal()
     {
         if (!BuildInfo.IsServer) return null;
 
@@ -68,10 +74,26 @@ public static class LiveProgressService
         };
     }
 
-    /// <summary>Blok konteks sekali-pakai (blok D) untuk ditempel ke system prompt.</summary>
-    public static string BuildChatContext()
+    /// <summary>
+    /// Potret progres di mana pun dipanggil: Server baca state lokal, Client ambil
+    /// dari endpoint Server. Null = tidak ada yang bisa dilaporkan / tidak terhubung.
+    /// </summary>
+    public static async Task<LiveProgress?> GetAsync(CancellationToken ct = default)
     {
-        var p = Build();
+        if (BuildInfo.IsServer) return BuildLocal();
+
+        try
+        {
+            var s = AppSettingsService.Load();
+            return await HeQueueClient.GetLiveProgressAsync(s.ServerHost, s.ServerToken);
+        }
+        catch { return null; }
+    }
+
+    /// <summary>Blok konteks sekali-pakai (blok D) untuk ditempel ke system prompt.</summary>
+    public static async Task<string> BuildChatContextAsync(CancellationToken ct = default)
+    {
+        var p = await GetAsync(ct);
         if (p is null) return "";
 
         var sb = new StringBuilder();
@@ -104,19 +126,21 @@ public static class LiveProgressService
     /// Jawaban langsung untuk pertanyaan progres ("sudah berapa lama", "kapan settle").
     /// Null = bukan pertanyaan progres, teruskan ke router berikutnya / LLM.
     /// </summary>
-    public static string? TryAnswerProgressRequest(string message)
+    public static async Task<string?> TryAnswerProgressRequestAsync(
+        string message, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(message)) return null;
         if (!LooksLikeProgressRequest(message.ToLowerInvariant())) return null;
 
-        if (!BuildInfo.IsServer)
-            return "Progres live hanya bisa dibaca di sisi Server (data TCP 6001 masuk ke sana). " +
-                   "Buka dashboard di PC Server lalu tanyakan lagi.";
-
-        var p = Build();
+        var p = await GetAsync(ct);
         if (p is null)
-            return "Belum ada run live maupun simulasi. Tekan **RUN** simulasi dulu untuk prediksi settling, " +
-                   "lalu jalankan plant — progresnya akan terbaca di sini.";
+        {
+            if (BuildInfo.IsServer)
+                return "Belum ada run live maupun simulasi. Tekan **RUN** simulasi dulu untuk prediksi settling, " +
+                       "lalu jalankan plant — progresnya akan terbaca di sini.";
+            return "Tidak terhubung ke Server, jadi progres live belum bisa dibaca. " +
+                   "Periksa koneksi ke Server lalu tanyakan lagi.";
+        }
 
         var sb = new StringBuilder();
         if (p.IsRunning)

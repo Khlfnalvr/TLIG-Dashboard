@@ -1288,7 +1288,8 @@ public sealed partial class DashboardPage : Page
             _ai.SystemPrompt += "\n\n" + realContext;
 
         // Progres live (opsi 1, tanpa CSV): elapsed recorder vs prediksi settling RK4.
-        string progressContext = Services.ControlEngineering.LiveProgressService.BuildChatContext();
+        // Server baca lokal, Client ambil dari endpoint Server — angkanya sama.
+        string progressContext = await Services.ControlEngineering.LiveProgressService.BuildChatContextAsync();
         if (!string.IsNullOrEmpty(progressContext))
             _ai.SystemPrompt += "\n\n" + progressContext;
 
@@ -1307,7 +1308,7 @@ public sealed partial class DashboardPage : Page
         // the verified simulator search, not the LLM (which can't compute this plant's overshoot).
         // A question about the simulation-vs-LabVIEW error is answered the same way, from the
         // computed comparison — checked second so an ambiguous tuning phrasing still wins.
-        var routed = Services.ControlEngineering.LiveProgressService.TryAnswerProgressRequest(text)
+        var routed = await Services.ControlEngineering.LiveProgressService.TryAnswerProgressRequestAsync(text)
                    ?? Services.ControlEngineering.TuningChat.TryAnswerTargetRequest(text, (float)App.CascadeSession.Setpoint)
                    ?? await Services.ControlEngineering.RealHistoryService.TryAnswerRealRequestAsync(text)
                    ?? Services.ControlEngineering.ProcessErrorService.TryAnswerErrorRequest(text);

@@ -134,6 +134,32 @@ public static class HeQueueClient
         return runs;
     }
 
+    // ── Progres live ──────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Potret progres run live dari Server (rig global, bukan milik pemanggil saja).
+    /// Null = tidak bisa dibaca (offline / tanpa sesi / Server tidak menjawab).
+    /// </summary>
+    public static async Task<ControlEngineering.LiveProgress?> GetLiveProgressAsync(string host, string token)
+    {
+        var node = await GetAsync(host, token, ShareProtocol.HeLiveProgressPath);
+        if (node is null) return null;
+        if ((bool?)node["available"] != true) return null;
+
+        static double? Num(JsonNode? n) => n is null ? null
+            : (double?)n is { } v && double.IsFinite(v) ? v : null;
+
+        return new ControlEngineering.LiveProgress
+        {
+            IsRunning = (bool?)node["isRunning"] ?? false,
+            ElapsedSeconds = (double?)node["elapsedSeconds"] ?? 0,
+            SampleCount = (int?)node["sampleCount"] ?? 0,
+            Setpoint = (double?)node["setpoint"] ?? 0,
+            LiveTemp = Num(node["liveTemp"]),
+            PredictedSettling = Num(node["predictedSettling"]),
+        };
+    }
+
     // ── Internals ───────────────────────────────────────────────────────────
 
     private static async Task<JsonNode?> GetAsync(string host, string token, string path)

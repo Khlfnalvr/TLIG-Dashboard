@@ -62,6 +62,7 @@ public static class ShareProtocol
     public const string HeQueueLogPath          = "/he/queue/log";           // GET  ?limit= riwayat antrian (staf)
     public const string HeParamMyRunsPath       = "/he/params/my-runs";      // GET  ?limit= percobaan MILIK PEMANGGIL saja (semua peran)
     public const string HeParamNearestPath      = "/he/params/nearest";     // GET  ?sp=&kc=&ti=&td=&pump=&limit= tetangga terdekat MILIK PEMANGGIL (semua peran)
+    public const string HeLiveProgressPath      = "/he/live/progress";      // GET  progres run live (semua peran): elapsed recorder + suhu live + prediksi settling
 
     public const string GuidWs            = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 
@@ -315,6 +316,10 @@ public sealed class ShareServer
             else if (method == "GET" && path == ShareProtocol.HeParamNearestPath)
             {
                 await HandleHeParamNearestGetAsync(stream, rawPath, headers, ct);
+            }
+            else if (method == "GET" && path == ShareProtocol.HeLiveProgressPath)
+            {
+                await HandleHeLiveProgressGetAsync(stream, headers, ct);
             }
             else if (method == "GET" && path == "/info")
             {
@@ -1709,6 +1714,41 @@ public sealed class ShareServer
         }
 
         await WriteJsonAsync(stream, new JsonObject { ["runs"] = arr }.ToJsonString(), ct);
+    }
+
+    /// <summary>
+    /// GET /he/live/progress — potret progres run live untuk semua peran (termasuk Client
+    /// mahasiswa). Isinya: apakah ada run berjalan, elapsed sejak RUN, jumlah sampel,
+    /// setpoint run, suhu live, dan prediksi settling simulasi Server sebagai acuan ideal.
+    /// Tidak ada data milik pengguna lain yang bocor: progres rig bersifat global.
+    /// Angka null = tidak diketahui (mis. suhu belum ada, atau belum ada run simulasi).
+    /// </summary>
+    private async Task HandleHeLiveProgressGetAsync(
+        NetworkStream stream, Dictionary<string, string> headers, CancellationToken ct)
+    {
+        var session = GetSession(BearerToken(headers));
+        if (session is null)
+        {
+            await WriteSimpleAsync(stream, "401 Unauthorized", "text/plain", "Invalid or expired session", ct);
+            return;
+        }
+
+        var p = ControlEngineering.LiveProgressService.BuildLocal();
+        var body = new JsonObject
+        {
+            ["available"] = p is not null,
+        };
+        if (p is not null)
+        {
+            body["isRunning"] = p.IsRunning;
+            body["elapsedSeconds"] = p.ElapsedSeconds;
+            body["sampleCount"] = p.SampleCount;
+            body["setpoint"] = p.Setpoint;
+            if (p.LiveTemp is { } t) body["liveTemp"] = t;
+            if (p.PredictedSettling is { } s) body["predictedSettling"] = s;
+        }
+
+        await WriteJsonAsync(stream, body.ToJsonString(), ct);
     }
 
     /// <summary>Nilai double satu parameter query, atau <paramref name="fallback"/> (terima koma maupun titik).</summary>
