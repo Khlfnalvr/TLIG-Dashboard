@@ -160,6 +160,17 @@ public static class HeQueueClient
         };
     }
 
+    /// <summary>
+    /// Telemetri LabVIEW terkini milik Server, untuk kartu "LabVIEW Data" di Client.
+    /// <c>null</c> kalau Server tidak terjangkau — dibedakan dari jawaban sah yang
+    /// berkata pemanggilnya belum berhak melihat angkanya.
+    /// </summary>
+    public static async Task<HmiLatest?> GetHmiLatestAsync(string host, string token)
+    {
+        var node = await GetAsync(host, token, ShareProtocol.HmiLatestPath);
+        return node is null ? null : HmiLatest.FromJson(node);
+    }
+
     // ── Internals ───────────────────────────────────────────────────────────
 
     private static async Task<JsonNode?> GetAsync(string host, string token, string path)

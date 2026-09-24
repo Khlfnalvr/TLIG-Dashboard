@@ -389,6 +389,10 @@ public sealed class LocalizationManager : INotifyPropertyChanged
     public string Hmi_DataHeader   => T(nameof(Hmi_DataHeader));
     public string Hmi_DataWaiting  => T(nameof(Hmi_DataWaiting));
     public string Hmi_DataPort     => T(nameof(Hmi_DataPort));
+    public string Hmi_DataViaServer => T(nameof(Hmi_DataViaServer));
+    public string Hmi_DataNotLinked => T(nameof(Hmi_DataNotLinked));
+    public string Hmi_DataTurnOnly  => T(nameof(Hmi_DataTurnOnly));
+    public string Hmi_DataNoServer  => T(nameof(Hmi_DataNoServer));
 
     // ── Sharing (server broadcast / client connect) ──────────────────────────
     public string Share_TabBroadcast   => T(nameof(Share_TabBroadcast));
@@ -1136,6 +1140,10 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             [nameof(Hmi_DataHeader)]   = "LabVIEW Data",
             [nameof(Hmi_DataWaiting)]  = "Waiting for data from LabVIEW (TCP {0})...",
             [nameof(Hmi_DataPort)]     = "TCP {0}",
+            [nameof(Hmi_DataViaServer)] = "via server",
+            [nameof(Hmi_DataNotLinked)] = "Not connected - LabVIEW is not sending data to the server.",
+            [nameof(Hmi_DataTurnOnly)]  = "LabVIEW values appear while the plant is your turn.",
+            [nameof(Hmi_DataNoServer)]  = "Server unreachable - cannot read LabVIEW values.",
 
             [nameof(Share_TabBroadcast)] = "Broadcast",
             [nameof(Share_TabConnect)]   = "Connect",
@@ -1811,6 +1819,10 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             [nameof(Hmi_DataHeader)]   = "Data LabVIEW",
             [nameof(Hmi_DataWaiting)]  = "Menunggu data dari LabVIEW (TCP {0})...",
             [nameof(Hmi_DataPort)]     = "TCP {0}",
+            [nameof(Hmi_DataViaServer)] = "lewat server",
+            [nameof(Hmi_DataNotLinked)] = "Tidak tersambung - LabVIEW tidak sedang mengirim data ke server.",
+            [nameof(Hmi_DataTurnOnly)]  = "Angka LabVIEW tampil saat plant sedang giliran Anda.",
+            [nameof(Hmi_DataNoServer)]  = "Server tidak terjangkau - angka LabVIEW tidak bisa dibaca.",
 
             [nameof(Share_TabBroadcast)] = "Siaran",
             [nameof(Share_TabConnect)]   = "Sambung",

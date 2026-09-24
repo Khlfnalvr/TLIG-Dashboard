@@ -26,6 +26,7 @@ public sealed partial class HmiShareView : UserControl
     private LocalizationManager Lang => App.Lang;
     private static HmiCaptureService Capture => HmiCaptureService.Instance;
     private static HmiDataService Data => HmiDataService.Instance;
+    private static HmiRelayService Relay => HmiRelayService.Instance;
 
     // ── LabVIEW TCP data readout state ──────────────────────────────────────────
     // Value TextBlocks keyed by tag name, so incoming frames update values in place
@@ -33,6 +34,13 @@ public sealed partial class HmiShareView : UserControl
     private readonly Dictionary<string, TextBlock> _dataValueBlocks = new(StringComparer.Ordinal);
     private bool _dataPlaceholderShown = true;
     private DispatcherTimer? _dataStaleTimer;
+
+    // ── Keadaan render jalur CLIENT (relay) ─────────────────────────────────────
+    // Sengaja terpisah dari _dataValueBlocks/_dataPlaceholderShown di atas: jalur
+    // Server harus melewati kode yang sama persis seperti sebelum kartu ini ada di
+    // Client, jadi tidak ada satu pun method lamanya yang ikut diubah.
+    private readonly Dictionary<string, TextBlock> _relayValueBlocks = new(StringComparer.Ordinal);
+    private bool _relayRowsShown;
 
     private static readonly SolidColorBrush _dotLive  = new(Microsoft.UI.Colors.LimeGreen);
     private static readonly SolidColorBrush _dotStale = new(Microsoft.UI.Colors.Orange);
@@ -47,14 +55,18 @@ public sealed partial class HmiShareView : UserControl
         if (_clientMode)
         {
             // Client: display the HMI stream received from the server instead of
-            // capturing a local screen. The LabVIEW numeric readout stays hidden here (the
-            // client's HMI panel shows the server's shared screen), but the LabVIEW TCP
-            // link itself is started so the Dashboard's Control panel can drive a LabVIEW
-            // (setpoint / Run / Stop over the same socket) exactly like the Server.
+            // capturing a local screen. The LabVIEW TCP link itself is started so the
+            // Dashboard's Control panel can drive a LabVIEW (setpoint / Run / Stop over
+            // the same socket) exactly like the Server.
             SourceSelector.Visibility       = Visibility.Collapsed;
             RefreshSourcesButton.Visibility = Visibility.Collapsed;
-            DataSection.Visibility          = Visibility.Collapsed;
             ShowPlaceholder(Lang.Hmi_WaitingStream);
+
+            // Angka LabVIEW-nya TIDAK datang dari listener lokal di atas — VI menyambung
+            // ke 127.0.0.1:6001 di PC Server, jadi listener milik laptop ini selamanya
+            // sepi. Yang mengisinya HmiRelayService lewat endpoint Server.
+            ShowRelayMessage(Lang.Hmi_DataNoServer);
+
             // Subscribe on every load; unsubscribe on unload. (The hosting page is
             // cached, so hooking once in the ctor would be dropped after the first
             // navigation away.)
@@ -63,8 +75,18 @@ public sealed partial class HmiShareView : UserControl
                 ShareClient.Instance.FrameReceived -= OnRemoteFrame;
                 ShareClient.Instance.FrameReceived += OnRemoteFrame;
                 Data.Start(AppSettingsService.Load().HmiDataPort);   // enable dashboard → LabVIEW commands
+
+                Relay.Updated -= OnRelayUpdated;
+                Relay.Updated += OnRelayUpdated;
+                Relay.Attach();
+                RenderRelay(Relay.Latest);
             };
-            Unloaded += (_, _) => ShareClient.Instance.FrameReceived -= OnRemoteFrame;
+            Unloaded += (_, _) =>
+            {
+                ShareClient.Instance.FrameReceived -= OnRemoteFrame;
+                Relay.Updated -= OnRelayUpdated;
+                Relay.Detach();
+            };
         }
         else
         {
@@ -234,6 +256,80 @@ public sealed partial class HmiShareView : UserControl
         return grid;
     }
 
+    // ── Jalur CLIENT: telemetri LabVIEW yang direlay Server ─────────────────────
+    //
+    // Method-method di bawah ini HANYA dipakai flavor Client. Semua method di atas
+    // (HmiShareView_Loaded, OnHmiData, DataStaleTimer_Tick, UpdateDataHeader,
+    // RenderData, ShowDataPlaceholder) tidak disentuh sama sekali, sehingga dashboard
+    // Server berjalan lewat kode yang sama persis seperti sebelumnya — termasuk
+    // perilakunya saat VI dimatikan.
+
+    private void OnRelayUpdated(HmiLatest? latest)
+        => DispatcherQueue.TryEnqueue(() => RenderRelay(latest));
+
+    /// <summary>
+    /// Menggambar kartu dari jawaban Server. Empat keadaan yang sengaja dibedakan,
+    /// karena masing-masing menuntut tindakan berbeda dari mahasiswa:
+    ///
+    /// <list type="bullet">
+    /// <item>Server tidak terjangkau — periksa koneksi ke Server;</item>
+    /// <item>bukan giliran Anda — tunggu giliran (kartunya tetap ada, supaya tidak
+    ///   terbaca seperti fitur yang rusak atau hilang);</item>
+    /// <item>VI mati / bacaannya basi — <b>Tidak tersambung</b>, dan angkanya
+    ///   DIKOSONGKAN, bukan dibiarkan memajang nilai lama yang diam;</item>
+    /// <item>hidup — angkanya digambar.</item>
+    /// </list>
+    /// </summary>
+    private void RenderRelay(HmiLatest? latest)
+    {
+        if (latest is null)          { ShowRelayMessage(Lang.Hmi_DataNoServer);   return; }
+        if (!latest.Allowed)         { ShowRelayMessage(Lang.Hmi_DataTurnOnly);   return; }
+        if (!latest.IsLive)          { ShowRelayMessage(Lang.Hmi_DataNotLinked);  return; }
+
+        if (!_relayRowsShown)
+        {
+            DataList.Children.Clear();
+            _relayValueBlocks.Clear();
+            _relayRowsShown = true;
+        }
+
+        foreach (var (key, value) in latest.Values)
+        {
+            if (_relayValueBlocks.TryGetValue(key, out var block))
+            {
+                block.Text = value;
+            }
+            else
+            {
+                var row = CreateDataRow(key, out var valueBlock);
+                valueBlock.Text = value;
+                DataList.Children.Add(row);
+                _relayValueBlocks[key] = valueBlock;
+            }
+        }
+
+        DataLiveDot.Fill  = _dotLive;
+        DataPortText.Text = Lang.Hmi_DataViaServer;
+    }
+
+    /// <summary>Mengosongkan angka dan menggantinya dengan satu baris keterangan.</summary>
+    private void ShowRelayMessage(string message)
+    {
+        DataList.Children.Clear();
+        _relayValueBlocks.Clear();
+        _relayRowsShown   = false;
+        DataLiveDot.Fill  = _dotIdle;
+        DataHeaderText.Text = Lang.Hmi_DataHeader;
+        DataPortText.Text   = Lang.Hmi_DataViaServer;
+        DataList.Children.Add(new TextBlock
+        {
+            Text         = message,
+            FontSize     = 11,
+            Opacity      = 0.55,
+            TextWrapping = TextWrapping.Wrap
+        });
+    }
+
     // Shared list changed (a refresh happened here or in the other view): repopulate
     // the combo and re-point it at the shared selection.
     private void OnSourcesChanged()
@@ -338,6 +434,15 @@ public sealed partial class HmiShareView : UserControl
         StopShareButton.Content        = Lang.Hmi_StopShare;
 
         DataHeaderText.Text = Lang.Hmi_DataHeader;
+
+        if (_clientMode)
+        {
+            // Jalur Client punya keterangannya sendiri; menggambar ulang dari bacaan
+            // terakhir sekaligus menerjemahkan pesan "Tidak tersambung" dan kawan-kawan.
+            RenderRelay(Relay.Latest);
+            return;
+        }
+
         DataPortText.Text   = Lang.Format("Hmi_DataPort",
             Data.IsListening ? Data.Port : AppSettingsService.Load().HmiDataPort);
         if (_dataPlaceholderShown)

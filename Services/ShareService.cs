@@ -63,6 +63,7 @@ public static class ShareProtocol
     public const string HeParamMyRunsPath       = "/he/params/my-runs";      // GET  ?limit= percobaan MILIK PEMANGGIL saja (semua peran)
     public const string HeParamNearestPath      = "/he/params/nearest";     // GET  ?sp=&kc=&ti=&td=&pump=&limit= tetangga terdekat MILIK PEMANGGIL (semua peran)
     public const string HeLiveProgressPath      = "/he/live/progress";      // GET  progres run live (semua peran): elapsed recorder + suhu live + prediksi settling
+    public const string HmiLatestPath           = "/hmi/latest";            // GET  telemetri LabVIEW terkini (staf selalu; Mahasiswa hanya saat memegang giliran)
 
     public const string GuidWs            = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 
@@ -320,6 +321,10 @@ public sealed class ShareServer
             else if (method == "GET" && path == ShareProtocol.HeLiveProgressPath)
             {
                 await HandleHeLiveProgressGetAsync(stream, headers, ct);
+            }
+            else if (method == "GET" && path == ShareProtocol.HmiLatestPath)
+            {
+                await HandleHmiLatestGetAsync(stream, headers, ct);
             }
             else if (method == "GET" && path == "/info")
             {
@@ -1747,6 +1752,75 @@ public sealed class ShareServer
             if (p.LiveTemp is { } t) body["liveTemp"] = t;
             if (p.PredictedSettling is { } s) body["predictedSettling"] = s;
         }
+
+        await WriteJsonAsync(stream, body.ToJsonString(), ct);
+    }
+
+    /// <summary>
+    /// GET /hmi/latest — telemetri LabVIEW terkini milik Server, supaya kartu
+    /// "LabVIEW Data" bisa ikut tampil di dashboard Client.
+    ///
+    /// <para>Jalurnya harus lewat sini karena VI membuka koneksinya ke
+    /// <c>127.0.0.1:6001</c>: hanya dashboard yang berjalan di PC yang sama dengan VI
+    /// (yaitu Server) yang bisa berada di jalur itu. Polanya sama dengan
+    /// <c>/he/live/progress</c> — Server membaca state lokalnya, Client memakai
+    /// jawabannya apa adanya.</para>
+    ///
+    /// <para><b>Siapa yang boleh melihat angkanya.</b> Staf (Admin/Dosen/Asisten)
+    /// selalu boleh: mereka pengawas, dan sulit mengambil langkah tanpa melihat suhu
+    /// rig. Mahasiswa hanya boleh saat dirinya sendiri yang memegang giliran — yang
+    /// mengantre, yang gilirannya habis kena batas waktu, atau yang kendalinya
+    /// dicabut, ketiganya bukan pemegang giliran lagi dan berhenti melihat angkanya.
+    /// Keputusannya diambil DI SINI dari identitas sesi, bukan dari parameter apa pun
+    /// yang dikirim Client; dan saat tidak berhak, <c>values</c> memang tidak pernah
+    /// dirakit — bukan dirakit lalu disembunyikan layar.</para>
+    ///
+    /// <para>Antriannya hanya DIBACA (<see cref="HeQueueRepository.GetSnapshotAsync"/>
+    /// murni baca, tanpa <c>GrantNextAsync</c>), jadi melihat kartu ini tidak pernah
+    /// menggeser giliran siapa pun. Staf bahkan tidak menyentuh database sama sekali
+    /// karena sudah lolos lebih dulu.</para>
+    ///
+    /// <para><c>allowed=false</c> sengaja dijawab 200, bukan 403, supaya Client bisa
+    /// membedakan tiga hal yang berbeda: belum login (401), bukan giliran Anda
+    /// (allowed=false), dan Server tidak terjangkau (permintaannya gagal).</para>
+    /// </summary>
+    private async Task HandleHmiLatestGetAsync(
+        NetworkStream stream, Dictionary<string, string> headers, CancellationToken ct)
+    {
+        var session = GetSession(BearerToken(headers));
+        if (session is null)
+        {
+            await WriteSimpleAsync(stream, "401 Unauthorized", "text/plain", "Invalid or expired session", ct);
+            return;
+        }
+
+        // Staf lolos tanpa menyentuh database sama sekali; antrian hanya dibaca kalau
+        // pemanggilnya Mahasiswa. Aturannya sendiri ada di HmiLatest.MayView supaya
+        // bisa diuji langsung.
+        bool allowed = UserRoles.IsStaff(session.Role) ||
+                       HmiLatest.MayView(session.Role, session.Username,
+                                         (await App.HeQueue.GetSnapshotAsync(ct)).Holder);
+
+        var body = new JsonObject { ["allowed"] = allowed };
+        if (!allowed)
+        {
+            await WriteJsonAsync(stream, body.ToJsonString(), ct);
+            return;
+        }
+
+        var data = HmiDataService.Instance;
+        var values = new JsonArray();
+        foreach (var (key, value) in data.Snapshot())
+            values.Add((JsonNode)new JsonObject { ["k"] = key, ["v"] = value });
+
+        // linked = ada VI yang benar-benar tersambung ke listener 6001 Server.
+        // ageMs = umur bacaan terakhir; keduanya dipakai Client untuk memutuskan
+        // "Tidak tersambung" alih-alih memajang angka basi yang diam.
+        body["linked"] = data.HasClient;
+        body["ageMs"]  = data.LastReceivedUtc == DateTime.MinValue
+            ? -1
+            : (long)(DateTime.UtcNow - data.LastReceivedUtc).TotalMilliseconds;
+        body["values"] = values;
 
         await WriteJsonAsync(stream, body.ToJsonString(), ct);
     }
