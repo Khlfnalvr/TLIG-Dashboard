@@ -15,14 +15,14 @@
     <DefineConstants>DISABLE_XAML_GENERATED_MAIN</DefineConstants>
     <EnableMsixTooling>true</EnableMsixTooling>
     <ApplicationIcon>Assets\logo.ico</ApplicationIcon>
-    <Version>1.0.8</Version>
-    <AssemblyVersion>1.0.8.0</AssemblyVersion>
-    <FileVersion>1.0.8.0</FileVersion>
+    <Version>1.0.9</Version>
+    <AssemblyVersion>1.0.9.0</AssemblyVersion>
+    <FileVersion>1.0.9.0</FileVersion>
     <!-- Ikut dinaikkan: MainWindow.AppVersion membaca InformationalVersion LEBIH DULU,
          dan nilai itulah yang dipakai UpdateService untuk membandingkan diri dengan
          rilis terbaru. Tertinggal di 1.0.5 membuat aplikasi v1.0.6 mengaku 1.0.5 dan
          terus-menerus menawarkan pembaruan yang sebenarnya sudah terpasang. -->
-    <InformationalVersion>1.0.8</InformationalVersion>
+    <InformationalVersion>1.0.9</InformationalVersion>
   </PropertyGroup>
 
   <!--
