@@ -851,6 +851,9 @@ public sealed partial class MainWindow : Window
         _loggedInUser = string.IsNullOrWhiteSpace(displayName) ? accountName : displayName;
         _loggedInRole = role;
         App.Session.SignIn(accountName, displayName, role, nrp, kelas);
+        // Isolasi riwayat chat: muat milik akun ini (device bersama tidak bocor
+        // ke akun lain). Fire-and-forget — UI me-refresh via ContentChanged.
+        _ = Services.ChatSessionService.Instance.SwitchOwnerAsync(accountName);
         UpdateAccountFlyoutText();
         ApplyRoleNavVisibility();
         LoginErrorText.Visibility = Visibility.Collapsed;
@@ -1324,6 +1327,9 @@ public sealed partial class MainWindow : Window
         _loggedInUser = "";
         _loggedInRole = "";
         App.Session.SignOut();
+        // Bersihkan riwayat chat milik akun lama dari memory + alihkan file ke
+        // anonim, supaya akun berikutnya di device yang sama mulai kosong.
+        await Services.ChatSessionService.Instance.SwitchOwnerAsync("");
         // Keadaan antrian milik pengguna lama tidak boleh terbawa ke pengguna
         // berikutnya, kalau tidak giliran orang lain akan dibaca sebagai peristiwa
         // baru dan diumumkan ke orang yang salah.

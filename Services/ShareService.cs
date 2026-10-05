@@ -48,6 +48,9 @@ public static class ShareProtocol
     public const string ChallengeSubmissionsPath = "/challenge/submissions"; // GET all submissions (staff only)
     public const string ChallengeGradePath     = "/challenge/grade";     // POST dosen grade (staff only)
     public const string StudentsPath           = "/students";            // GET student roster (staff only)
+    public const string ChatSessionsPath       = "/chat/sessions";       // GET riwayat chat MILIK PEMANGGIL (semua peran)
+    public const string ChatSyncPath           = "/chat/sync";           // POST satu sesi chat MILIK PEMANGGIL (semua peran)
+    public const string ChatDeletePath         = "/chat/delete";         // POST {id} hapus satu sesi MILIK PEMANGGIL
 
     // ── Antrian giliran plant HE + arsip hasil percobaan ─────────────────────
     // Databasenya milik Server (hanya Server yang tersambung ke plant), jadi
@@ -285,6 +288,18 @@ public sealed class ShareServer
             else if (method == "GET" && path == ShareProtocol.StudentsPath)
             {
                 await HandleStudentsGetAsync(stream, headers, ct);
+            }
+            else if (method == "GET" && path == ShareProtocol.ChatSessionsPath)
+            {
+                await HandleChatSessionsGetAsync(stream, headers, ct);
+            }
+            else if (method == "POST" && path == ShareProtocol.ChatSyncPath)
+            {
+                await HandleChatSyncAsync(stream, headers, ct);
+            }
+            else if (method == "POST" && path == ShareProtocol.ChatDeletePath)
+            {
+                await HandleChatDeleteAsync(stream, headers, ct);
             }
             else if (method == "GET" && path == ShareProtocol.HeQueuePath)
             {
@@ -1977,6 +1992,111 @@ public sealed class ShareServer
         }
 
         await WriteJsonAsync(stream, new JsonObject { ["students"] = arr }.ToJsonString(), ct);
+    }
+
+    // ── Riwayat chat per akun (semua peran, selalu milik pemanggil) ──────────
+    // Server = sumber kebenaran sync lintas device: Client mendorong satu sesi
+    // tiap ada perubahan dan menarik semuanya saat login. Username SELALU dari
+    // token sesi yang tervalidasi (seperti /he/params/my-runs), bukan dari body,
+    // sehingga akun A tidak bisa membaca/menulis milik akun B.
+
+    private async Task HandleChatSessionsGetAsync(
+        NetworkStream stream, Dictionary<string, string> headers, CancellationToken ct)
+    {
+        var session = GetSession(BearerToken(headers));
+        if (session is null)
+        {
+            await WriteSimpleAsync(stream, "401 Unauthorized", "text/plain", "Invalid or expired session", ct);
+            return;
+        }
+
+        var arr = new JsonArray();
+        try
+        {
+            foreach (var row in await TLIGDashboard.App.ChatHistory.GetForUserAsync(session.Username, ct))
+            {
+                JsonArray msgs;
+                try { msgs = JsonNode.Parse(row.MessagesJson)?.AsArray() ?? new JsonArray(); }
+                catch { msgs = new JsonArray(); }
+                arr.Add(new JsonObject
+                {
+                    ["id"] = row.SessionId,
+                    ["title"] = row.Title,
+                    ["summary"] = row.Summary,
+                    ["messages"] = msgs,
+                    ["updatedAt"] = row.UpdatedAt.ToString("O"),
+                });
+            }
+        }
+        catch { }
+
+        await WriteJsonAsync(stream, new JsonObject { ["sessions"] = arr }.ToJsonString(), ct);
+    }
+
+    private async Task HandleChatSyncAsync(
+        NetworkStream stream, Dictionary<string, string> headers, CancellationToken ct)
+    {
+        var session = GetSession(BearerToken(headers));
+        if (session is null)
+        {
+            await WriteSimpleAsync(stream, "401 Unauthorized", "text/plain", "Invalid or expired session", ct);
+            return;
+        }
+
+        var body = await ReadBodyAsync(stream, headers, ct);
+        // Satu sesi dibatasi 200 pesan x 8000 char di Sanitize — body wajar
+        // < 512 KB. Tolak yang lebih besar sebelum JsonNode.Parse agar satu
+        // payload nakal tidak memangsa memori server.
+        if (body.Length > 512 * 1024)
+        {
+            await WriteSimpleAsync(stream, "413 Content Too Large", "text/plain", "Session payload too large", ct);
+            return;
+        }
+        try
+        {
+            var node = JsonNode.Parse(body);
+            string id = (string?)node?["id"] ?? "";
+            if (id.Length > 0 && id.Length <= 64)
+            {
+                var msgs = node?["messages"]?.AsArray() ?? new JsonArray();
+                await TLIGDashboard.App.ChatHistory.UpsertAsync(session.Username, new ChatSessionRow
+                {
+                    SessionId = id,
+                    Title = (string?)node?["title"] ?? "",
+                    Summary = (string?)node?["summary"] ?? "",
+                    MessagesJson = msgs.ToJsonString(),
+                    UpdatedAt = DateTime.TryParse((string?)node?["updatedAt"] ?? "",
+                            null, System.Globalization.DateTimeStyles.RoundtripKind,
+                            out var dt) ? dt.ToUniversalTime() : DateTime.UtcNow,
+                }, ct);
+            }
+        }
+        catch { }
+
+        await WriteJsonAsync(stream, "{\"ok\":true}", ct);
+    }
+
+    private async Task HandleChatDeleteAsync(
+        NetworkStream stream, Dictionary<string, string> headers, CancellationToken ct)
+    {
+        var session = GetSession(BearerToken(headers));
+        if (session is null)
+        {
+            await WriteSimpleAsync(stream, "401 Unauthorized", "text/plain", "Invalid or expired session", ct);
+            return;
+        }
+
+        var body = await ReadBodyAsync(stream, headers, ct);
+        try
+        {
+            var node = JsonNode.Parse(body);
+            string id = (string?)node?["id"] ?? "";
+            if (id.Length > 0 && id.Length <= 64)
+                await TLIGDashboard.App.ChatHistory.DeleteAsync(session.Username, id, ct);
+        }
+        catch { }
+
+        await WriteJsonAsync(stream, "{\"ok\":true}", ct);
     }
 
     // ── HTTP parsing helpers ──────────────────────────────────────────────────

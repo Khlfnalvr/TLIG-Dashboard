@@ -133,6 +133,7 @@
     -->
     <EmbeddedResource Include="Database\HeQueueSchema.sql" />
     <EmbeddedResource Include="Database\HeParameterCacheSchema.sql" />
+    <EmbeddedResource Include="Database\ChatHistorySchema.sql" />
   </ItemGroup>
 
   <ItemGroup>

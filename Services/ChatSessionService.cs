@@ -14,6 +14,13 @@ public sealed class ChatSession
     public string Title { get; set; } = "";
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
     public List<ChatMessage> Messages { get; set; } = new();
+    /// <summary>
+    /// Rolling long-term memory: ringkasan padat dari pesan-pesan lama yang sudah
+    /// dipangkas dari <see cref="Messages"/> agar konteks muat dalam limit token.
+    /// Dikelola <see cref="AiService"/> (compact) dan disimpan di sini agar
+    /// bertahan antar restart. Disuntik ke system prompt tiap request.
+    /// </summary>
+    public string Summary { get; set; } = "";
 }
 
 public sealed class ChatSessionService
@@ -23,7 +30,47 @@ public sealed class ChatSessionService
 
     private const int MaxSessions = 20;
     private const int MaxMessages = 200;
-    private const string FileName = "chat-sessions.json";
+
+    // ── Isolasi antar pengguna ──────────────────────────────────────────
+    // File riwayat di-scope per akun in-app (bukan per device): user A logout
+    // lalu user B login di device yang sama TIDAK boleh melihat chat + summary
+    // milik A. Antar device beda (laptop client 1 vs 2) memang sudah terpisah
+    // karena filenya lokal per device; yang ditutup di sini adalah bocor di
+    // device bersama + memory in-memory yang tertinggal sehabis logout.
+    private string _owner = "";
+
+    private static string FileNameFor(string owner)
+    {
+        if (string.IsNullOrWhiteSpace(owner))
+            return "chat-sessions.json"; // pra-login / legacy
+        foreach (char c in Path.GetInvalidFileNameChars())
+            owner = owner.Replace(c, '_');
+        return $"chat-sessions-{owner.ToLowerInvariant()}.json";
+    }
+
+    private string FileName => FileNameFor(_owner);
+
+    /// <summary>
+    /// Ganti pemilik riwayat (login/logout). Menyimpan milik lama, membersihkan
+    /// memory, lalu memuat milik yang baru. Aman dipanggil berulang.
+    /// </summary>
+    public async Task SwitchOwnerAsync(string username)
+    {
+        string next = (username ?? "").Trim().ToLowerInvariant();
+        if (next == _owner && _loaded) return;
+        try { SaveActive(); } catch { }
+        _owner = next;
+        _loaded = false;
+        _sessions.Clear();
+        Active = null;
+        try
+        {
+            App.Ai.ClearHistory();
+            App.Ai.ConversationSummary = "";
+        }
+        catch { }
+        await EnsureLoadedAsync().ConfigureAwait(false);
+    }
 
     private readonly List<ChatSession> _sessions = new();
     private bool _loaded;
@@ -64,6 +111,7 @@ public sealed class ChatSessionService
                             Title = (string?)n?["title"] ?? DefaultTitle(),
                             UpdatedAt = DateTime.TryParse((string?)n?["updatedAt"] ?? "", out var dt) ? dt : DateTime.UtcNow,
                             Messages = msgs.TakeLast(MaxMessages).ToList(),
+                            Summary = (string?)n?["summary"] ?? "",
                         });
                     }
                     _sessions.Sort((a, b) => b.UpdatedAt.CompareTo(a.UpdatedAt));
@@ -76,6 +124,38 @@ public sealed class ChatSessionService
         if (_sessions.Count == 0)
             _sessions.Add(new ChatSession { Title = DefaultTitle() });
         Activate(_sessions[0], loadMessages: true);
+        ContentChanged?.Invoke();
+        ListChanged?.Invoke();
+
+        // Sync lintas device: akun yang sama melihat sesi yang sama di mana pun.
+        // Lokal tampil dulu (cepat, offline-safe); hasil server di-merge setelahnya.
+        if (_owner.Length > 0)
+            _ = PullAndMergeAsync(_owner);
+    }
+
+    /// <summary>
+    /// Tarik milik <paramref name="username"/> dari server (atau DB langsung di
+    /// build Server), gabung dengan cache lokal (yang updatedAt lebih baru
+    /// menang), lalu tampilkan. Tidak pernah menghapus: gagal jaringan = cache
+    /// lokal tetap dipakai apa adanya.
+    /// </summary>
+    private async Task PullAndMergeAsync(string username)
+    {
+        List<ChatSession> remote;
+        try { remote = await ChatHistorySync.PullAsync(username).ConfigureAwait(false); }
+        catch { return; }
+        if (remote.Count == 0) return;
+
+        string? activeId = Active?.Id;
+        var merged = ChatHistorySync.Merge(_sessions, remote);
+        if (merged.Count == 0) return;
+        _sessions.Clear();
+        _sessions.AddRange(merged);
+        // Pertahankan sesi aktif (bukan lompat ke sesi lain), tapi pakai versi
+        // gabungannya yang mungkin lebih baru dari remote.
+        var target = _sessions.FirstOrDefault(s => s.Id == activeId) ?? _sessions[0];
+        Activate(target, loadMessages: true);
+        Persist();
         ContentChanged?.Invoke();
         ListChanged?.Invoke();
     }
@@ -117,6 +197,9 @@ public sealed class ChatSessionService
             ContentChanged?.Invoke();
         }
         Persist();
+        // Hapus juga di server agar sesi tidak hidup lagi saat pull berikutnya.
+        if (_owner.Length > 0)
+            _ = ChatHistorySync.DeleteAsync(_owner, id);
         ListChanged?.Invoke();
     }
 
@@ -130,6 +213,7 @@ public sealed class ChatSessionService
             .TakeLast(MaxMessages)
             .Select(m => new ChatMessage(m.Role, m.Content))
             .ToList();
+        active.Summary = App.Ai.ConversationSummary ?? "";
         active.UpdatedAt = DateTime.UtcNow;
         string? firstUser = active.Messages.FirstOrDefault(m => m.Role == "user")?.Content;
         if (!string.IsNullOrWhiteSpace(firstUser) && active.Title == DefaultTitle())
@@ -139,12 +223,71 @@ public sealed class ChatSessionService
             ListChanged?.Invoke();
         }
         Persist();
+        // Sync lintas device: dorong sesi aktif ke server (sumber kebenaran)
+        // agar akun yang sama melihatnya di device lain. Snapshot disalin agar
+        // aman dari balapan dengan turn berikutnya. Fire-and-forget: gagal =
+        // cache lokal tetap utuh, didorong lagi saat turn berikutnya.
+        if (_owner.Length > 0)
+        {
+            var snapshot = new ChatSession
+            {
+                Id = active.Id,
+                Title = active.Title,
+                UpdatedAt = active.UpdatedAt,
+                Summary = active.Summary,
+                Messages = active.Messages.ToList(),
+            };
+            _ = ChatHistorySync.PushAsync(_owner, snapshot);
+        }
+        // Long-term memory: padatkan pesan lama jadi ringkasan di background.
+        // Menutup semua jalur (chat, routed answer, advisor) karena semuanya
+        // bermuara ke SaveActive. Fire-and-forget: gagal = riwayat tetap utuh.
+        _ = CompactInBackgroundAsync(active.Id);
+    }
+
+    private async Task CompactInBackgroundAsync(string sessionId)
+    {
+        string? newSummary;
+        int dropped;
+        try
+        {
+            (newSummary, dropped) = await App.Ai.MaybeCompactAsync().ConfigureAwait(false);
+        }
+        catch { return; }
+        if (newSummary is null || dropped <= 0) return;
+
+        var target = _sessions.FirstOrDefault(s => s.Id == sessionId);
+        if (target is null) return;
+        target.Summary = newSummary;
+        // Selaraskan pesan tersimpan dengan history yang sudah dipangkas.
+        var history = App.Ai.History;
+        target.Messages = history
+            .Where(m => m.Role is "user" or "assistant")
+            .TakeLast(MaxMessages)
+            .Select(m => new ChatMessage(m.Role, m.Content))
+            .ToList();
+        Persist();
+        // Ringkasan baru juga harus naik ke server, kalau tidak device lain
+        // dapat pesannya tanpa memorinya.
+        if (_owner.Length > 0)
+        {
+            var snapshot = new ChatSession
+            {
+                Id = target.Id,
+                Title = target.Title,
+                UpdatedAt = target.UpdatedAt,
+                Summary = target.Summary,
+                Messages = target.Messages.ToList(),
+            };
+            _ = ChatHistorySync.PushAsync(_owner, snapshot);
+        }
     }
 
     private void Activate(ChatSession session, bool loadMessages)
     {
         Active = session;
         App.Ai.ClearHistory();
+        App.Ai.ConversationSummary = session.Summary ?? "";
         if (loadMessages)
             foreach (var m in session.Messages)
                 App.Ai.AddHistoryEntry(m.Role, m.Content);
@@ -161,6 +304,7 @@ public sealed class ChatSessionService
             Title = s.Title,
             UpdatedAt = s.UpdatedAt,
             Messages = s.Messages.ToList(),
+            Summary = s.Summary ?? "",
         }).ToList();
         _ = Task.Run(async () =>
         {
@@ -178,6 +322,7 @@ public sealed class ChatSessionService
                         ["title"] = s.Title,
                         ["updatedAt"] = s.UpdatedAt.ToString("O"),
                         ["messages"] = msgs,
+                        ["summary"] = s.Summary ?? "",
                     });
                 }
                 var file = await ApplicationData.Current.LocalFolder.CreateFileAsync(

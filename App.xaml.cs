@@ -77,6 +77,14 @@ public partial class App : Application
     /// </summary>
     public static Services.HeParameterCacheRepository HeParamCache { get; } = Services.HeParameterCacheRepository.Instance;
 
+    /// <summary>
+    /// Riwayat chat AI per akun — sumber kebenaran untuk sync lintas device.
+    /// Client mendorong/menarik lewat endpoint HTTP; staf yang memakai aplikasi
+    /// Server langsung membaca/menulis DB ini.
+    /// </summary>
+    public static Services.ChatHistoryRepository ChatHistory { get; }
+        = Services.ChatHistoryRepository.Instance;
+
     public App()
     {
         InitializeComponent();
@@ -116,6 +124,7 @@ public partial class App : Application
             {
                 await HeQueue.InitializeAsync();
                 await HeParamCache.InitializeAsync();
+                await ChatHistory.InitializeAsync();
                 await WatchStaleHolderAsync();
             }
             catch (Exception ex)
