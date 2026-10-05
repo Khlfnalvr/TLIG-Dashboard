@@ -171,6 +171,16 @@ public static class HeQueueClient
         return node is null ? null : HmiLatest.FromJson(node);
     }
 
+    /// <summary>
+    /// Keadaan sambungan plant menurut Server (PLC/Sensor/LabVIEW), untuk panel
+    /// "Status System" di Client. <c>null</c> kalau Server tidak terjangkau.
+    /// </summary>
+    public static async Task<ServerSystemStatus?> GetSystemStatusAsync(string host, string token)
+    {
+        var node = await GetAsync(host, token, ShareProtocol.SystemStatusPath);
+        return node is null ? null : ServerSystemStatus.FromJson(node);
+    }
+
     // ── Internals ───────────────────────────────────────────────────────────
 
     private static async Task<JsonNode?> GetAsync(string host, string token, string path)

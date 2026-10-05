@@ -110,6 +110,8 @@ Kartu **PLC Connection** (label lama "OPC UA" masih terlihat di beberapa tempat,
 
 Koneksi ini otomatis mencoba menyambung ulang setiap 5 detik jika terputus, sampai pengguna menekan Disconnect secara manual. Tab yang sama juga bisa dibuka lewat ikon status PLC di title bar (pojok kanan atas jendela) tanpa harus membuka halaman Settings.
 
+> **Client tidak pernah menyambung langsung ke PLC/LabVIEW.** Sejak v1.2.0 tab PLC tidak ada di aplikasi Client. Semua data (angka LabVIEW, status PLC/Sensor, metrik PID, kamera, HMI, kurva simulasi PID & Cascade) dikirim Server ke Client, dan semua perintah (RUN/STOP/parameter/valve) dari Client diteruskan Server ke plant. Server adalah satu-satunya relay — Client cukup login ke alamat Server (IP LAN atau URL Cloudflare Tunnel).
+
 ### 5.4 Mengonfigurasi AI
 Kartu **AI** di halaman Settings (atau tab "AI" di flyout title bar) membuka dialog **Pengaturan AI**, berisi satu kartu per provider:
 
@@ -316,5 +318,6 @@ Tersedia di kedua varian, lewat title bar dan menu hamburger (ikon garis tiga):
 | Parameter PID tidak bisa diterapkan (Client) | Sudah mencapai batas 3 kali penerapan | Hubungi staf/gunakan akun Server untuk penerapan lebih lanjut |
 | Chat AI error "tidak ada kunci" | Belum ada provider yang diaktifkan/diberi API key oleh staf | Staf membuka Pengaturan AI (gear icon), aktifkan provider & isi API key |
 | Status PLC tetap merah/terputus | Host/port HMI LabVIEW salah, atau HMI belum berjalan | Cek IP mesin HMI dan port di kartu PLC Connection, pastikan HMI sedang berjalan dan dapat dijangkau di jaringan |
+| Status PLC/Sensor merah di Client | Client hanya menyalin status Server: Server belum tersambung ke PLC/VI, Client belum login, atau Server masih versi lama | Periksa status di aplikasi Server; pastikan Server dan Client sama-sama v1.2.0 atau lebih baru |
 | Registrasi mandiri ditolak | Domain email bukan `its.ac.id` (atau subdomain) / `ep.itc.ac.id`, atau kata sandi < 6 karakter | Gunakan email kampus yang valid dan kata sandi lebih panjang |
 | Update otomatis gagal | Antivirus memblokir proses penyalinan, atau app terpasang di folder non-standar | Tambahkan folder instalasi ke whitelist antivirus; instal ulang lewat installer resmi |

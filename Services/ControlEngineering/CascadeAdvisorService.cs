@@ -41,8 +41,9 @@ public class CascadeAdvisorService
     private readonly string _requestedLanguage;
 
     /// <param name="language">
-    /// "id" / "en"; empty falls back to this process's own setting. The cascade designer runs
-    /// locally in both flavors, so the review should follow the app's language.
+    /// "id" / "en"; empty falls back to this process's own setting. On behalf of a Client the
+    /// Server passes the Client's UI language (see <c>/sim/cascade</c>), so the review follows
+    /// the language of whoever is reading it.
     /// </param>
     public CascadeAdvisorService(string language = "")
     {

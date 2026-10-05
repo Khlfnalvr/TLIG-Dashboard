@@ -2219,6 +2219,21 @@ public sealed partial class MainWindow : Window
         // Init sharing panel (broadcast on server, connect on client)
         InitSharePanel();
 
+        if (Services.BuildInfo.IsClient)
+        {
+            // Client tidak punya jalur TCP sendiri ke LabVIEW/PLC — semuanya lewat Server
+            // (tunnel). Tab PLC disembunyikan; status PLC/Sensor di panel "Status System"
+            // diisi ServerStatusRelay dari keadaan yang dilaporkan Server.
+            TabOpcUa.Visibility   = Visibility.Collapsed;
+            PanelOpcUa.Visibility = Visibility.Collapsed;
+            ConnAiTabs.SelectedItem = TabShare;
+
+            ShareClient.Instance.ConnectionChanged += (_, _) =>
+                DispatcherQueue.TryEnqueue(UpdateOpcStatusDot);
+            Services.ServerStatusRelay.Instance.Start();
+            return;
+        }
+
         // Default tab = PLC
         ConnAiTabs.SelectedItem = TabOpcUa;
 
@@ -2226,10 +2241,20 @@ public sealed partial class MainWindow : Window
         {
             SyncOpcConnectButton();
             UpdateOpcStatusDot();
-            bool connected = ViewModel.Plc.IsConnected;
-            App.Status.PlcConnected    = connected;
-            App.Status.SensorConnected = connected;
+            RefreshServerSensorStatus();
         });
+
+        // Sensor juga hidup saat VI mengalirkan data ke listener 6001 — itu jalur data
+        // sensor yang sebenarnya, dan keadaan inilah yang direlay ke Client.
+        HmiDataService.Instance.ClientConnectedChanged += _ =>
+            DispatcherQueue.TryEnqueue(RefreshServerSensorStatus);
+    }
+
+    private void RefreshServerSensorStatus()
+    {
+        bool plc = ViewModel.Plc.IsConnected;
+        App.Status.PlcConnected    = plc;
+        App.Status.SensorConnected = plc || HmiDataService.Instance.HasClient;
     }
 
     private void OpcUaFlyout_Opened(object sender, object e)
@@ -2338,7 +2363,10 @@ public sealed partial class MainWindow : Window
 
     private void UpdateOpcStatusDot()
     {
-        bool connected = ViewModel.Plc.IsConnected;
+        // Client: titik hijau = tersambung ke Server (satu-satunya jalur ke plant).
+        bool connected = Services.BuildInfo.IsClient
+            ? ShareClient.Instance.IsConnected
+            : ViewModel.Plc.IsConnected;
         OpcStatusDot.Fill = connected
             ? new SolidColorBrush(Color.FromArgb(0xFF, 0x25, 0xC6, 0x85))
             : new SolidColorBrush(Color.FromArgb(0x00, 0x00, 0x00, 0x00));
@@ -2351,7 +2379,9 @@ public sealed partial class MainWindow : Window
         bool isAi    = ReferenceEquals(ConnAiTabs.SelectedItem, TabAiApi);
         bool isShare = ReferenceEquals(ConnAiTabs.SelectedItem, TabShare);
 
-        PanelOpcUa.Visibility = (!isAi && !isShare) ? Visibility.Visible : Visibility.Collapsed;
+        // Tab PLC hanya ada di Server; Client tidak pernah menyambung langsung ke LabVIEW.
+        PanelOpcUa.Visibility = (!isAi && !isShare && Services.BuildInfo.IsServer)
+            ? Visibility.Visible : Visibility.Collapsed;
         PanelAiApi.Visibility = isAi ? Visibility.Visible : Visibility.Collapsed;
 
         // The share tab is the client's session/connect panel. On the server flavor

@@ -95,9 +95,10 @@ public sealed partial class DashboardPage : Page
         ApplySimulationType(App.SimType.CurrentType);
 
         // When a LabVIEW client (re)connects, push the current control values so the VI
-        // starts in sync with what the dashboard is showing. Wired on both flavors so the
-        // Client drives LabVIEW (setpoint / Run / Stop) exactly like the Server.
-        Data.ClientConnectedChanged += OnLabViewClientConnected;
+        // starts in sync with what the dashboard is showing. Server only: the Client has no
+        // LabVIEW socket of its own — its controls reach the plant through the Server.
+        if (!_clientMode)
+            Data.ClientConnectedChanged += OnLabViewClientConnected;
 
         // From here on, user edits to the controls are forwarded to LabVIEW.
         _controlsReady = true;
@@ -165,7 +166,9 @@ public sealed partial class DashboardPage : Page
 
     private void SendControlLine()
     {
-        if (!_controlsReady) return;
+        // Client: tidak ada soket LabVIEW lokal. Server menggemakan baris yang sama ke
+        // 6001 miliknya sendiri saat menerima /sim/pid/run (lihat ShareServer.HandlePidRunAsync).
+        if (!_controlsReady || _clientMode) return;
 
         double kp = KpBox.Value, ki = KiBox.Value, kd = KdBox.Value,
                sp = CtlSetpointBox.Value, pump = CtlPump.Value;
@@ -1278,6 +1281,7 @@ public sealed partial class DashboardPage : Page
         // dihitung di C# (lihat ProcessErrorService). ApplyActive di atas mereset system prompt
         // tiap kirim, jadi konteks ini sekali-pakai — tidak menumpuk, tidak masuk riwayat
         // maupun tampilan chat.
+        await Services.ControlEngineering.ProcessErrorService.RefreshLiveAsync();
         string liveContext = Services.ControlEngineering.ProcessErrorService.BuildChatContext();
         if (!string.IsNullOrEmpty(liveContext))
             _ai.SystemPrompt += "\n\n" + liveContext;

@@ -140,6 +140,10 @@ public sealed class HmiDataService
     /// </summary>
     public void Start(int port)
     {
+        // Listener ini hanya hidup di Server — PC yang sejalan dengan VI. Client menerima
+        // angkanya lewat Server (HmiRelayService), tidak pernah lewat soket lokal.
+        if (BuildInfo.IsClient) return;
+
         lock (_gate)
         {
             if (IsListening && Port == port)

@@ -29,6 +29,16 @@ public sealed class HmiLatest
 
     public IReadOnlyList<HmiDatum> Values { get; init; } = [];
 
+    // Metrik step-response yang dilaporkan PLC ke Server (PidMetricsService di Server).
+    // Ikut direlay supaya tugas Challenge di Client terisi dari plant yang sama; null =
+    // Server belum menerima metrik itu.
+    public double? RiseTime         { get; init; }
+    public double? Overshoot        { get; init; }
+    public double? Settling         { get; init; }
+    public double? SteadyStateError { get; init; }
+
+    public bool HasMetrics => RiseTime.HasValue || Overshoot.HasValue || Settling.HasValue || SteadyStateError.HasValue;
+
     /// <summary>
     /// Angkanya layak ditampilkan: berhak, VI tersambung, ada isinya, dan bacaannya
     /// masih baru.
@@ -85,12 +95,17 @@ public sealed class HmiLatest
                 values.Add(new HmiDatum(key, (string?)item?["v"] ?? ""));
             }
 
+        var metrics = node["metrics"];
         return new HmiLatest
         {
             Allowed = true,
             Linked  = (bool?)node["linked"] ?? false,
             AgeMs   = (long?)node["ageMs"] ?? -1,
             Values  = values,
+            RiseTime         = (double?)metrics?["riseTime"],
+            Overshoot        = (double?)metrics?["overshoot"],
+            Settling         = (double?)metrics?["settling"],
+            SteadyStateError = (double?)metrics?["sse"],
         };
     }
 }

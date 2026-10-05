@@ -68,6 +68,13 @@ public static class ShareProtocol
     public const string HeLiveProgressPath      = "/he/live/progress";      // GET  progres run live (semua peran): elapsed recorder + suhu live + prediksi settling
     public const string HmiLatestPath           = "/hmi/latest";            // GET  telemetri LabVIEW terkini (staf selalu; Mahasiswa hanya saat memegang giliran)
 
+    // ── Server sebagai relay ─────────────────────────────────────────────────
+    // Client tidak pernah menyambung langsung ke LabVIEW/PLC; semua lewat Server
+    // (LAN atau Cloudflare Tunnel). Dua endpoint ini menutup sisa yang dulu masih
+    // dihitung/dibaca sendiri oleh Client.
+    public const string SystemStatusPath        = "/system/status";         // GET  status PLC/Sensor/LabVIEW milik Server (semua peran)
+    public const string CascadeSimPath          = "/sim/cascade";           // POST CascadeInput + history → kurva + metrik + review (semua peran)
+
     public const string GuidWs            = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 
     /// <summary>Generates an opaque, high-entropy session token (URL-safe base64).</summary>
@@ -340,6 +347,14 @@ public sealed class ShareServer
             else if (method == "GET" && path == ShareProtocol.HmiLatestPath)
             {
                 await HandleHmiLatestGetAsync(stream, headers, ct);
+            }
+            else if (method == "GET" && path == ShareProtocol.SystemStatusPath)
+            {
+                await HandleSystemStatusGetAsync(stream, headers, ct);
+            }
+            else if (method == "POST" && path == ShareProtocol.CascadeSimPath)
+            {
+                await HandleCascadeSimulationAsync(stream, headers, ct);
             }
             else if (method == "GET" && path == "/info")
             {
@@ -1837,7 +1852,82 @@ public sealed class ShareServer
             : (long)(DateTime.UtcNow - data.LastReceivedUtc).TotalMilliseconds;
         body["values"] = values;
 
+        // Metrik step-response dari PLC (PlcTcpService → PidMetricsService) ikut direlay:
+        // Client tidak punya soket PLC sendiri, jadi tanpa ini tugas Challenge-nya kosong.
+        var pm = PidMetricsService.Instance;
+        if (pm.HasData)
+        {
+            static JsonNode? Num(double? v) => v is { } d && double.IsFinite(d) ? JsonValue.Create(d) : null;
+            body["metrics"] = new JsonObject
+            {
+                ["riseTime"]  = Num(pm.RiseTime),
+                ["overshoot"] = Num(pm.Overshoot),
+                ["settling"]  = Num(pm.Settling),
+                ["sse"]       = Num(pm.SteadyStateError),
+            };
+        }
+
         await WriteJsonAsync(stream, body.ToJsonString(), ct);
+    }
+
+    /// <summary>
+    /// GET /system/status — keadaan sambungan plant menurut Server, untuk panel
+    /// "Status System" di Client. Client tidak punya soket sendiri ke LabVIEW/PLC,
+    /// jadi lampu PLC/Sensor-nya menyalin apa yang dilihat Server.
+    ///
+    /// <para>Hanya boolean sambungan — tidak ada angka proses, jadi semua peran yang
+    /// sudah login boleh membacanya (angka tetap dijaga <c>/hmi/latest</c>).</para>
+    /// </summary>
+    private async Task HandleSystemStatusGetAsync(
+        NetworkStream stream, Dictionary<string, string> headers, CancellationToken ct)
+    {
+        var session = GetSession(BearerToken(headers));
+        if (session is null)
+        {
+            await WriteSimpleAsync(stream, "401 Unauthorized", "text/plain", "Invalid or expired session", ct);
+            return;
+        }
+
+        var status = SystemStatusService.Instance;
+        var body = new JsonObject
+        {
+            ["plc"]     = status.PlcConnected,
+            ["sensor"]  = status.SensorConnected,
+            ["labview"] = HmiDataService.Instance.HasClient,
+            ["bridge"]  = PythonBridgeService.Instance.IsRunning,
+        };
+        await WriteJsonAsync(stream, body.ToJsonString(), ct);
+    }
+
+    /// <summary>
+    /// POST /sim/cascade — simulasi Cascade Control (RK4 + metrik + rekomendasi + review
+    /// AI) dijalankan di Server, lalu kurvanya dikirim ke Client untuk digambar. Sama
+    /// polanya dengan <c>/sim/pid</c>: Client hanya menampilkan apa yang dihitung Server.
+    /// </summary>
+    private async Task HandleCascadeSimulationAsync(
+        NetworkStream stream, Dictionary<string, string> headers, CancellationToken ct)
+    {
+        var session = GetSession(BearerToken(headers));
+        if (session is null)
+        {
+            await WriteSimpleAsync(stream, "401 Unauthorized", "text/plain", "Invalid or expired session", ct);
+            return;
+        }
+
+        var body = await ReadBodyAsync(stream, headers, ct);
+        try
+        {
+            var node = JsonNode.Parse(body) ?? throw new Exception("Invalid input");
+            var (input, history, language) = ControlEngineering.CascadeJson.ReadRequest(node);
+
+            var result = await ControlEngineering.CascadeDesignService.RunLocalAsync(input, history, language, ct);
+            await WriteJsonAsync(stream, ControlEngineering.CascadeJson.WriteResult(result).ToJsonString(), ct);
+        }
+        catch (Exception ex)
+        {
+            await WriteSimpleAsync(stream, "400 Bad Request", "application/json",
+                new JsonObject { ["error"] = ex.Message }.ToJsonString(), ct);
+        }
     }
 
     /// <summary>Nilai double satu parameter query, atau <paramref name="fallback"/> (terima koma maupun titik).</summary>
