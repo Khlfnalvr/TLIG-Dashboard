@@ -49,22 +49,6 @@ public sealed class AiService
     private const int MaxSendAttempts = 3;
     private const int MaxSentHistory = 40;
 
-    // ── Long-term memory (Level 1: rolling summary) ─────────────────────
-    // History yang dikirim ke API dibatasi 40 turn terakhir; selebihnya DULU
-    // hilang diam-diam. Sekarang pesan lama dipadatkan jadi ringkasan
-    // (ConversationSummary) yang ikut dikirim sebagai konteks + disimpan
-    // ChatSessionService ke chat-sessions.json agar bertahan antar restart.
-    private const int CompactThreshold = 60;  // mulai padatkan di atas ini
-    private const int KeepRecent = 40;        // pesan mentah yang dipertahankan
-    private const int MaxSummaryChars = 2000; // ringkasan tidak boleh bengkak
-    private readonly object _historyLock = new();
-
-    /// <summary>
-    /// Ringkasan padat pesan-pesan lama sesi aktif. Disuntik ke system prompt
-    /// tiap request; disinkron dua arah dengan ChatSession.Summary.
-    /// </summary>
-    public string ConversationSummary { get; set; } = "";
-
     // ── History ───────────────────────────────────────────────────────────────
     public IReadOnlyList<ChatMessage> History => _history;
     private readonly List<ChatMessage> _history = new();
@@ -80,212 +64,6 @@ public sealed class AiService
         if (string.IsNullOrEmpty(suffix)) return;
         if (_history.Count > 0 && _history[^1].Role == "assistant")
             _history[^1] = _history[^1] with { Content = _history[^1].Content + suffix };
-    }
-
-    /// <summary>
-    /// Padatkan pesan lama jadi ringkasan bila history melebihi
-    /// <see cref="CompactThreshold"/>. Dipanggil fire-and-forget dari
-    /// ChatSessionService.SaveActive (semua jalur chat bermuara ke sana).
-    /// Mengembalikan (summaryBaru, jumlahPesanDibuang); (null, 0) = tidak ada
-    /// yang dilakukan. Aman gagal: riwayat tidak disentuh bila summarizer gagal.
-    /// </summary>
-    public async Task<(string? Summary, int Dropped)> MaybeCompactAsync(
-        CancellationToken ct = default)
-    {
-        List<ChatMessage> chunk;
-        string prior;
-        lock (_historyLock)
-        {
-            if (_history.Count <= CompactThreshold)
-                return (null, 0);
-            int drop = _history.Count - KeepRecent;
-            chunk = _history.GetRange(0, drop);
-            prior = ConversationSummary ?? "";
-        }
-
-        string? updated = await SummarizeChunkAsync(prior, chunk, ct).ConfigureAwait(false);
-        if (updated is null)
-            return (null, 0);
-
-        lock (_historyLock)
-        {
-            // Sesi bisa berganti / history berubah saat summarizer bekerja —
-            // hanya pangkas bila chunk yang sama masih di depan.
-            if (_history.Count < chunk.Count)
-                return (null, 0);
-            for (int i = 0; i < chunk.Count; i++)
-                if (_history[i].Role != chunk[i].Role || _history[i].Content != chunk[i].Content)
-                    return (updated, 0); // ringkasan tetap dipakai, tapi jangan pangkas
-            _history.RemoveRange(0, chunk.Count);
-            ConversationSummary = updated;
-            return (updated, chunk.Count);
-        }
-    }
-
-    private async Task<string?> SummarizeChunkAsync(
-        string prior, List<ChatMessage> chunk, CancellationToken ct)
-    {
-        var sb = new StringBuilder();
-        if (!string.IsNullOrWhiteSpace(prior))
-            sb.AppendLine(prior.Trim());
-        foreach (var m in chunk)
-        {
-            string line = m.Content.Replace("\n", " ").Trim();
-            if (line.Length > 300) line = line[..300] + "…";
-            sb.Append(m.Role == "user" ? "U: " : "A: ").AppendLine(line);
-        }
-        string condensed = sb.ToString().Trim();
-        if (condensed.Length == 0)
-            return null;
-
-        // Tanpa kunci API tidak bisa memanggil LLM — pakai ringkasan ekstraktif
-        // (topik dari pesan user) agar history tetap terpangkas.
-        if (string.IsNullOrWhiteSpace(ApiKey))
-            return ExtractiveSummary(prior, chunk);
-
-        try
-        {
-            string prompt =
-                "Summarize this conversation excerpt for long-term memory. " +
-                "Write 3-8 dense bullet lines, same language as the conversation, " +
-                "keeping: user goals, key facts/decisions/numbers, open tasks. " +
-                "No preamble, bullets only.\n\n" +
-                (string.IsNullOrWhiteSpace(prior) ? "" : "Existing summary:\n" + prior.Trim() + "\n\n") +
-                "New excerpt:\n" + condensed;
-
-            string? reply = await CallSummarizerAsync(prompt, ct).ConfigureAwait(false);
-            if (string.IsNullOrWhiteSpace(reply))
-                return ExtractiveSummary(prior, chunk);
-            string merged = string.IsNullOrWhiteSpace(prior)
-                ? reply.Trim()
-                : prior.Trim() + "\n" + reply.Trim();
-            if (merged.Length > MaxSummaryChars)
-                merged = merged[^MaxSummaryChars..];
-            return merged;
-        }
-        catch
-        {
-            return ExtractiveSummary(prior, chunk);
-        }
-    }
-
-    private static string ExtractiveSummary(string prior, List<ChatMessage> chunk)
-    {
-        var lines = new List<string>();
-        if (!string.IsNullOrWhiteSpace(prior))
-            lines.AddRange(prior.Trim().Split('\n'));
-        foreach (var m in chunk)
-        {
-            if (m.Role != "user") continue;
-            string line = m.Content.Replace("\n", " ").Trim();
-            if (line.Length == 0) continue;
-            if (line.Length > 120) line = line[..120] + "…";
-            string bullet = "- " + line;
-            if (!lines.Contains(bullet))
-                lines.Add(bullet);
-        }
-        // Cap: baris terbaru yang bertahan.
-        while (string.Join("\n", lines).Length > MaxSummaryChars && lines.Count > 1)
-            lines.RemoveAt(string.IsNullOrWhiteSpace(prior) ? 0 : 1);
-        return string.Join("\n", lines).Trim();
-    }
-
-    /// <summary>
-    /// Satu request non-streaming ke provider aktif tanpa menyentuh _history.
-    /// Trim-friendly: body dibangun via JsonObject seperti Build*Body.
-    /// </summary>
-    private async Task<string?> CallSummarizerAsync(string prompt, CancellationToken ct)
-    {
-        string body = Protocol switch
-        {
-            AiProtocols.Anthropic => new JsonObject
-            {
-                ["model"] = Model,
-                ["system"] = "You compress chat history into memory bullets.",
-                ["messages"] = new JsonArray
-                {
-                    new JsonObject { ["role"] = "user", ["content"] = prompt }
-                },
-                ["stream"] = false,
-                ["max_tokens"] = 512,
-            }.ToJsonString(),
-            AiProtocols.Gemini => new JsonObject
-            {
-                ["contents"] = new JsonArray
-                {
-                    new JsonObject
-                    {
-                        ["role"] = "user",
-                        ["parts"] = new JsonArray
-                        {
-                            new JsonObject { ["text"] = prompt }
-                        }
-                    }
-                },
-                ["generationConfig"] = new JsonObject
-                {
-                    ["maxOutputTokens"] = 512,
-                    ["temperature"] = 0.2,
-                },
-                ["systemInstruction"] = new JsonObject
-                {
-                    ["parts"] = new JsonArray
-                    {
-                        new JsonObject { ["text"] = "You compress chat history into memory bullets." }
-                    }
-                },
-            }.ToJsonString(),
-            _ => new JsonObject
-            {
-                ["model"] = Model,
-                ["messages"] = new JsonArray
-                {
-                    new JsonObject { ["role"] = "system", ["content"] = "You compress chat history into memory bullets." },
-                    new JsonObject { ["role"] = "user", ["content"] = prompt },
-                },
-                ["stream"] = false,
-                ["max_tokens"] = 512,
-                ["temperature"] = 0.2,
-            }.ToJsonString(),
-        };
-
-        using var request = CreateRequest(body);
-        using var response = await _http.SendAsync(request, ct).ConfigureAwait(false);
-        if (!response.IsSuccessStatusCode)
-            return null;
-        string json = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
-        return ExtractNonStreamingText(json);
-    }
-
-    private string? ExtractNonStreamingText(string json)
-    {
-        try
-        {
-            using var doc = JsonDocument.Parse(json);
-            var root = doc.RootElement;
-            if (IsAnthropic)
-            {
-                if (root.TryGetProperty("content", out var content) && content.GetArrayLength() > 0)
-                    return content[0].TryGetProperty("text", out var t) ? t.GetString() : null;
-                return null;
-            }
-            if (IsGemini)
-            {
-                var parts = root.GetProperty("candidates")[0].GetProperty("content").GetProperty("parts");
-                if (parts.GetArrayLength() > 0 && parts[0].TryGetProperty("text", out var t))
-                    return t.GetString();
-                return null;
-            }
-            var choices = root.GetProperty("choices");
-            if (choices.GetArrayLength() == 0) return null;
-            var msg = choices[0].GetProperty("message");
-            return msg.TryGetProperty("content", out var c) ? c.GetString() : null;
-        }
-        catch (Exception ex)
-        {
-            Debug.WriteLine($"[AiService] summary parse failed: {ex.Message}");
-            return null;
-        }
     }
 
     public AiTokenUsage? LastUsage { get; private set; }
@@ -333,7 +111,7 @@ public sealed class AiService
             throw new InvalidOperationException("Nama model belum diset.");
 
         int historyMark = _history.Count;
-        int requestChars = (SystemPrompt?.Length ?? 0) + (ConversationSummary?.Length ?? 0) + userMessage.Length;
+        int requestChars = (SystemPrompt?.Length ?? 0) + userMessage.Length;
         foreach (var m in _history) requestChars += m.Content?.Length ?? 0;
         _history.Add(new ChatMessage("user", userMessage));
 
@@ -533,57 +311,17 @@ public sealed class AiService
     // the Release publish runs with reflection-based JSON serialization disabled
     // (trim-friendly default), which throws NotSupportedException for anonymous types.
 
-    private string EffectiveSystemPrompt()
-    {
-        if (string.IsNullOrWhiteSpace(ConversationSummary))
-            return SystemPrompt ?? "";
-        return (SystemPrompt ?? "").TrimEnd()
-            + "\n\n[Ringkasan percakapan sebelumnya — ingat fakta di dalamnya, jangan minta pengguna mengulang]\n"
-            + ConversationSummary.Trim();
-    }
-
-    /// <summary>
-    /// Jendela history yang muat dalam limit konteks model: berjalan dari pesan
-    /// terbaru ke terlama sampai budget token habis, dengan hard cap
-    /// <see cref="MaxSentHistory"/>. Estimasi kasar 4 char ≈ 1 token.
-    /// </summary>
-    private List<ChatMessage> WindowedHistory(int systemChars)
-    {
-        int limit = AiContextLimits.ForModel(Model, out _);
-        int budget = limit - (4096 + 1000); // completion + margin
-        if (budget < 8000) budget = 8000;
-        int avail = budget - systemChars / 4;
-        if (avail < 1000) avail = 1000;
-
-        var window = new List<ChatMessage>(Math.Min(_history.Count, MaxSentHistory));
-        int used = 0;
-        for (int i = _history.Count - 1; i >= 0 && window.Count < MaxSentHistory; i--)
-        {
-            int t = ((_history[i].Content?.Length ?? 0) / 4) + 4;
-            if (used + t > avail) break;
-            used += t;
-            window.Add(_history[i]);
-        }
-        window.Reverse();
-        return window;
-    }
-
-    private (string System, List<ChatMessage> Window) SnapshotWindow()
-    {
-        lock (_historyLock)
-        {
-            string system = EffectiveSystemPrompt();
-            return (system, WindowedHistory(system.Length));
-        }
-    }
+    private IEnumerable<ChatMessage> RecentHistory() =>
+        _history.Count <= MaxSentHistory
+            ? _history
+            : _history.GetRange(_history.Count - MaxSentHistory, MaxSentHistory);
 
     private string BuildOpenAiBody()
     {
-        var (system, window) = SnapshotWindow();
         var msgs = new JsonArray();
-        if (!string.IsNullOrWhiteSpace(system))
-            msgs.Add((JsonNode)new JsonObject { ["role"] = "system", ["content"] = system });
-        foreach (var m in window)
+        if (!string.IsNullOrWhiteSpace(SystemPrompt))
+            msgs.Add((JsonNode)new JsonObject { ["role"] = "system", ["content"] = SystemPrompt });
+        foreach (var m in RecentHistory())
             msgs.Add((JsonNode)new JsonObject { ["role"] = m.Role, ["content"] = m.Content });
 
         return new JsonObject
@@ -600,15 +338,14 @@ public sealed class AiService
     private string BuildAnthropicBody()
     {
         // Anthropic carries the system prompt as a top-level field, not a message.
-        var (system, window) = SnapshotWindow();
         var msgs = new JsonArray();
-        foreach (var m in window)
+        foreach (var m in RecentHistory())
             msgs.Add((JsonNode)new JsonObject { ["role"] = m.Role, ["content"] = m.Content });
 
         return new JsonObject
         {
             ["model"]      = Model,
-            ["system"]     = system,
+            ["system"]     = SystemPrompt ?? "",
             ["messages"]   = msgs,
             ["stream"]     = true,
             ["max_tokens"] = 4096
@@ -620,9 +357,8 @@ public sealed class AiService
     // Roles are "user"/"model" (not "assistant").
     private string BuildGeminiBody()
     {
-        var (system, window) = SnapshotWindow();
         var contents = new JsonArray();
-        foreach (var m in window)
+        foreach (var m in RecentHistory())
             contents.Add(new JsonObject
             {
                 ["role"]  = m.Role == "assistant" ? "model" : "user",
@@ -634,10 +370,10 @@ public sealed class AiService
             ["contents"]         = contents,
             ["generationConfig"] = new JsonObject { ["maxOutputTokens"] = 4096, ["temperature"] = 0.7 }
         };
-        if (!string.IsNullOrWhiteSpace(system))
+        if (!string.IsNullOrWhiteSpace(SystemPrompt))
             body["systemInstruction"] = new JsonObject
             {
-                ["parts"] = new JsonArray { new JsonObject { ["text"] = system } }
+                ["parts"] = new JsonArray { new JsonObject { ["text"] = SystemPrompt } }
             };
         return body.ToJsonString();
     }
