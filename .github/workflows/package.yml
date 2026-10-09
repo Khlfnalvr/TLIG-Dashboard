@@ -1,0 +1,56 @@
+# Build the release files (installers + update ZIPs) WITHOUT publishing a release.
+#
+# Same procedure as release.yml (release.ps1 -> dotnet publish both flavors, update
+# ZIPs, Inno Setup installers), but the output is only uploaded as a workflow
+# artifact so it can be downloaded and attached to a GitHub Release by hand:
+#
+#   TLIGDashboard-<Flavor>-v<VERSION>-Setup.exe
+#   TLIGDashboard-<Flavor>-v<VERSION>-Update.zip
+#
+# Runs on a claude/** push ONLY when the commit message contains "[package]", or on
+# manual dispatch — Windows minutes are not spent on ordinary pushes.
+
+name: Package
+
+on:
+  push:
+    branches: [ 'claude/**' ]
+  workflow_dispatch:
+
+jobs:
+  package:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[package]')
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.x'
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup --no-progress -y
+
+      - name: Build installers + update ZIPs
+        shell: pwsh
+        run: .\release.ps1
+
+      - name: List artifacts
+        shell: pwsh
+        run: |
+          Get-ChildItem publish -File |
+            Select-Object Name, @{N='Size (MB)'; E={ [math]::Round($_.Length/1MB,1) }} |
+            Format-Table -AutoSize
+
+      - name: Upload installers + update ZIPs
+        uses: actions/upload-artifact@v4
+        with:
+          name: TLIGDashboard-release-files
+          path: |
+            publish/*-Setup.exe
+            publish/*-Update.zip
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30

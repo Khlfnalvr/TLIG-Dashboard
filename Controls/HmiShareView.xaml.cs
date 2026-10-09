@@ -55,9 +55,9 @@ public sealed partial class HmiShareView : UserControl
         if (_clientMode)
         {
             // Client: display the HMI stream received from the server instead of
-            // capturing a local screen. No LabVIEW TCP listener is opened here — TCP to
-            // LabVIEW exists only on the Server; the Client's RUN/STOP reach the plant
-            // through the Server (/sim/pid/run) and its readings come back via the relay.
+            // capturing a local screen. Client never opens its own LabVIEW TCP link —
+            // commands go to the Server (PythonBridgeService → /sim/pid/run) and the
+            // numbers come back from it (HmiRelayService → /hmi/latest).
             SourceSelector.Visibility       = Visibility.Collapsed;
             RefreshSourcesButton.Visibility = Visibility.Collapsed;
             ShowPlaceholder(Lang.Hmi_WaitingStream);

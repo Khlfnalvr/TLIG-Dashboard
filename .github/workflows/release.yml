@@ -85,80 +85,17 @@ jobs:
             Write-Host "OK  publish/$flavor/PIDtest.py  (48 byte / 6 double)"
           }
 
+      # Catatan rilis dibaca dari RELEASE_NOTES.md di commit yang dirilis, bukan ditulis
+      # di workflow ini. Teks yang dulu di-hardcode di sini selalu tertinggal satu rilis
+      # (dan bentrok tiap kali dua branch menulis catatannya sendiri). {VERSION} di file
+      # diganti nomor versi dari csproj.
       - name: Write release notes
         shell: pwsh
         run: |
           $v = '${{ steps.ver.outputs.version }}'
-          $lines = @(
-            '## Angka LabVIEW kini ikut terlihat di dashboard Client',
-            '',
-            'Selama ini kartu LabVIEW Data -- Flow Tube, PV, Flow Shell, Temp. Shell out --',
-            'hanya ada di dashboard yang berjalan di PC lab. Mahasiswa yang memakai laptop',
-            'sendiri tidak bisa melihat angkanya sama sekali.',
-            '',
-            '### Penyebabnya',
-            '',
-            'VI LabVIEW membuka koneksinya ke 127.0.0.1:6001, alamat loopback. Hanya dashboard',
-            'yang berjalan di PC yang sama dengan VI yang bisa berada di jalur itu, jadi listener',
-            'milik laptop mahasiswa selamanya sepi. Ini tidak bisa diperbaiki dengan mengubah',
-            'port atau IP di Client.',
-            '',
-            '### Perbaikannya',
-            '',
-            'Server sekarang menyediakan satu alamat baca-saja (GET /hmi/latest) berisi angka',
-            'terkini yang ia terima dari VI. Client menanyakannya sekali per detik, jadi angka',
-            'di laptop mengikuti PC lab dengan jeda di bawah dua detik.',
-            '',
-            'Polanya sama dengan progres live yang sudah ada di v1.0.8: Server membaca keadaan',
-            'lokalnya, Client memakai jawabannya apa adanya.',
-            '',
-            '### Siapa yang melihat angkanya',
-            '',
-            'Bukan semua orang, dan penyaringannya dikerjakan Server dari identitas login --',
-            'bukan oleh aplikasi di laptop, jadi tidak ada permintaan yang bisa diubah untuk',
-            'menembusnya.',
-            '',
-            '- Dosen, Asisten, dan Admin: SELALU melihat, di laptop mana pun. Mereka pengawas,',
-            '  dan sulit mengambil langkah tanpa melihat suhu rig.',
-            '- Mahasiswa: HANYA saat dirinya sendiri yang sedang memegang giliran. Yang',
-            '  mengantre, yang gilirannya habis kena batas 30 menit, dan yang kendalinya',
-            '  dicabut sama-sama berhenti melihat angkanya.',
-            '',
-            'Mahasiswa yang belum gilirannya tetap melihat kartunya, dengan keterangan bahwa',
-            'angka akan muncul saat gilirannya tiba -- kartunya tidak hilang timbul.',
-            '',
-            'Kalau VI dimatikan atau angkanya berhenti mengalir, kartu di Client berkata',
-            '"Tidak tersambung" dan MENGOSONGKAN angkanya, bukan memajang nilai lama yang diam.',
-            '',
-            'Kartunya muncul di dua halaman Client: Dashboard dan Live View.',
-            '',
-            '### Yang TIDAK berubah',
-            '',
-            'Dashboard PC lab tidak berubah sedikit pun, termasuk perilaku kartunya saat VI',
-            'dimatikan. Jalur valve/PID (paket 48 byte port 6000, PIDtest.py, pid_bridge.json)',
-            'tidak disentuh. Logika antrian giliran tidak disentuh. Tidak ada teks lama yang',
-            'berubah, tidak ada tombol yang pindah, dan bentuk database tidak berubah sama',
-            'sekali. VI LabVIEW juga tidak perlu diubah.',
-            '',
-            '### Siapa yang perlu update',
-            '',
-            'PC SERVER DAN LAPTOP CLIENT, keduanya. Alamat baru itu ada di Server, jadi Client',
-            'v1.0.9 yang menyambung ke Server v1.0.8 akan menampilkan kartu yang berkata server',
-            'tidak terjangkau. Client v1.0.8 yang menyambung ke Server v1.0.9 tidak rusak --',
-            'kartunya saja yang tetap tersembunyi seperti sebelumnya.',
-            '',
-            '### Cara memasang',
-            '',
-            "- Pemasangan baru: unduh TLIGDashboard-Server-v$v-Setup.exe untuk PC lab dan",
-            "  TLIGDashboard-Client-v$v-Setup.exe untuk laptop mahasiswa.",
-            '- Sudah terpasang: buka aplikasi, tombol notifikasi pembaruan akan muncul sendiri.',
-            '  Pembaruan tidak dipasang diam-diam, harus diklik dulu.',
-            '',
-            'Kalau perlu mundur, pasang kembali installer v1.0.8 -- rilis itu tetap ada beserta',
-            'seluruh asetnya, dan karena bentuk database tidak berubah, tidak ada data yang',
-            'hilang saat mundur.'
-          )
-          Set-Content -Path release-notes.md -Value $lines -Encoding utf8
+          if (-not (Test-Path RELEASE_NOTES.md)) { throw 'RELEASE_NOTES.md tidak ditemukan' }
+          (Get-Content RELEASE_NOTES.md -Raw).Replace('{VERSION}', $v) |
+            Set-Content -Path release-notes.md -Encoding utf8
 
       - name: Create GitHub Release
         shell: pwsh

@@ -2226,6 +2226,12 @@ public sealed partial class MainWindow : Window
             TabOpcUa.Visibility   = Visibility.Collapsed;
             PanelOpcUa.Visibility = Visibility.Collapsed;
             ConnAiTabs.SelectedItem = TabShare;
+
+            // Lampu PLC/Sensor di panel "Status System" disalin ServerStatusRelay dari
+            // GET /system/status — keadaan yang dilihat Server, bukan laptop ini.
+            ShareClient.Instance.ConnectionChanged += (_, _) =>
+                DispatcherQueue.TryEnqueue(UpdateOpcStatusDot);
+            Services.ServerStatusRelay.Instance.Start();
             return;
         }
 
@@ -2238,6 +2244,12 @@ public sealed partial class MainWindow : Window
             UpdateOpcStatusDot();
             RigStatusService.Instance.Refresh();   // panel Status Sistem: PLC/Sensor
         });
+
+        // VI yang menyambung/putus dari listener 6001 adalah jalur data sensor yang
+        // sebenarnya: hitung ulang seketika, tidak menunggu detak RigStatusService. Keadaan
+        // inilah yang direlay ke Client lewat /system/status.
+        HmiDataService.Instance.ClientConnectedChanged += _ =>
+            DispatcherQueue.TryEnqueue(RigStatusService.Instance.Refresh);
     }
 
     private void OpcUaFlyout_Opened(object sender, object e)
@@ -2368,7 +2380,8 @@ public sealed partial class MainWindow : Window
         bool isAi    = ReferenceEquals(ConnAiTabs.SelectedItem, TabAiApi);
         bool isShare = ReferenceEquals(ConnAiTabs.SelectedItem, TabShare);
 
-        PanelOpcUa.Visibility = (Services.BuildInfo.IsServer && !isAi && !isShare)
+        // Tab PLC hanya ada di Server; Client tidak pernah menyambung langsung ke LabVIEW.
+        PanelOpcUa.Visibility = (!isAi && !isShare && Services.BuildInfo.IsServer)
             ? Visibility.Visible : Visibility.Collapsed;
         PanelAiApi.Visibility = isAi ? Visibility.Visible : Visibility.Collapsed;
 

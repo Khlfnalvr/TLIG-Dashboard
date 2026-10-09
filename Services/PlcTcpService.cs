@@ -93,7 +93,12 @@ public sealed class PlcTcpService : IDisposable
     /// <see cref="IsConnected"/> / <see cref="Connected"/> for the actual peer.
     /// </summary>
     public Task<bool> StartAsync(bool serverMode, string host, int port)
-        => serverMode ? ListenAsync(host, port) : ConnectAsync(host, port);
+    {
+        // Client tidak pernah membuka TCP sendiri ke LabVIEW/PLC: satu-satunya jalurnya
+        // adalah Server (lewat tunnel), yang merelay data dan meneruskan perintah.
+        if (BuildInfo.IsClient) return Task.FromResult(false);
+        return serverMode ? ListenAsync(host, port) : ConnectAsync(host, port);
+    }
 
     public async Task<bool> ConnectAsync(string host, int port)
     {

@@ -119,7 +119,7 @@ public static class ProcessErrorService
     /// </summary>
     public static ProcessComparison Build()
     {
-        var live = HmiDataService.Instance.Snapshot();
+        var live = LiveSnapshot();
         var sim  = CascadeSessionService.Instance.LastResult;
 
         var pairs = new List<ProcessErrorPair>();
@@ -155,6 +155,26 @@ public static class ProcessErrorService
         return new ProcessComparison { Live = live, Simulation = sim, Pairs = pairs };
     }
 
+    /// <summary>
+    /// Data live LabVIEW. Server membaca listener 6001-nya sendiri; Client memakai angka yang
+    /// direlay Server (<see cref="HmiRelayService"/>, <c>/hmi/latest</c>) — Client tidak pernah
+    /// membuka soket ke LabVIEW. Angka relay yang basi / tidak berhak dianggap tidak ada, supaya
+    /// AI tidak menghitung error dari bacaan lama.
+    /// </summary>
+    private static IReadOnlyList<HmiDatum> LiveSnapshot()
+    {
+        if (BuildInfo.IsServer) return HmiDataService.Instance.Snapshot();
+        return HmiRelayService.Instance.Latest is { IsLive: true } latest ? latest.Values : Array.Empty<HmiDatum>();
+    }
+
+    /// <summary>
+    /// Client: ambil bacaan relay terbaru dari Server sebelum konteks chat disusun, karena
+    /// timer relay hanya berjalan selama kartu LabVIEW Data tampil. Server: tidak ada yang
+    /// perlu diambil.
+    /// </summary>
+    public static Task RefreshLiveAsync() =>
+        BuildInfo.IsClient ? HmiRelayService.Instance.RefreshAsync() : Task.CompletedTask;
+
     // ── System-prompt context ─────────────────────────────────────────────────
 
     /// <summary>
@@ -176,7 +196,9 @@ public static class ProcessErrorService
         if (c.HasLive)
         {
             sb.AppendLine();
-            sb.AppendLine("A. Data live LabVIEW/HMI (TCP 6001):");
+            sb.AppendLine(BuildInfo.IsServer
+                ? "A. Data live LabVIEW/HMI (TCP 6001):"
+                : "A. Data live LabVIEW/HMI (direlay Server dari TCP 6001):");
             foreach (var d in c.Live)
                 sb.AppendLine($"   - {d.Key} = {d.Value}");
         }
@@ -241,8 +263,11 @@ public static class ProcessErrorService
         var c = Build();
 
         if (!c.HasLive)
-            return "Belum ada data live dari LabVIEW (TCP 6001) yang masuk, jadi errornya belum bisa dihitung. " +
-                   "Jalankan VI-nya dulu supaya dashboard menerima baris `DATA,...`.";
+            return BuildInfo.IsServer
+                ? "Belum ada data live dari LabVIEW (TCP 6001) yang masuk, jadi errornya belum bisa dihitung. " +
+                  "Jalankan VI-nya dulu supaya dashboard menerima baris `DATA,...`."
+                : "Belum ada data live LabVIEW yang direlay Server, jadi errornya belum bisa dihitung. " +
+                  "Pastikan VI di PC Server berjalan, dan (untuk Mahasiswa) Anda sedang memegang giliran plant.";
 
         if (!c.HasSimulation)
             return "Belum ada hasil simulasi System Model untuk dibandingkan. Tekan **RUN** dulu, " +

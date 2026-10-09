@@ -103,6 +103,22 @@ public sealed class HmiRelayService
     private void Publish(HmiLatest? latest)
     {
         Latest = latest;
+        if (latest is { Allowed: true, HasMetrics: true })
+            MirrorMetrics(latest);
         try { Updated?.Invoke(latest); } catch { }
+    }
+
+    /// <summary>
+    /// Menyalin metrik PLC yang direlay ke <see cref="PidMetricsService"/> lokal — di Client
+    /// itulah satu-satunya sumbernya. Hanya saat berubah, supaya pelanggan
+    /// <c>MetricsUpdated</c> tidak dibangunkan tiap detik.
+    /// </summary>
+    private static void MirrorMetrics(HmiLatest latest)
+    {
+        var pm = PidMetricsService.Instance;
+        if (pm.RiseTime == latest.RiseTime && pm.Overshoot == latest.Overshoot &&
+            pm.Settling == latest.Settling && pm.SteadyStateError == latest.SteadyStateError)
+            return;
+        pm.Update(latest.RiseTime, latest.Overshoot, latest.Settling, latest.SteadyStateError);
     }
 }

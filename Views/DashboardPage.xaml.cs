@@ -1328,6 +1328,7 @@ public sealed partial class DashboardPage : Page
         // dihitung di C# (lihat ProcessErrorService). ApplyActive di atas mereset system prompt
         // tiap kirim, jadi konteks ini sekali-pakai — tidak menumpuk, tidak masuk riwayat
         // maupun tampilan chat.
+        await Services.ControlEngineering.ProcessErrorService.RefreshLiveAsync();
         string liveContext = Services.ControlEngineering.ProcessErrorService.BuildChatContext();
         if (!string.IsNullOrEmpty(liveContext))
             _ai.SystemPrompt += "\n\n" + liveContext;

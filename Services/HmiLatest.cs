@@ -29,15 +29,15 @@ public sealed class HmiLatest
 
     public IReadOnlyList<HmiDatum> Values { get; init; } = [];
 
-    /// <summary>
-    /// Status rig menurut panel "Status Sistem" Server: PLC online. Dikirim ke <b>semua</b>
-    /// pemanggil, termasuk yang belum berhak melihat angka — ini hanya "rig hidup atau
-    /// tidak", bukan telemetri. <c>null</c> = Server versi lama yang belum mengirimnya.
-    /// </summary>
-    public bool? RigPlc { get; init; }
+    // Metrik step-response yang dilaporkan PLC ke Server (PidMetricsService di Server).
+    // Ikut direlay supaya tugas Challenge di Client terisi dari plant yang sama; null =
+    // Server belum menerima metrik itu.
+    public double? RiseTime         { get; init; }
+    public double? Overshoot        { get; init; }
+    public double? Settling         { get; init; }
+    public double? SteadyStateError { get; init; }
 
-    /// <summary>Status rig menurut panel Server: sensor aktif (bacaan LabVIEW masih baru).</summary>
-    public bool? RigSensor { get; init; }
+    public bool HasMetrics => RiseTime.HasValue || Overshoot.HasValue || Settling.HasValue || SteadyStateError.HasValue;
 
     /// <summary>
     /// Angkanya layak ditampilkan: berhak, VI tersambung, ada isinya, dan bacaannya
@@ -84,12 +84,7 @@ public sealed class HmiLatest
     /// </summary>
     public static HmiLatest FromJson(JsonNode node)
     {
-        // Status rig dibaca lebih dulu: ia ikut dikirim walau pemanggilnya tidak berhak.
-        bool? rigPlc    = (bool?)node["rig"]?["plc"];
-        bool? rigSensor = (bool?)node["rig"]?["sensor"];
-
-        if ((bool?)node["allowed"] != true)
-            return new HmiLatest { Allowed = false, RigPlc = rigPlc, RigSensor = rigSensor };
+        if ((bool?)node["allowed"] != true) return new HmiLatest { Allowed = false };
 
         var values = new List<HmiDatum>();
         if (node["values"] is JsonArray arr)
@@ -100,14 +95,17 @@ public sealed class HmiLatest
                 values.Add(new HmiDatum(key, (string?)item?["v"] ?? ""));
             }
 
+        var metrics = node["metrics"];
         return new HmiLatest
         {
             Allowed = true,
             Linked  = (bool?)node["linked"] ?? false,
             AgeMs   = (long?)node["ageMs"] ?? -1,
             Values  = values,
-            RigPlc    = rigPlc,
-            RigSensor = rigSensor,
+            RiseTime         = (double?)metrics?["riseTime"],
+            Overshoot        = (double?)metrics?["overshoot"],
+            Settling         = (double?)metrics?["settling"],
+            SteadyStateError = (double?)metrics?["sse"],
         };
     }
 }
