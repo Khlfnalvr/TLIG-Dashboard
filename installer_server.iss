@@ -4,7 +4,7 @@
 ; ============================================================
 
 #define AppName      "TLIG Dashboard Server"
-#define AppVersion   "2.2.1"
+#define AppVersion   "2.2.2"
 #define AppPublisher "ICO Laboratory"
 #define AppExe       "TLIGDashboard.Server.exe"
 
@@ -29,7 +29,7 @@ SolidCompression=yes
 WizardStyle=modern
 MinVersion=10.0.17763
 PrivilegesRequired=admin
-VersionInfoVersion=2.2.1.0
+VersionInfoVersion=2.2.2.0
 VersionInfoProductName={#AppName}
 VersionInfoCompany={#AppPublisher}
 VersionInfoDescription=TLIG Dashboard Server — broadcasts camera + HMI and hosts the AI proxy
