@@ -35,7 +35,15 @@ $VersionNode = $ProjectXml.SelectSingleNode('//PropertyGroup/Version')
 if (-not $VersionNode) { throw "Version tidak ditemukan di $Project" }
 $Version      = $VersionNode.InnerText.Trim()
 $PublishRoot  = Join-Path $PSScriptRoot "publish"
-$InnoCompiler = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+# Inno Setup bisa terpasang untuk semua pengguna (Program Files, juga cara choco di CI)
+# atau per-user (winget tanpa admin -> %LOCALAPPDATA%\Programs). Pakai yang ditemukan.
+$InnoCandidates = @(
+    "C:\Program Files (x86)\Inno Setup 6\ISCC.exe",
+    "C:\Program Files\Inno Setup 6\ISCC.exe",
+    (Join-Path $env:LOCALAPPDATA "Programs\Inno Setup 6\ISCC.exe")
+)
+$InnoCompiler = $InnoCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+if (-not $InnoCompiler) { $InnoCompiler = $InnoCandidates[0] }   # untuk pesan peringatan di bawah
 
 $Flavors = if ($Flavor -eq 'Both') { @('Server', 'Client') } else { @($Flavor) }
 

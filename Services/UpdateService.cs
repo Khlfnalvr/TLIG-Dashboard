@@ -88,8 +88,8 @@ public static class UpdateService
             if (release is null)
                 return Err("Invalid API response");
 
-            var latestTag = release.TagName.TrimStart('v');
-            var current   = currentVersion.TrimStart('v');
+            var latestTag = NormalizeVersion(release.TagName);
+            var current   = NormalizeVersion(currentVersion);
 
             // Pick the ZIP that matches this flavor (Server or Client) and contains
             // "Update" in its name. Fall back to any flavor-matched ZIP, then any ZIP.
@@ -227,6 +227,20 @@ public static class UpdateService
 
     private static UpdateCheckInfo Err(string msg) =>
         new() { Result = UpdateCheckResult.Error, ErrorMessage = msg };
+
+    /// <summary>
+    /// "v2.2.1", "V2.2" and "2.2.1+72bf1b3…" all become plain "2.2.1" / "2.2" so
+    /// <see cref="Version.TryParse(string?, out Version?)"/> can compare them numerically.
+    /// The "+hash" is the source revision the .NET SDK appends to InformationalVersion;
+    /// left in place it forced an ordinal string compare (where "2.10" sorts before "2.9"),
+    /// and an upper-case "V" tag was never stripped at all.
+    /// </summary>
+    private static string NormalizeVersion(string version)
+    {
+        var v = version.Trim().TrimStart('v', 'V');
+        int plus = v.IndexOf('+');
+        return plus >= 0 ? v[..plus] : v;
+    }
 
     private static bool IsNewer(string latest, string current)
     {
