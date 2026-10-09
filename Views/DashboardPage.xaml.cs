@@ -743,7 +743,12 @@ public sealed partial class DashboardPage : Page
         _ = ModelPicker.ReloadAsync();
 
         if (_clientMode)
+        {
             EnterDashboardCameraClientMode();
+            RigStatusService.Instance.CameraStreamChanged -= OnClientCameraStreamChanged;
+            RigStatusService.Instance.CameraStreamChanged += OnClientCameraStreamChanged;
+            ApplyClientCameraLayout(RigStatusService.Instance.CameraStreamLive);
+        }
         else
             await PopulateDashboardCameraListAsync();
     }
@@ -759,6 +764,7 @@ public sealed partial class DashboardPage : Page
         if (_clientMode)
         {
             ShareClient.Instance.FrameReceived -= OnRemoteDashboardCameraFrame;
+            RigStatusService.Instance.CameraStreamChanged -= OnClientCameraStreamChanged;
             return;
         }
 
@@ -784,6 +790,22 @@ public sealed partial class DashboardPage : Page
 
         ShareClient.Instance.FrameReceived -= OnRemoteDashboardCameraFrame;
         ShareClient.Instance.FrameReceived += OnRemoteDashboardCameraFrame;
+    }
+
+    // Raised on the UI thread by RigStatusService.
+    private void OnClientCameraStreamChanged(bool live) => ApplyClientCameraLayout(live);
+
+    /// <summary>
+    /// Client: while the Server is not broadcasting its camera (never shared, or stopped),
+    /// the camera card is dropped and the HMI takes both columns; it comes back with the
+    /// first frame. The Client cannot open a camera of its own, so an empty card would only
+    /// waste half the panel on "Waiting for the server stream…".
+    /// </summary>
+    private void ApplyClientCameraLayout(bool cameraLive)
+    {
+        DashboardCameraCard.Visibility = cameraLive ? Visibility.Visible : Visibility.Collapsed;
+        Grid.SetColumn(DashboardHmiCard, cameraLive ? 1 : 0);
+        Grid.SetColumnSpan(DashboardHmiCard, cameraLive ? 1 : 2);
     }
 
     private void OnRemoteDashboardCameraFrame(byte channel, byte[] bytes)

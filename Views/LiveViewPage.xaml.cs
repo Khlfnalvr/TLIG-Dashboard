@@ -83,7 +83,12 @@ public sealed partial class LiveViewPage : Page
         ApplyColumnRatio();
 
         if (_clientMode)
+        {
             EnterCameraClientMode();
+            RigStatusService.Instance.CameraStreamChanged -= OnClientCameraStreamChanged;
+            RigStatusService.Instance.CameraStreamChanged += OnClientCameraStreamChanged;
+            ApplyClientCameraLayout(RigStatusService.Instance.CameraStreamLive);
+        }
         else if (_mediaCapture is null)
             await PopulateCameraListAsync();
         else
@@ -104,6 +109,23 @@ public sealed partial class LiveViewPage : Page
         // so a one-time hook would be dropped the first time we navigate away.)
         ShareClient.Instance.FrameReceived -= OnRemoteCameraFrame;
         ShareClient.Instance.FrameReceived += OnRemoteCameraFrame;
+    }
+
+    // Raised on the UI thread by RigStatusService.
+    private void OnClientCameraStreamChanged(bool live) => ApplyClientCameraLayout(live);
+
+    /// <summary>
+    /// Client: while the Server is not broadcasting its camera, the camera panel and the
+    /// splitter are dropped and the HMI spans the whole row; both come back with the first
+    /// frame. Column widths are left alone, so the user's split is restored as it was.
+    /// </summary>
+    private void ApplyClientCameraLayout(bool cameraLive)
+    {
+        var vis = cameraLive ? Visibility.Visible : Visibility.Collapsed;
+        LiveCameraPanel.Visibility = vis;
+        LiveHmiSplitter.Visibility = vis;
+        Grid.SetColumn(HmiPanel, cameraLive ? 2 : 0);
+        Grid.SetColumnSpan(HmiPanel, cameraLive ? 1 : 3);
     }
 
     private void OnRemoteCameraFrame(byte channel, byte[] bytes)
@@ -140,7 +162,10 @@ public sealed partial class LiveViewPage : Page
         _isPageLoaded = false;
 
         if (_clientMode)
+        {
             ShareClient.Instance.FrameReceived -= OnRemoteCameraFrame;
+            RigStatusService.Instance.CameraStreamChanged -= OnClientCameraStreamChanged;
+        }
         // Camera preview and broadcast keep running in the background.
     }
 

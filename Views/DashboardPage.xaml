@@ -836,7 +836,9 @@
                 </Grid>
             </Border>
 
-            <!-- Top section: 2 columns — Live Camera | HMI -->
+            <!-- Top section: 2 columns — Live Camera | HMI. On the Client the camera card is
+                 dropped (and the HMI spans both columns) while the Server is not broadcasting
+                 its camera — see ApplyClientCameraLayout(). -->
             <Grid Grid.Row="1" ColumnSpacing="8" Margin="8,8,8,4">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
@@ -844,7 +846,8 @@
                 </Grid.ColumnDefinitions>
 
                 <!-- Live Camera feed -->
-                <Border Grid.Column="0"
+                <Border x:Name="DashboardCameraCard"
+                        Grid.Column="0"
                         Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                         BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                         BorderThickness="1"
@@ -929,7 +932,8 @@
                 </Border>
 
                 <!-- HMI Heat Exchanger -->
-                <Border Grid.Column="1"
+                <Border x:Name="DashboardHmiCard"
+                        Grid.Column="1"
                         Style="{StaticResource DashCardStyle}"
                         Padding="8">
                     <controls:HmiShareView/>

@@ -41,6 +41,25 @@ public sealed class RigStatusService
     private Microsoft.UI.Dispatching.DispatcherQueue? _ui;
     private DateTime _lastCameraFrameUtc = DateTime.MinValue;
 
+    /// <summary>
+    /// Client: the Server is broadcasting its camera right now (a frame arrived within the
+    /// last few seconds). False until the first frame, and again once frames stop — e.g. the
+    /// Server never ticked "Share Camera", or stopped it. Pages use it to drop the camera card
+    /// and give the HMI the full width.
+    /// </summary>
+    public bool CameraStreamLive { get; private set; }
+
+    /// <summary>Raised on the UI thread whenever <see cref="CameraStreamLive"/> flips.</summary>
+    public event Action<bool>? CameraStreamChanged;
+
+    private void SetCameraLive(bool live)
+    {
+        App.Status.CameraConnected = live;
+        if (CameraStreamLive == live) return;
+        CameraStreamLive = live;
+        try { CameraStreamChanged?.Invoke(live); } catch { }
+    }
+
     /// <summary>Mulai memantau. Dipanggil sekali dari thread UI saat jendela utama dibuat.</summary>
     public void Start()
     {
@@ -74,9 +93,9 @@ public sealed class RigStatusService
         }
 
         // Client: halaman hanya pernah menyalakan lampu kamera; di sini lampunya dipadamkan
-        // lagi begitu siaran dari Server berhenti.
+        // lagi (dan kartu kamera disembunyikan) begitu siaran dari Server berhenti.
         if (DateTime.UtcNow - _lastCameraFrameUtc > CameraWindow)
-            status.CameraConnected = false;
+            SetCameraLive(false);
     }
 
     private void OnRemoteFrame(byte channel, byte[] _)
@@ -87,6 +106,6 @@ public sealed class RigStatusService
         var now = DateTime.UtcNow;
         bool resumed = now - _lastCameraFrameUtc > CameraWindow;
         _lastCameraFrameUtc = now;
-        if (resumed) _ui?.TryEnqueue(() => App.Status.CameraConnected = true);
+        if (resumed) _ui?.TryEnqueue(() => SetCameraLive(true));
     }
 }
