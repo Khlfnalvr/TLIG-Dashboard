@@ -68,7 +68,8 @@ namespace TLIGDashboard.Models
         public string          Title         { get; set; } = string.Empty;
         public string          Description   { get; set; } = string.Empty;
         public string          Instructions  { get; set; } = string.Empty;
-        public SimulationType  TargetSystem  { get; set; } = SimulationType.Flow;
+        // The HE rig controls temperature only, so every challenge targets it.
+        public SimulationType  TargetSystem  { get; set; } = SimulationType.Temperature;
         public DateTime        CreatedAt     { get; set; } = DateTime.Now;
         public DateTime?       Deadline      { get; set; }
         public ChallengeStatus Status        { get; set; } = ChallengeStatus.Draft;
@@ -93,7 +94,7 @@ namespace TLIGDashboard.Models
             SimulationType.Flow        => "Flow",
             SimulationType.Level       => "Level",
             SimulationType.Temperature => "Temperature",
-            _                          => "Flow"
+            _                          => "Temperature"
         };
     }
 

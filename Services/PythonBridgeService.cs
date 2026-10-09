@@ -184,7 +184,20 @@ public sealed class PythonBridgeService : IDisposable
         if (pump is { } p) _pump = p;
         if (cmd  is { } c) _cmd  = c;
         if (BuildInfo.IsClient) { ForwardToServer("sync"); return; }
+        EndTraceIfHalting();
         WriteParamsFile();
+    }
+
+    /// <summary>
+    /// STOP dan E-STOP menutup kurva hasil PLC untuk grafik (kurvanya sendiri tetap
+    /// dipajang sampai RUN berikutnya). Ditaruh di sini, bukan di tiap tombol, karena semua
+    /// jalur berhenti — tombol Dashboard, halaman Parameter, perintah Client, dan pemutusan
+    /// otomatis — berakhir di salah satu method bridge ini.
+    /// </summary>
+    private void EndTraceIfHalting()
+    {
+        if (_cmd is CmdStop or CmdEStop)
+            PlcTraceService.Instance.End();
     }
 
     /// <summary>
@@ -217,6 +230,7 @@ public sealed class PythonBridgeService : IDisposable
         // hasilnya dilaporkan lewat StatusChanged). Jalur pemutusan otomatis selalu
         // berjalan di Server, jadi nilai balik yang benar-benar dipakai ada di bawah.
         if (BuildInfo.IsClient) { ForwardToServer("sync"); return true; }
+        EndTraceIfHalting();
         return WriteParamsFile();
     }
 
@@ -244,6 +258,7 @@ public sealed class PythonBridgeService : IDisposable
     {
         _run = false;
         if (BuildInfo.IsClient) { ForwardToServer("stop"); return; }
+        PlcTraceService.Instance.End();
         WriteParamsFile();   // a still-looping script sees run=false and exits cleanly…
         KillProcess();       // …and we make it immediate regardless.
     }
@@ -266,6 +281,18 @@ public sealed class PythonBridgeService : IDisposable
         double kp = _kp, ki = _ki, kd = _kd, sp = _sp, pump = _pump;
         int    cmd = _cmd;
 
+        // Untuk RUN, bawa juga sisa masukan simulasi cascade (gain loop dalam + gangguan) supaya
+        // Server bisa menggambar simulasi yang sama persis dengan yang dilihat Client. Hanya
+        // dibaca di sini, di thread pemanggil: sesi cascade tidak thread-safe.
+        double? innerKp = null, innerKi = null, disturbance = null;
+        if (action == "run")
+        {
+            var cascade = App.CascadeSession;
+            innerKp     = cascade.InnerKp;
+            innerKi     = cascade.InnerKi;
+            disturbance = cascade.Disturbance;
+        }
+
         if (string.IsNullOrWhiteSpace(AuthClient.NormalizeHost(host)) || string.IsNullOrWhiteSpace(token))
         {
             // A background parameter sync stays silent; an explicit RUN/STOP reports why nothing happened.
@@ -280,7 +307,8 @@ public sealed class PythonBridgeService : IDisposable
 
         _ = Task.Run(async () =>
         {
-            bool ok = await PidRunClient.PostAsync(host, token, action, kp, ki, kd, sp, pump, cmd);
+            bool ok = await PidRunClient.PostAsync(host, token, action, kp, ki, kd, sp, pump, cmd,
+                                                   innerKp, innerKi, disturbance);
             switch (action)
             {
                 case "run":
@@ -482,7 +510,8 @@ public static class PidRunClient
     /// <summary>POSTs one command; returns true on a 2xx response, false on any error.</summary>
     public static async Task<bool> PostAsync(
         string host, string token, string action, double kp, double ki, double kd, double sp,
-        double pump, int cmd)
+        double pump, int cmd,
+        double? innerKp = null, double? innerKi = null, double? disturbance = null)
     {
         if (string.IsNullOrWhiteSpace(AuthClient.NormalizeHost(host)) || string.IsNullOrWhiteSpace(token))
             return false;
@@ -499,6 +528,10 @@ public static class PidRunClient
                 ["pump"] = pump,
                 ["cmd"] = cmd,
             };
+            // Hanya dikirim untuk RUN; absen = Server memakai nilai sesinya sendiri.
+            if (innerKp is { } ikp)     body["ikp"]  = ikp;
+            if (innerKi is { } iki)     body["iki"]  = iki;
+            if (disturbance is { } dst) body["dist"] = dst;
 
             using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
             using var req  = new HttpRequestMessage(HttpMethod.Post, $"{AuthClient.BaseUrl(host)}{ShareProtocol.PidRunPath}")

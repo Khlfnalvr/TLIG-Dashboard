@@ -40,6 +40,7 @@ public sealed partial class CascadeControlPage : Page
     {
         Loaded -= OnLoaded;
         _ = RespChart.InitializeAsync();
+        _ = RespChartInner.InitializeAsync();
     }
 
     protected override void OnNavigatedTo(Microsoft.UI.Xaml.Navigation.NavigationEventArgs e)
@@ -131,11 +132,14 @@ public sealed partial class CascadeControlPage : Page
         s.RunFailed             += OnRunFailed;
         s.RecommendationCleared -= OnRecommendationCleared;
         s.RecommendationCleared += OnRecommendationCleared;
+        s.RemoteInputsApplied   -= OnRemoteInputs;
+        s.RemoteInputsApplied   += OnRemoteInputs;
     }
 
     private void UnsubscribeSession()
     {
         var s = App.CascadeSession;
+        s.RemoteInputsApplied   -= OnRemoteInputs;
         s.ResultChanged         -= OnResultChanged;
         s.RunningChanged        -= OnRunningChanged;
         s.RunFailed             -= OnRunFailed;
@@ -148,6 +152,10 @@ public sealed partial class CascadeControlPage : Page
             CascadeErrorInfoBar.IsOpen = false;
             RenderResult(result);
         });
+
+    // Run salinan dari Client: tarik kotak masukan dari sesi supaya sama dengan kurva yang digambar.
+    private void OnRemoteInputs(object? sender, System.EventArgs e)
+        => DispatcherQueue.TryEnqueue(PullInputs);
 
     private void OnRunningChanged(object? sender, bool running)
         => DispatcherQueue.TryEnqueue(() => RunBtn.IsEnabled = !running);
@@ -177,10 +185,14 @@ public sealed partial class CascadeControlPage : Page
         // The FOPDT run is ~12000 samples (1200 s @ dt=0.1); thin it for the chart so the
         // WebView isn't handed tens of thousands of points. Metrics use the full arrays.
         int stride = System.Math.Max(1, sim.Time.Length / 1500);
-        RespChart.Update(
-            Sample(sim.Time, stride), Sample(sim.Temperature, stride), Sample(sim.SingleLoopTemperature, stride),
-            Sample(sim.Flow, stride), Sample(sim.FlowSetpoint, stride),
-            result.Input.Setpoint, sim.DisturbanceTime);
+        // Same run to both charts; each plots its own loop (outer = temperature, inner = flow).
+        var time   = Sample(sim.Time, stride);
+        var temp   = Sample(sim.Temperature, stride);
+        var single = Sample(sim.SingleLoopTemperature, stride);
+        var flow   = Sample(sim.Flow, stride);
+        var flowSp = Sample(sim.FlowSetpoint, stride);
+        RespChart.Update(time, temp, single, flow, flowSp, result.Input.Setpoint, sim.DisturbanceTime);
+        RespChartInner.Update(time, temp, single, flow, flowSp, result.Input.Setpoint, sim.DisturbanceTime);
 
         var m = result.Metrics;
         RiseTimeValue.Text  = m.RiseTime.ToString("0.00");

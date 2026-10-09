@@ -171,6 +171,17 @@ public static class HeQueueClient
         return node is null ? null : HmiLatest.FromJson(node);
     }
 
+    /// <summary>
+    /// Kurva hasil PLC milik Server, hanya titik yang belum dimiliki Client (mulai dari
+    /// <paramref name="from"/> kalau <paramref name="runId"/> masih run yang sama). <c>null</c>
+    /// kalau Server tidak terjangkau.
+    /// </summary>
+    public static async Task<PlcTraceReply?> GetPlcTraceAsync(string host, string token, long runId, int from)
+    {
+        var node = await GetAsync(host, token, $"{ShareProtocol.PlcTracePath}?run={runId}&from={from}");
+        return node is null ? null : PlcTraceJson.ToReply(node);
+    }
+
     // ── Internals ───────────────────────────────────────────────────────────
 
     private static async Task<JsonNode?> GetAsync(string host, string token, string path)
@@ -214,6 +225,82 @@ public static class HeQueueClient
 
     private static bool Usable(string host, string token) =>
         !string.IsNullOrWhiteSpace(AuthClient.NormalizeHost(host)) && !string.IsNullOrWhiteSpace(token);
+}
+
+/// <summary>
+/// Bentuk JSON kurva hasil PLC di kabel (<c>GET /hmi/trace</c>) — satu tempat untuk kedua
+/// sisi. Nilai yang tidak terukur ditulis <c>null</c> (JSON tidak punya NaN) dan dibaca
+/// kembali sebagai <see cref="double.NaN"/>.
+/// </summary>
+public static class PlcTraceJson
+{
+    public static JsonObject FromTrace(PlcTrace t)
+    {
+        static JsonArray Arr(double[] xs)
+        {
+            var a = new JsonArray();
+            foreach (var x in xs)
+                a.Add(double.IsFinite(x) ? JsonValue.Create(x) : null);
+            return a;
+        }
+
+        return new JsonObject
+        {
+            ["allowed"]   = true,
+            ["available"] = true,
+            ["runId"]     = t.RunId,
+            ["running"]   = t.Running,
+            ["origin"]    = t.Origin,
+            ["owner"]     = t.Owner,
+            ["setpoint"]  = t.Setpoint,
+            ["offset"]    = t.Offset,
+            ["total"]     = t.Total,
+            ["t"]         = Arr(t.Time),
+            ["pv"]        = Arr(t.PvShellOut),
+            ["fs"]        = Arr(t.FlowShell),
+            ["ft"]        = Arr(t.FlowTube),
+        };
+    }
+
+    /// <summary>Ditulis defensif: field hilang/bertipe aneh menghasilkan "tidak ada kurva", bukan pengecualian.</summary>
+    public static PlcTraceReply ToReply(JsonNode node)
+    {
+        if ((bool?)node["allowed"] != true)   return new PlcTraceReply(false, false, null);
+        if ((bool?)node["available"] != true) return new PlcTraceReply(true, false, null);
+
+        static double[] Arr(JsonNode? n)
+        {
+            if (n is not JsonArray arr) return [];
+            var xs = new double[arr.Count];
+            for (int i = 0; i < xs.Length; i++)
+                xs[i] = arr[i] is { } v && (double?)v is { } d && double.IsFinite(d) ? d : double.NaN;
+            return xs;
+        }
+
+        var time = Arr(node["t"]);
+        var pv   = Arr(node["pv"]);
+        var fs   = Arr(node["fs"]);
+        var ft   = Arr(node["ft"]);
+
+        // Larik yang tidak sama panjang berarti jawaban rusak: jangan digambar setengah-setengah.
+        if (pv.Length != time.Length || fs.Length != time.Length || ft.Length != time.Length)
+            return new PlcTraceReply(true, false, null);
+
+        return new PlcTraceReply(true, true, new PlcTrace
+        {
+            RunId      = (long?)node["runId"] ?? 0,
+            Running    = (bool?)node["running"] ?? false,
+            Origin     = (string?)node["origin"] ?? PlcTraceService.OriginClient,
+            Owner      = (string?)node["owner"],
+            Setpoint   = (double?)node["setpoint"] ?? 0,
+            Offset     = (int?)node["offset"] ?? 0,
+            Total      = (int?)node["total"] ?? time.Length,
+            Time       = time,
+            PvShellOut = pv,
+            FlowShell  = fs,
+            FlowTube   = ft,
+        });
+    }
 }
 
 /// <summary>

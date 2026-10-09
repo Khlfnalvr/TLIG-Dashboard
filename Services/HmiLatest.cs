@@ -30,6 +30,16 @@ public sealed class HmiLatest
     public IReadOnlyList<HmiDatum> Values { get; init; } = [];
 
     /// <summary>
+    /// Status rig menurut panel "Status Sistem" Server: PLC online. Dikirim ke <b>semua</b>
+    /// pemanggil, termasuk yang belum berhak melihat angka — ini hanya "rig hidup atau
+    /// tidak", bukan telemetri. <c>null</c> = Server versi lama yang belum mengirimnya.
+    /// </summary>
+    public bool? RigPlc { get; init; }
+
+    /// <summary>Status rig menurut panel Server: sensor aktif (bacaan LabVIEW masih baru).</summary>
+    public bool? RigSensor { get; init; }
+
+    /// <summary>
     /// Angkanya layak ditampilkan: berhak, VI tersambung, ada isinya, dan bacaannya
     /// masih baru.
     ///
@@ -74,7 +84,12 @@ public sealed class HmiLatest
     /// </summary>
     public static HmiLatest FromJson(JsonNode node)
     {
-        if ((bool?)node["allowed"] != true) return new HmiLatest { Allowed = false };
+        // Status rig dibaca lebih dulu: ia ikut dikirim walau pemanggilnya tidak berhak.
+        bool? rigPlc    = (bool?)node["rig"]?["plc"];
+        bool? rigSensor = (bool?)node["rig"]?["sensor"];
+
+        if ((bool?)node["allowed"] != true)
+            return new HmiLatest { Allowed = false, RigPlc = rigPlc, RigSensor = rigSensor };
 
         var values = new List<HmiDatum>();
         if (node["values"] is JsonArray arr)
@@ -91,6 +106,8 @@ public sealed class HmiLatest
             Linked  = (bool?)node["linked"] ?? false,
             AgeMs   = (long?)node["ageMs"] ?? -1,
             Values  = values,
+            RigPlc    = rigPlc,
+            RigSensor = rigSensor,
         };
     }
 }

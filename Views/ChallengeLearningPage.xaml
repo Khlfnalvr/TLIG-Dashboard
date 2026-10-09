@@ -190,15 +190,13 @@
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
+                        <!-- The HE rig controls temperature only: the target is fixed, shown
+                             read-only so staff still see what the challenge is about. -->
                         <StackPanel Grid.Column="0" Spacing="4">
                             <TextBlock Text="TARGET SISTEM" Style="{StaticResource CL_SectionHeader}"/>
-                            <ComboBox x:Name="FormSystemCombo"
-                                      HorizontalAlignment="Stretch"
-                                      FontSize="12" CornerRadius="6">
-                                <ComboBoxItem Content="Flow"        Tag="Flow"/>
-                                <ComboBoxItem Content="Level"       Tag="Level"/>
-                                <ComboBoxItem Content="Temperature" Tag="Temperature"/>
-                            </ComboBox>
+                            <TextBlock Text="Temperature – Heat Exchanger"
+                                       FontSize="12" FontWeight="SemiBold"
+                                       VerticalAlignment="Center" Margin="0,6,0,0"/>
                         </StackPanel>
                         <StackPanel Grid.Column="1" Spacing="4">
                             <TextBlock Text="DEADLINE" Style="{StaticResource CL_SectionHeader}"/>

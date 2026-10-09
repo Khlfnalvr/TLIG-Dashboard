@@ -278,7 +278,7 @@ namespace TLIGDashboard.Models
         public string   Id           { get; set; } = Guid.NewGuid().ToString();
         public string   StudentId    { get; set; } = "";
         public string   AssignmentId { get; set; } = "";
-        public string   PlantType    { get; set; } = "Flow";  // Flow / Level / Temperature
+        public string   PlantType    { get; set; } = "Temperature";  // HE rig: temperature only (older records may say Flow / Level)
 
         // Parameter PID yang dicoba
         public double Kp { get; set; }

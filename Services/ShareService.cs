@@ -64,6 +64,7 @@ public static class ShareProtocol
     public const string HeParamNearestPath      = "/he/params/nearest";     // GET  ?sp=&kc=&ti=&td=&pump=&limit= tetangga terdekat MILIK PEMANGGIL (semua peran)
     public const string HeLiveProgressPath      = "/he/live/progress";      // GET  progres run live (semua peran): elapsed recorder + suhu live + prediksi settling
     public const string HmiLatestPath           = "/hmi/latest";            // GET  telemetri LabVIEW terkini (staf selalu; Mahasiswa hanya saat memegang giliran)
+    public const string PlcTracePath            = "/hmi/trace";             // GET  ?run=&from= kurva hasil PLC untuk grafik, hanya run yang dimulai dari Client (staf; Mahasiswa hanya run miliknya)
 
     public const string GuidWs            = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 
@@ -325,6 +326,10 @@ public sealed class ShareServer
             else if (method == "GET" && path == ShareProtocol.HmiLatestPath)
             {
                 await HandleHmiLatestGetAsync(stream, headers, ct);
+            }
+            else if (method == "GET" && path == ShareProtocol.PlcTracePath)
+            {
+                await HandlePlcTraceGetAsync(stream, rawPath, headers, ct);
             }
             else if (method == "GET" && path == "/info")
             {
@@ -1321,6 +1326,13 @@ public sealed class ShareServer
             double? pump = (double?)node["pump"];
             int?    cmd  = (int?)node["cmd"];
 
+            // Sisa masukan simulasi cascade milik Client (gain loop dalam + gangguan). Hanya dipakai
+            // untuk menggambar ulang simulasi yang sama di layar Server; plant tidak membacanya.
+            // Absen dari Client lama: Server lalu memakai nilai sesinya sendiri.
+            double? innerKp     = (double?)node["ikp"];
+            double? innerKi     = (double?)node["iki"];
+            double? disturbance = (double?)node["dist"];
+
             var bridge = PythonBridgeService.Instance;
             switch (action)
             {
@@ -1356,7 +1368,17 @@ public sealed class ShareServer
                             "Run berikutnya datang dari Client tanpa nilai bukaan valve");
                     }
 
+                    // Kurva hasil PLC untuk grafik. Asalnya "client": run ini tampil di Server
+                    // dan di Client pemiliknya (lihat HandlePlcTraceGetAsync). Dimulai sebelum
+                    // perintah berangkat, sama alasannya dengan perekam di atas.
+                    PlcTraceService.Instance.Begin(PlcTraceService.OriginClient, session.Username, sp);
+
                     bridge.Run(kp, ki, kd, sp, pump, cmd);
+
+                    // Layar Server ikut menggambar simulasi yang sama. Dijalankan terpisah supaya
+                    // balasan HTTP tidak menunggu simulasinya; hasilnya sampai ke layar lewat
+                    // ResultChanged milik sesi cascade.
+                    _ = App.CascadeSession.RunMirroredAsync(kp, ki, kd, sp, innerKp, innerKi, disturbance);
                     break;
                 }
 
@@ -1801,7 +1823,18 @@ public sealed class ShareServer
                        HmiLatest.MayView(session.Role, session.Username,
                                          (await App.HeQueue.GetSnapshotAsync(ct)).Holder);
 
-        var body = new JsonObject { ["allowed"] = allowed };
+        var body = new JsonObject
+        {
+            ["allowed"] = allowed,
+            // Panel "Status Sistem" di Client memakai status yang persis sama dengan panel
+            // Server. Dikirim ke semua peran: ini hanya "rig hidup atau tidak" (setara
+            // /he/live/progress yang juga terbuka untuk semua), bukan angka telemetri.
+            ["rig"] = new JsonObject
+            {
+                ["plc"]    = App.Status.PlcConnected,
+                ["sensor"] = App.Status.SensorConnected,
+            },
+        };
         if (!allowed)
         {
             await WriteJsonAsync(stream, body.ToJsonString(), ct);
@@ -1823,6 +1856,60 @@ public sealed class ShareServer
         body["values"] = values;
 
         await WriteJsonAsync(stream, body.ToJsonString(), ct);
+    }
+
+    /// <summary>
+    /// GET /hmi/trace — kurva hasil PLC (suhu shell out, flow shell, flow tube) run terakhir,
+    /// supaya grafik di Client ikut menampilkan hasil plant.
+    ///
+    /// <para><b>Siapa melihat apa.</b> Run yang dimulai dari <i>Server</i> hanya tampil di
+    /// Server: jawabannya <c>available=false</c>, sehingga grafik Client kosong. Run yang
+    /// dimulai dari <i>Client</i> tampil di Server dan di Client. Staf boleh melihat run
+    /// Client mana pun; Mahasiswa hanya run miliknya sendiri, dan hanya selama masih
+    /// memegang giliran (aturan yang sama dengan <see cref="HmiLatest.MayView"/>).
+    /// Keputusannya diambil di sini dari identitas sesi, dan data yang tidak berhak
+    /// tidak pernah dirakit.</para>
+    ///
+    /// <para><c>run</c> dan <c>from</c> membuat jawabannya inkremental: Client yang sudah
+    /// memegang titik 0..N-1 dari run yang sama cukup meminta mulai dari N. <c>allowed=false</c>
+    /// dijawab 200 (bukan 403) agar Client bisa membedakannya dari Server yang tidak terjangkau.</para>
+    /// </summary>
+    private async Task HandlePlcTraceGetAsync(
+        NetworkStream stream, string rawPath, Dictionary<string, string> headers, CancellationToken ct)
+    {
+        var session = GetSession(BearerToken(headers));
+        if (session is null)
+        {
+            await WriteSimpleAsync(stream, "401 Unauthorized", "text/plain", "Invalid or expired session", ct);
+            return;
+        }
+
+        bool staff = UserRoles.IsStaff(session.Role);
+        bool allowed = staff ||
+                       HmiLatest.MayView(session.Role, session.Username,
+                                         (await App.HeQueue.GetSnapshotAsync(ct)).Holder);
+        if (!allowed)
+        {
+            await WriteJsonAsync(stream, new JsonObject { ["allowed"] = false }.ToJsonString(), ct);
+            return;
+        }
+
+        long runId = (long)QueryDouble(rawPath, "run", -1);
+        int  from  = QueryInt(rawPath, "from", 0);
+
+        var trace = PlcTraceService.Instance.Read(runId, from);
+        bool visible = trace is not null &&
+                       trace.Origin == PlcTraceService.OriginClient &&
+                       (staff || string.Equals(trace.Owner, session.Username, StringComparison.Ordinal));
+
+        if (!visible)
+        {
+            await WriteJsonAsync(stream,
+                new JsonObject { ["allowed"] = true, ["available"] = false }.ToJsonString(), ct);
+            return;
+        }
+
+        await WriteJsonAsync(stream, PlcTraceJson.FromTrace(trace!).ToJsonString(), ct);
     }
 
     /// <summary>Nilai double satu parameter query, atau <paramref name="fallback"/> (terima koma maupun titik).</summary>

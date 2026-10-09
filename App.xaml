@@ -180,15 +180,6 @@
                 </Setter>
             </Style>
 
-            <!-- System Model Selector flyout presenter — default WinUI flyout
-                 surface (theme-aware), only sizing/padding overridden -->
-            <Style x:Key="SmsFlyoutStyle" TargetType="FlyoutPresenter">
-                <Setter Property="CornerRadius" Value="{ThemeResource OverlayCornerRadius}"/>
-                <Setter Property="Padding"      Value="12"/>
-                <Setter Property="MinWidth"     Value="320"/>
-                <Setter Property="MaxWidth"     Value="380"/>
-            </Style>
-
             <!-- Dashboard semantic colours — intentionally fixed (same in both themes) -->
             <SolidColorBrush x:Key="DashRunBrush"       Color="#FF0B7F14"/>
             <SolidColorBrush x:Key="DashStopBrush"      Color="#FFC5221F"/>

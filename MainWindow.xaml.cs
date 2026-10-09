@@ -105,6 +105,11 @@ public sealed partial class MainWindow : Window
         InitOpcUaFlyout();
         InitLoginOverlay();
 
+        // Panel "Status Sistem": Server membaca jalur LabVIEW-nya sendiri, Client menyalin
+        // status Server lewat internet (lihat RigStatusService).
+        RigStatusService.Instance.PlcTcpConnected = () => ViewModel.Plc.IsConnected;
+        RigStatusService.Instance.Start();
+
         _earlyAccess = AppSettingsService.Load().EarlyAccess;
         MenuEarlyAccess.IsChecked = _earlyAccess;
 
@@ -2213,6 +2218,17 @@ public sealed partial class MainWindow : Window
         // Init sharing panel (broadcast on server, connect on client)
         InitSharePanel();
 
+        // TCP ke LabVIEW hanya ada di Server: VI dan bridge Python berjalan di PC lab, dan
+        // Client mendapat semua datanya dari Server lewat internet. Client karena itu tidak
+        // punya tab PLC sama sekali — flyout ini hanya berisi tab Connect ke Server.
+        if (Services.BuildInfo.IsClient)
+        {
+            TabOpcUa.Visibility   = Visibility.Collapsed;
+            PanelOpcUa.Visibility = Visibility.Collapsed;
+            ConnAiTabs.SelectedItem = TabShare;
+            return;
+        }
+
         // Default tab = PLC
         ConnAiTabs.SelectedItem = TabOpcUa;
 
@@ -2220,18 +2236,21 @@ public sealed partial class MainWindow : Window
         {
             SyncOpcConnectButton();
             UpdateOpcStatusDot();
-            bool connected = ViewModel.Plc.IsConnected;
-            App.Status.PlcConnected    = connected;
-            App.Status.SensorConnected = connected;
+            RigStatusService.Instance.Refresh();   // panel Status Sistem: PLC/Sensor
         });
     }
 
     private void OpcUaFlyout_Opened(object sender, object e)
     {
-        SyncOpcConnectButton();
         UpdateOpcStatusDot();
-        if (Services.BuildInfo.IsServer)
-            InitAiPanel();
+        if (Services.BuildInfo.IsClient)
+        {
+            RefreshClientStatus();
+            return;
+        }
+
+        SyncOpcConnectButton();
+        InitAiPanel();
     }
 
     private void SyncOpcConnectButton()
@@ -2332,7 +2351,11 @@ public sealed partial class MainWindow : Window
 
     private void UpdateOpcStatusDot()
     {
-        bool connected = ViewModel.Plc.IsConnected;
+        // Server: titik hijau = LabVIEW tersambung lewat TCP. Client tidak punya TCP, jadi
+        // titiknya menunjukkan sambungan ke Server — satu-satunya jalur datanya.
+        bool connected = Services.BuildInfo.IsClient
+            ? ShareClient.Instance.IsConnected
+            : ViewModel.Plc.IsConnected;
         OpcStatusDot.Fill = connected
             ? new SolidColorBrush(Color.FromArgb(0xFF, 0x25, 0xC6, 0x85))
             : new SolidColorBrush(Color.FromArgb(0x00, 0x00, 0x00, 0x00));
@@ -2345,7 +2368,8 @@ public sealed partial class MainWindow : Window
         bool isAi    = ReferenceEquals(ConnAiTabs.SelectedItem, TabAiApi);
         bool isShare = ReferenceEquals(ConnAiTabs.SelectedItem, TabShare);
 
-        PanelOpcUa.Visibility = (!isAi && !isShare) ? Visibility.Visible : Visibility.Collapsed;
+        PanelOpcUa.Visibility = (Services.BuildInfo.IsServer && !isAi && !isShare)
+            ? Visibility.Visible : Visibility.Collapsed;
         PanelAiApi.Visibility = isAi ? Visibility.Visible : Visibility.Collapsed;
 
         // The share tab is the client's session/connect panel. On the server flavor
@@ -2399,6 +2423,7 @@ public sealed partial class MainWindow : Window
 
         // The AI assistant is "active" on the client when connected to the server.
         App.Status.AiConnected = connected;
+        UpdateOpcStatusDot();
     }
 
     private async void ConnectServerBtn_Click(object sender, RoutedEventArgs e)

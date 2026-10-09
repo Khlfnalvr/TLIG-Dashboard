@@ -46,7 +46,40 @@ public sealed class CascadeSessionService
     public event EventHandler? RunFailed;
     public event EventHandler? RecommendationCleared;
 
-    public async Task<CascadeDesignResult?> RunAsync(CancellationToken ct = default)
+    /// <summary>
+    /// Masukan sesi ini baru saja diganti oleh run salinan dari Client (<see cref="RunMirroredAsync"/>).
+    /// Layar yang menampilkan kotak gain/setpoint perlu menariknya ulang supaya angka di kotak
+    /// sama dengan kurva yang digambar. Bisa dipanggil dari thread latar.
+    /// </summary>
+    public event EventHandler? RemoteInputsApplied;
+
+    /// <summary>
+    /// Menjalankan simulasi yang sama dengan yang baru dijalankan Client, supaya layar Server
+    /// ikut menggambarnya. Dipanggil Server saat Client menekan RUN dan antriannya sudah
+    /// memberi giliran (lihat <c>/sim/pid/run</c>). Penasihat AI dan riwayat percobaan
+    /// sengaja dilewati: itu milik Client yang menekan RUN, bukan milik sesi Server.
+    /// Null di tiap parameter = pakai nilai yang sedang ada di sesi ini.
+    /// </summary>
+    public async Task<CascadeDesignResult?> RunMirroredAsync(
+        double outerKp, double outerKi, double outerKd, double setpoint,
+        double? innerKp, double? innerKi, double? disturbance)
+    {
+        // Run Server sendiri yang sedang berjalan tidak boleh ditimpa kiriman Client.
+        if (IsRunning) return null;
+
+        OuterKp  = outerKp;
+        OuterKi  = outerKi;
+        OuterKd  = outerKd;
+        Setpoint = setpoint;
+        if (innerKp is { } ikp)     InnerKp     = ikp;
+        if (innerKi is { } iki)     InnerKi     = iki;
+        if (disturbance is { } dst) Disturbance = dst;
+
+        try { RemoteInputsApplied?.Invoke(this, EventArgs.Empty); } catch { }
+        return await RunAsync(default, mirrored: true);
+    }
+
+    public async Task<CascadeDesignResult?> RunAsync(CancellationToken ct = default, bool mirrored = false)
     {
         if (IsRunning) return null;
 
@@ -56,25 +89,30 @@ public sealed class CascadeSessionService
         {
             // Prior attempts only — a snapshot taken before this run, so the advisor sees the
             // trajectory that led here without this run in it yet.
-            var result = await CascadeDesignService.RunAsync(BuildInput(), new List<CascadeAttempt>(_attempts), ct);
+            var result = await CascadeDesignService.RunAsync(
+                BuildInput(), new List<CascadeAttempt>(_attempts), ct, mirrored);
 
             // Record this run so the next advisor review sees it as prior context; keep only the
-            // most recent MaxHistory to bound the advisor prompt.
-            _attempts.Add(new CascadeAttempt
+            // most recent MaxHistory to bound the advisor prompt. A mirrored run is the Client's
+            // attempt, not this session's, so it stays out of the trajectory.
+            if (!mirrored)
             {
-                OuterKp = result.Input.OuterKp,
-                OuterKi = result.Input.OuterKi,
-                OuterKd = result.Input.OuterKd,
-                InnerKp = result.Input.InnerKp,
-                InnerKi = result.Input.InnerKi,
-                Overshoot = result.Metrics.Overshoot,
-                RiseTime = result.Metrics.RiseTime,
-                SettlingTime = result.Metrics.SettlingTime,
-                SteadyStateError = result.Metrics.SteadyStateError,
-                Diagnosis = result.Diagnosis,
-            });
-            if (_attempts.Count > MaxHistory)
-                _attempts.RemoveRange(0, _attempts.Count - MaxHistory);
+                _attempts.Add(new CascadeAttempt
+                {
+                    OuterKp = result.Input.OuterKp,
+                    OuterKi = result.Input.OuterKi,
+                    OuterKd = result.Input.OuterKd,
+                    InnerKp = result.Input.InnerKp,
+                    InnerKi = result.Input.InnerKi,
+                    Overshoot = result.Metrics.Overshoot,
+                    RiseTime = result.Metrics.RiseTime,
+                    SettlingTime = result.Metrics.SettlingTime,
+                    SteadyStateError = result.Metrics.SteadyStateError,
+                    Diagnosis = result.Diagnosis,
+                });
+                if (_attempts.Count > MaxHistory)
+                    _attempts.RemoveRange(0, _attempts.Count - MaxHistory);
+            }
 
             LastResult            = result;
             PendingRecommendation = result.AdvisorRecommendation;

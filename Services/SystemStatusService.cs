@@ -10,9 +10,10 @@ namespace TLIGDashboard.Services;
 ///
 /// Every flag defaults to <c>false</c> (disconnected → red) and only turns green
 /// when the corresponding subsystem reports a real connection:
-///   • PLC / Sensor — driven by the PLC TCP link (<see cref="PlcTcpService.IsConnected"/>).
-///   • AI Assistant — driven by whether an API key is configured.
-///   • Camera       — no integration yet, so it stays offline until one is wired in.
+///   • PLC / Sensor — driven by <see cref="RigStatusService"/>: on the Server from its own
+///                    LabVIEW link, on the Client copied from the Server over the internet.
+///   • AI Assistant — driven by whether an API key is configured (Client: server reachable).
+///   • Camera       — the local camera (Server) or the camera broadcast from the Server (Client).
 ///
 /// Bindings use {x:Bind Status.PlcBrush, Mode=OneWay} etc.; changing a flag raises
 /// PropertyChanged for its brush + text so the dot colour and label refresh live.

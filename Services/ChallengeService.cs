@@ -14,6 +14,7 @@ namespace TLIGDashboard.Services
     /// <summary>On-disk envelope for the challenge database (allows future migrations).</summary>
     public sealed class ChallengesFile
     {
+        // Files written before the version-2 migration carry 1 (see ChallengeService.Migrate).
         public int             Version    { get; set; } = 1;
         public List<Challenge> Challenges { get; set; } = new();
     }
@@ -61,6 +62,11 @@ namespace TLIGDashboard.Services
                         var file = JsonSerializer.Deserialize(
                             File.ReadAllText(_path), AppJsonContext.Default.ChallengesFile);
                         _challenges = file?.Challenges ?? new();
+                        if ((file?.Version ?? CurrentFileVersion) < CurrentFileVersion)
+                        {
+                            Migrate(_challenges);
+                            SaveLocked();
+                        }
                         return;
                     }
                 }
@@ -81,10 +87,54 @@ namespace TLIGDashboard.Services
             {
                 Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
                 File.WriteAllText(_path, JsonSerializer.Serialize(
-                    new ChallengesFile { Challenges = _challenges },
+                    new ChallengesFile { Version = CurrentFileVersion, Challenges = _challenges },
                     AppJsonContext.Default.ChallengesFile));
             }
             catch { /* best-effort */ }
+        }
+
+        // ── Migration ──────────────────────────────────────────────────────
+
+        /// <summary>
+        /// Version 2: the HE rig controls temperature only, so the Flow/Level choice is gone.
+        /// </summary>
+        private const int CurrentFileVersion = 2;
+
+        // Titles the two old Flow/Level sample challenges were seeded with. A seed whose title
+        // still matches was never edited by staff, so its content can be replaced safely.
+        private const string OldSeedC1Title = "Tune PID for Fast Rise Time";
+        private const string OldSeedC2Title = "Minimize Settling Time – Level";
+
+        /// <summary>
+        /// Upgrades a pre-version-2 challenge list in place:
+        /// <list type="bullet">
+        /// <item>every challenge now targets Temperature (staff-written text is left alone);</item>
+        /// <item>the two old Flow/Level sample challenges, if still unedited, get the new
+        ///   heat-exchanger content — while keeping their Id, status, deadline, weights and,
+        ///   above all, the submissions students already made.</item>
+        /// </list>
+        /// </summary>
+        private static void Migrate(List<Challenge> challenges)
+        {
+            foreach (var c in challenges)
+            {
+                c.TargetSystem = SimulationType.Temperature;
+
+                // Matched by title + author rather than Id: Load runs from the Instance
+                // initializer, before the _cNId fields are initialized, so seeds on disk may
+                // carry Guid.Empty instead of the fixed Guids. The Id itself is never touched.
+                if (c.CreatedByName != "System") continue;
+                if (c.Title == OldSeedC1Title)      ApplySeedContent(c, SeedC1());
+                else if (c.Title == OldSeedC2Title) ApplySeedContent(c, SeedC2());
+            }
+        }
+
+        private static void ApplySeedContent(Challenge target, Challenge seed)
+        {
+            target.Title        = seed.Title;
+            target.Description  = seed.Description;
+            target.Instructions = seed.Instructions;
+            target.Tasks        = seed.Tasks;
         }
 
         // ── CRUD Challenge ──────────────────────────────────────────────────
@@ -292,100 +342,105 @@ namespace TLIGDashboard.Services
         private static readonly Guid _c2Id = new("b2c3d4e5-f6a7-8901-bcde-f12345678901");
         private static readonly Guid _c3Id = new("c3d4e5f6-a7b8-9012-cdef-123456789012");
 
-        private static List<Challenge> SeedChallenges() => new()
+        private static List<Challenge> SeedChallenges() => new() { SeedC1(), SeedC2(), SeedC3() };
+
+        // All three target the heat exchanger's temperature loop — the only process the rig
+        // controls. Targets are sized for that plant: the SIMC default tuning gives rise ≈183 s,
+        // settling ≈315 s and overshoot ≈0.8 %, so each challenge asks for a visible improvement
+        // on one of those instead of the seconds-scale numbers the old Flow/Level samples used.
+        private static Challenge SeedC1() => new()
         {
-            new Challenge
+            Id            = _c1Id,
+            Title         = "Rise Time Cepat – Heat Exchanger",
+            Description   = "Atur parameter PID temperatur heat exchanger agar step response naik lebih cepat tanpa overshoot berlebihan.",
+            Instructions  = "1. Buka Dashboard (sistem: Temperature – Heat Exchanger).\n2. Atur Kp, Ki, Kd di panel PID Parameters.\n3. Klik RUN dan amati step response temperatur.\n4. Pastikan Rise Time dan Overshoot memenuhi target.\n5. Submit screenshot dan nilai parameter yang digunakan.",
+            TargetSystem  = SimulationType.Temperature,
+            Deadline      = DateTime.Now.AddDays(7),
+            Status        = ChallengeStatus.Active,
+            WeightDosen   = 50,
+            WeightAI      = 30,
+            WeightPeer    = 20,
+            CreatedByName = "System",
+            Tasks = new()
             {
-                Id            = _c1Id,
-                Title         = "Tune PID for Fast Rise Time",
-                Description   = "Atur parameter PID pada sistem Flow agar step response memenuhi spesifikasi rise time yang cepat.",
-                Instructions  = "1. Buka Dashboard → pilih sistem Flow.\n2. Atur Kp, Ki, Kd di panel PID Parameters.\n3. Klik RUN dan amati step response.\n4. Pastikan Rise Time dan Overshoot memenuhi target.\n5. Submit screenshot dan nilai parameter yang digunakan.",
-                TargetSystem  = SimulationType.Flow,
-                Deadline      = DateTime.Now.AddDays(7),
-                Status        = ChallengeStatus.Active,
-                WeightDosen   = 50,
-                WeightAI      = 30,
-                WeightPeer    = 20,
-                CreatedByName = "System",
-                Tasks = new()
+                new ChallengeTask
                 {
-                    new ChallengeTask
-                    {
-                        Name        = "Fast Rise Time",
-                        Description = "Atur Kp, Ki, Kd agar rise time singkat",
-                        Metric      = TaskMetrics.RiseTime,
-                        Op          = TaskOps.Lte,
-                        TargetValue = 2.0,
-                        Tolerance   = 0.2
-                    },
-                    new ChallengeTask
-                    {
-                        Name        = "Controlled Overshoot",
-                        Description = "Pertahankan overshoot agar tidak terlalu besar",
-                        Metric      = TaskMetrics.Overshoot,
-                        Op          = TaskOps.Lte,
-                        TargetValue = 10.0,
-                        Tolerance   = 2.0
-                    }
+                    Name        = "Fast Rise Time",
+                    Description = "Rise time temperatur di bawah 150 detik",
+                    Metric      = TaskMetrics.RiseTime,
+                    Op          = TaskOps.Lte,
+                    TargetValue = 150.0,
+                    Tolerance   = 10.0
+                },
+                new ChallengeTask
+                {
+                    Name        = "Controlled Overshoot",
+                    Description = "Pertahankan overshoot agar tidak terlalu besar",
+                    Metric      = TaskMetrics.Overshoot,
+                    Op          = TaskOps.Lte,
+                    TargetValue = 10.0,
+                    Tolerance   = 2.0
                 }
-            },
-            new Challenge
+            }
+        };
+
+        private static Challenge SeedC2() => new()
+        {
+            Id            = _c2Id,
+            Title         = "Settling Time Minimal – Heat Exchanger",
+            Description   = "Optimalkan PID temperatur heat exchanger agar settling time singkat dan steady-state error kecil.",
+            Instructions  = "1. Buka Dashboard (sistem: Temperature – Heat Exchanger).\n2. Set setpoint temperatur ke 60 °C.\n3. Tuning PID untuk mencapai target settling dan steady-state error.\n4. Submit parameter PID dan nilai metrik yang dicapai.",
+            TargetSystem  = SimulationType.Temperature,
+            Deadline      = DateTime.Now.AddDays(10),
+            Status        = ChallengeStatus.Active,
+            WeightDosen   = 40,
+            WeightAI      = 40,
+            WeightPeer    = 20,
+            CreatedByName = "System",
+            Tasks = new()
             {
-                Id            = _c2Id,
-                Title         = "Minimize Settling Time – Level",
-                Description   = "Optimalkan PID untuk sistem Level Tank agar settling time minimal dan steady-state error kecil.",
-                Instructions  = "1. Pilih sistem Level di SYSTEM MODEL.\n2. Set setpoint ke 50 cm.\n3. Tuning PID untuk mencapai target settling dan steady-state error.\n4. Submit parameter PID dan nilai metrik yang dicapai.",
-                TargetSystem  = SimulationType.Level,
-                Deadline      = DateTime.Now.AddDays(10),
-                Status        = ChallengeStatus.Active,
-                WeightDosen   = 40,
-                WeightAI      = 40,
-                WeightPeer    = 20,
-                CreatedByName = "System",
-                Tasks = new()
+                new ChallengeTask
                 {
-                    new ChallengeTask
-                    {
-                        Name        = "Quick Settling",
-                        Description = "Settling time harus di bawah 15 detik",
-                        Metric      = TaskMetrics.Settling,
-                        Op          = TaskOps.Lte,
-                        TargetValue = 15.0,
-                        Tolerance   = 1.0
-                    },
-                    new ChallengeTask
-                    {
-                        Name        = "Low Steady-State Error",
-                        Description = "Steady-state error maksimal 2%",
-                        Metric      = TaskMetrics.SteadyStateError,
-                        Op          = TaskOps.Lte,
-                        TargetValue = 2.0,
-                        Tolerance   = 0.5
-                    }
+                    Name        = "Quick Settling",
+                    Description = "Settling time di bawah 300 detik",
+                    Metric      = TaskMetrics.Settling,
+                    Op          = TaskOps.Lte,
+                    TargetValue = 300.0,
+                    Tolerance   = 20.0
+                },
+                new ChallengeTask
+                {
+                    Name        = "Low Steady-State Error",
+                    Description = "Steady-state error maksimal 2%",
+                    Metric      = TaskMetrics.SteadyStateError,
+                    Op          = TaskOps.Lte,
+                    TargetValue = 2.0,
+                    Tolerance   = 0.5
                 }
-            },
-            new Challenge
+            }
+        };
+
+        private static Challenge SeedC3() => new()
+        {
+            Id            = _c3Id,
+            Title         = "Temperature Control Design",
+            Description   = "Desain kontroler PID untuk heat exchanger dengan respons stabil.",
+            Instructions  = "Draft — instruksi belum lengkap.",
+            TargetSystem  = SimulationType.Temperature,
+            Deadline      = DateTime.Now.AddDays(21),
+            Status        = ChallengeStatus.Draft,
+            WeightDosen   = 50, WeightAI = 30, WeightPeer = 20,
+            CreatedByName = "System",
+            Tasks = new()
             {
-                Id            = _c3Id,
-                Title         = "Temperature Control Design",
-                Description   = "Desain kontroler PID untuk heat exchanger dengan respons stabil.",
-                Instructions  = "Draft — instruksi belum lengkap.",
-                TargetSystem  = SimulationType.Temperature,
-                Deadline      = DateTime.Now.AddDays(21),
-                Status        = ChallengeStatus.Draft,
-                WeightDosen   = 50, WeightAI = 30, WeightPeer = 20,
-                CreatedByName = "System",
-                Tasks = new()
+                new ChallengeTask
                 {
-                    new ChallengeTask
-                    {
-                        Name        = "Stable Overshoot",
-                        Description = "Overshoot di bawah 5% agar sistem aman",
-                        Metric      = TaskMetrics.Overshoot,
-                        Op          = TaskOps.Lte,
-                        TargetValue = 5.0,
-                        Tolerance   = 1.0
-                    }
+                    Name        = "Stable Overshoot",
+                    Description = "Overshoot di bawah 5% agar sistem aman",
+                    Metric      = TaskMetrics.Overshoot,
+                    Op          = TaskOps.Lte,
+                    TargetValue = 5.0,
+                    Tolerance   = 1.0
                 }
             }
         };

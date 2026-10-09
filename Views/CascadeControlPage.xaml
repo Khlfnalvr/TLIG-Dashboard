@@ -105,13 +105,36 @@
                     <TextBlock Grid.Row="0"
                                Text="{x:Bind Lang.Cas_Response, Mode=OneWay}"
                                Style="{StaticResource CasCaptionStyle}"/>
-                    <Border Grid.Row="1"
-                            MaxWidth="1200" Height="460"
-                            HorizontalAlignment="Stretch"
-                            CornerRadius="6" Padding="2"
-                            Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}">
-                        <controls:CascadeResponseChart x:Name="RespChart"/>
-                    </Border>
+                    <!-- One chart per cascade loop, side by side, each comparing the RK4
+                         simulation with the actual plant readings from the PLC. -->
+                    <Grid Grid.Row="1" ColumnSpacing="12" MaxWidth="1600">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <TextBlock Grid.Row="0" Grid.Column="0"
+                                   Text="{x:Bind Lang.Panel_OuterResponse, Mode=OneWay}"
+                                   FontSize="11" Opacity="0.65" TextWrapping="Wrap" Margin="2,0,0,6"/>
+                        <Border Grid.Row="1" Grid.Column="0"
+                                Height="420" CornerRadius="6" Padding="2"
+                                Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}">
+                            <controls:CascadeResponseChart x:Name="RespChart" Loop="Outer"/>
+                        </Border>
+
+                        <TextBlock Grid.Row="0" Grid.Column="1"
+                                   Text="{x:Bind Lang.Panel_InnerResponse, Mode=OneWay}"
+                                   FontSize="11" Opacity="0.65" TextWrapping="Wrap" Margin="2,0,0,6"/>
+                        <Border Grid.Row="1" Grid.Column="1"
+                                Height="420" CornerRadius="6" Padding="2"
+                                Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}">
+                            <controls:CascadeResponseChart x:Name="RespChartInner" Loop="Inner"/>
+                        </Border>
+                    </Grid>
                 </Grid>
             </Border>
 

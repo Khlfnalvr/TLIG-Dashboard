@@ -125,16 +125,18 @@
                 <RowDefinition Height="Auto"/>  <!-- Row D: Control + Status System + Alarm -->
             </Grid.RowDefinitions>
 
-            <!-- Title + the same Flow/Level/Temperature selector as the Dashboard's
-                 System Model panel; both drive the shared App.SimType service. -->
+            <!-- Title + the fixed process. The HE rig controls temperature only, so there
+                 is no Flow/Level/Temperature picker any more (same as the Dashboard). -->
             <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="10"
                         Margin="2,0,0,0">
                 <TextBlock Text="{x:Bind Lang.Panel_ModelSistem, Mode=OneWay}"
                            FontSize="11" FontWeight="SemiBold"
                            CharacterSpacing="80" Opacity="0.55"
                            VerticalAlignment="Center"/>
-                <controls:SystemModelSelectorControl x:Name="SimSelector"
-                                                     VerticalAlignment="Center"/>
+                <TextBlock VerticalAlignment="Center" FontSize="13">
+                    <Run Text="Temperature" FontWeight="SemiBold"/>
+                    <Run Text=" · °C" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                </TextBlock>
             </StackPanel>
 
             <!-- ── Row A: Block Diagram | metrics 2×2 | Transfer Function ── -->

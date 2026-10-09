@@ -160,10 +160,12 @@
                         <TextBlock Text="{x:Bind Lang.Panel_ModelSistem, Mode=OneWay}"
                                    Style="{StaticResource DashPanelHeaderStyle}"
                                    VerticalAlignment="Center"/>
-                        <!-- Simulation type card-selector -->
-                        <controls:SystemModelSelectorControl
-                                  x:Name="SimSelector"
-                                  VerticalAlignment="Center"/>
+                        <!-- The HE rig controls temperature only, so the process is fixed
+                             (App.SimType stays Temperature) and shown as a plain label. -->
+                        <TextBlock VerticalAlignment="Center" FontSize="13">
+                            <Run Text="Temperature" FontWeight="SemiBold"/>
+                            <Run Text=" · °C" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        </TextBlock>
                     </StackPanel>
                     <Button x:Name="LeftFullscreenBtn"
                             Width="18" Height="18"
@@ -291,11 +293,16 @@
                         </Grid>
                     </Border>
 
-                    <!-- PID Parameters — horizontal (Kp · Ki · Kd inline) -->
+                    <!-- PID Parameters — both cascade loops, same split as the Parameter
+                         (Cascade) page: outer temperature PID, then inner flow PI. -->
                     <Border Style="{StaticResource DashCardStyle}">
                         <StackPanel Spacing="8">
                             <TextBlock Text="{x:Bind Lang.Panel_ParameterPid, Mode=OneWay}"
                                        Style="{StaticResource DashCardTitleStyle}"/>
+
+                            <!-- Outer loop — Temperature PID -->
+                            <TextBlock Text="{x:Bind Lang.Cas_OuterGains, Mode=OneWay}"
+                                       Style="{StaticResource DashTinyLabelStyle}" Opacity="0.65"/>
                             <Grid ColumnSpacing="10">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="Auto"/>
@@ -311,6 +318,28 @@
                                 <NumberBox x:Name="KiBox" Grid.Column="3" Value="0.015" Minimum="0" SmallChange="0.005" SpinButtonPlacementMode="Compact" FontSize="11" Style="{StaticResource DashNumberBoxStyle}"/>
                                 <TextBlock Grid.Column="4" Text="Kd" Style="{StaticResource DashTinyLabelStyle}" VerticalAlignment="Center"/>
                                 <NumberBox x:Name="KdBox" Grid.Column="5" Value="8" Minimum="0" SmallChange="0.5" SpinButtonPlacementMode="Compact" FontSize="11" Style="{StaticResource DashNumberBoxStyle}"/>
+                            </Grid>
+
+                            <!-- Inner loop — Flow PI. Same column grid as the row above so the
+                                 Kp/Ki boxes line up; the Kd slot is left empty (PI only). -->
+                            <TextBlock Text="{x:Bind Lang.Cas_InnerGains, Mode=OneWay}"
+                                       Style="{StaticResource DashTinyLabelStyle}" Opacity="0.65"
+                                       Margin="0,2,0,0"/>
+                            <Grid ColumnSpacing="10">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="Kp" Style="{StaticResource DashTinyLabelStyle}" VerticalAlignment="Center"/>
+                                <NumberBox x:Name="InnerKpBox" Grid.Column="1" Value="0.0395" Minimum="0" SmallChange="0.01" SpinButtonPlacementMode="Compact" FontSize="11" Style="{StaticResource DashNumberBoxStyle}"/>
+                                <TextBlock Grid.Column="2" Text="Ki" Style="{StaticResource DashTinyLabelStyle}" VerticalAlignment="Center"/>
+                                <NumberBox x:Name="InnerKiBox" Grid.Column="3" Value="0.0295" Minimum="0" SmallChange="0.005" SpinButtonPlacementMode="Compact" FontSize="11" Style="{StaticResource DashNumberBoxStyle}"/>
+                                <!-- Invisible "Kd" keeps the label column as wide as the row above. -->
+                                <TextBlock Grid.Column="4" Text="Kd" Style="{StaticResource DashTinyLabelStyle}" VerticalAlignment="Center" Opacity="0"/>
                             </Grid>
 
                             <TextBlock Text="{x:Bind Lang.Pid_RunHint, Mode=OneWay}"
@@ -347,23 +376,32 @@
                     <!-- System Response — same two-loop view as the Cascade page (this panel's
                          extended screen): temperature + flow on two y-axes, plus the
                          single-loop baseline and disturbance marker. -->
-                    <Border Style="{StaticResource DashCardStyle}" Height="340">
-                        <Grid RowSpacing="8">
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="*"/>
-                            </Grid.RowDefinitions>
-                            <StackPanel Grid.Row="0" Spacing="3">
-                                <TextBlock Text="{x:Bind Lang.Panel_ResponSistem, Mode=OneWay}"
-                                           Style="{StaticResource DashCardTitleStyle}"/>
-                            </StackPanel>
-                            <Border Grid.Row="1"
-                                    x:Name="ResponSistemChart"
+                    <!-- Two charts, one per cascade loop, each comparing the RK4 simulation
+                         with the actual plant readings from the PLC. -->
+                    <Border Style="{StaticResource DashCardStyle}">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="{x:Bind Lang.Panel_ResponSistem, Mode=OneWay}"
+                                       Style="{StaticResource DashCardTitleStyle}"/>
+
+                            <!-- Outer loop: temperature -->
+                            <TextBlock Text="{x:Bind Lang.Panel_OuterResponse, Mode=OneWay}"
+                                       Style="{StaticResource DashTinyLabelStyle}" Opacity="0.65"
+                                       TextWrapping="Wrap"/>
+                            <Border x:Name="ResponSistemChart"
                                     Style="{StaticResource DashInputBoxStyle}"
-                                    Padding="2">
-                                <controls:CascadeResponseChart x:Name="RespChart"/>
+                                    Height="280" Padding="2">
+                                <controls:CascadeResponseChart x:Name="RespChart" Loop="Outer"/>
                             </Border>
-                        </Grid>
+
+                            <!-- Inner loop: flow -->
+                            <TextBlock Text="{x:Bind Lang.Panel_InnerResponse, Mode=OneWay}"
+                                       Style="{StaticResource DashTinyLabelStyle}" Opacity="0.65"
+                                       TextWrapping="Wrap" Margin="0,4,0,0"/>
+                            <Border Style="{StaticResource DashInputBoxStyle}"
+                                    Height="280" Padding="2">
+                                <controls:CascadeResponseChart x:Name="RespChartInner" Loop="Inner"/>
+                            </Border>
+                        </StackPanel>
                     </Border>
 
                     <!-- Rise/Overshoot/Settling/SteadyErr metrics — read directly off the RK4

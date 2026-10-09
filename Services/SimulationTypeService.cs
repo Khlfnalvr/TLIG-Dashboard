@@ -57,7 +57,8 @@ public sealed class SimulationTypeService : INotifyPropertyChanged
     public event PropertyChangedEventHandler? PropertyChanged;
     public event EventHandler<SimulationType>? SimulationTypeChanged;
 
-    private SimulationType _currentType = SimulationType.Flow;
+    // The HE rig controls temperature only; the picker was removed, so this is now fixed.
+    private SimulationType _currentType = SimulationType.Temperature;
 
     public SimulationType CurrentType
     {

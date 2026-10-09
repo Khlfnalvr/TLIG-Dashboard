@@ -166,6 +166,10 @@ public sealed partial class ParameterPage : Page
         // Bukaan valve tidak diteruskan: halaman ini tidak punya kontrolnya, jadi nilai
         // yang sedang berlaku dipertahankan. CMD diisi RUN karena ini penekanan tombol
         // yang disengaja, bukan sinkronisasi diam-diam.
+        // Kurva hasil PLC untuk grafik dashboard: hanya Server yang menerima data LabVIEW.
+        if (BuildInfo.IsServer)
+            PlcTraceService.Instance.Begin(PlcTraceService.OriginServer, App.Session.Username, sp);
+
         App.PythonBridge.Run(kp, ki, kd, sp, cmd: PythonBridgeService.CmdRun);
 
         ActivityStore.Instance.LogSession(

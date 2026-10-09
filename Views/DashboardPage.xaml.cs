@@ -95,14 +95,16 @@ public sealed partial class DashboardPage : Page
         ApplySimulationType(App.SimType.CurrentType);
 
         // When a LabVIEW client (re)connects, push the current control values so the VI
-        // starts in sync with what the dashboard is showing. Wired on both flavors so the
-        // Client drives LabVIEW (setpoint / Run / Stop) exactly like the Server.
-        Data.ClientConnectedChanged += OnLabViewClientConnected;
+        // starts in sync with what the dashboard is showing. Server only: the TCP link to
+        // LabVIEW lives there, and the Client drives the plant through the Server instead.
+        if (!_clientMode)
+            Data.ClientConnectedChanged += OnLabViewClientConnected;
 
         // From here on, user edits to the controls are forwarded to LabVIEW.
         _controlsReady = true;
 
         _ = RespChart.InitializeAsync();
+        _ = RespChartInner.InitializeAsync();
 
         ApplyLearningPanelContent();
         App.Session.Changed += OnSessionChanged;
@@ -165,7 +167,9 @@ public sealed partial class DashboardPage : Page
 
     private void SendControlLine()
     {
-        if (!_controlsReady) return;
+        // Client has no TCP link to LabVIEW; its values reach the plant via PythonBridge →
+        // Server (/sim/pid/run), which echoes this same line on its own 6001 connection.
+        if (!_controlsReady || _clientMode) return;
 
         double kp = KpBox.Value, ki = KiBox.Value, kd = KdBox.Value,
                sp = CtlSetpointBox.Value, pump = CtlPump.Value;
@@ -299,11 +303,14 @@ public sealed partial class DashboardPage : Page
         s.RunFailed             += OnPidRunFailed;
         s.RecommendationCleared -= OnPidRecommendationCleared;
         s.RecommendationCleared += OnPidRecommendationCleared;
+        s.RemoteInputsApplied   -= OnPidRemoteInputs;
+        s.RemoteInputsApplied   += OnPidRemoteInputs;
     }
 
     private void UnsubscribePidSession()
     {
         var s = App.CascadeSession;
+        s.RemoteInputsApplied   -= OnPidRemoteInputs;
         s.ResultChanged         -= OnPidResultChanged;
         s.RunningChanged        -= OnPidRunningChanged;
         s.RunFailed             -= OnPidRunFailed;
@@ -325,13 +332,18 @@ public sealed partial class DashboardPage : Page
             FractionDigits = 0,
             NumberRounder = new Windows.Globalization.NumberFormatting.SignificantDigitsNumberRounder { SignificantDigits = 5 },
         };
-        foreach (var box in new[] { KpBox, KiBox, KdBox, CtlSetpointBox })
+        foreach (var box in new[] { KpBox, KiBox, KdBox, InnerKpBox, InnerKiBox, CtlSetpointBox })
             box.NumberFormatter = gainFmt;
 
         KpBox.ValueChanged          += PidInput_ValueChanged;
         KiBox.ValueChanged          += PidInput_ValueChanged;
         KdBox.ValueChanged          += PidInput_ValueChanged;
         CtlSetpointBox.ValueChanged += PidInput_ValueChanged;
+        // Inner flow PI: simulation-only. The VI's 48-byte packet carries the outer PID
+        // (SP, KC, KI, KD, PUMP, CMD) and nothing for the inner loop, so these boxes update
+        // the cascade session and are never sent to LabVIEW.
+        InnerKpBox.ValueChanged     += InnerInput_ValueChanged;
+        InnerKiBox.ValueChanged     += InnerInput_ValueChanged;
     }
 
     private void PidInput_ValueChanged(NumberBox sender, NumberBoxValueChangedEventArgs args)
@@ -340,10 +352,19 @@ public sealed partial class DashboardPage : Page
         PushPidInputs();
     }
 
+    private void InnerInput_ValueChanged(NumberBox sender, NumberBoxValueChangedEventArgs args)
+    {
+        if (_syncingPidInputs) return;
+        var s = App.CascadeSession;
+        s.InnerKp = InnerKpBox.Value;
+        s.InnerKi = InnerKiBox.Value;
+    }
+
     private void PushPidInputs()
     {
-        // The Control panel edits the cascade's OUTER temperature PID + setpoint; the inner
-        // flow PI keeps its session values (edited on the Cascade page).
+        // The card's top row edits the cascade's OUTER temperature PID + setpoint — the part
+        // that reaches LabVIEW. The inner flow PI row is pushed by InnerInput_ValueChanged,
+        // because nothing of it goes to the plant.
         var s = App.CascadeSession;
         s.OuterKp  = KpBox.Value;
         s.OuterKi  = KiBox.Value;
@@ -369,6 +390,8 @@ public sealed partial class DashboardPage : Page
         KpBox.Value          = s.OuterKp;
         KiBox.Value          = s.OuterKi;
         KdBox.Value          = s.OuterKd;
+        InnerKpBox.Value     = s.InnerKp;
+        InnerKiBox.Value     = s.InnerKi;
         CtlSetpointBox.Value = s.Setpoint;
         _syncingPidInputs = false;
         SendControlLine();   // advisor-accepted / normalized gains also drive LabVIEW
@@ -424,7 +447,13 @@ public sealed partial class DashboardPage : Page
         // lagi lain kali. Hanya Server yang bisa merekam (data LabVIEW masuk ke
         // sana); run yang dimulai dari Client direkam Server di /sim/pid/run.
         if (BuildInfo.IsServer)
+        {
             HeRunRecorder.Instance.Start(input, App.Session.Username, App.Session.DisplayName);
+
+            // Kurva hasil PLC untuk grafik. Run yang dimulai dari Server hanya tampil di
+            // Server; run dari Client dimulai Server di /sim/pid/run dengan asal "client".
+            PlcTraceService.Instance.Begin(PlcTraceService.OriginServer, App.Session.Username, input.Sp);
+        }
 
         // RUN also launches the external Python client (PIDtest.py) with the current gains
         // (the Control card drives the cascade's outer temperature PID).
@@ -526,6 +555,23 @@ public sealed partial class DashboardPage : Page
     private void OnPidResultChanged(object? sender, CascadeDesignResult result)
         => DispatcherQueue.TryEnqueue(() => RenderCascadeResult(result));
 
+    // Run salinan dari Client: kotak gain/setpoint ditarik dari sesi supaya angkanya sama
+    // dengan kurva yang digambar. Berbeda dari PullPidInputs(), tidak ada baris kontrol yang
+    // dikirim ke LabVIEW — perintah itu sudah dikirim handler /sim/pid/run.
+    private void OnPidRemoteInputs(object? sender, EventArgs e)
+        => DispatcherQueue.TryEnqueue(() =>
+        {
+            var s = App.CascadeSession;
+            _syncingPidInputs = true;
+            KpBox.Value          = s.OuterKp;
+            KiBox.Value          = s.OuterKi;
+            KdBox.Value          = s.OuterKd;
+            InnerKpBox.Value     = s.InnerKp;
+            InnerKiBox.Value     = s.InnerKi;
+            CtlSetpointBox.Value = s.Setpoint;
+            _syncingPidInputs = false;
+        });
+
     private void OnPidRunningChanged(object? sender, bool running)
         => DispatcherQueue.TryEnqueue(() => CtlRunBtn.IsEnabled = !running);
 
@@ -550,10 +596,14 @@ public sealed partial class DashboardPage : Page
         // full arrays. Same two-loop view as the Cascade page: temperature + flow on two
         // y-axes, plus the single-loop baseline and disturbance marker.
         int stride = System.Math.Max(1, sim.Time.Length / 1500);
-        RespChart.Update(
-            Sample(sim.Time, stride), Sample(sim.Temperature, stride), Sample(sim.SingleLoopTemperature, stride),
-            Sample(sim.Flow, stride), Sample(sim.FlowSetpoint, stride),
-            result.Input.Setpoint, sim.DisturbanceTime);
+        // Same run to both charts; each plots its own loop (outer = temperature, inner = flow).
+        var time   = Sample(sim.Time, stride);
+        var temp   = Sample(sim.Temperature, stride);
+        var single = Sample(sim.SingleLoopTemperature, stride);
+        var flow   = Sample(sim.Flow, stride);
+        var flowSp = Sample(sim.FlowSetpoint, stride);
+        RespChart.Update(time, temp, single, flow, flowSp, result.Input.Setpoint, sim.DisturbanceTime);
+        RespChartInner.Update(time, temp, single, flow, flowSp, result.Input.Setpoint, sim.DisturbanceTime);
 
         // result.Metrics is read off the exact RK4 curve above — always consistent with what's
         // plotted (the temperature step metrics of the outer loop).

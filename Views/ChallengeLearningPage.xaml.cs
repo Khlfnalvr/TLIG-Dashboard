@@ -1035,7 +1035,6 @@ public sealed partial class ChallengeLearningPage : Page
         WeightAiBox.Value    = existing?.WeightAI    ?? 30;
         WeightPeerBox.Value  = existing?.WeightPeer  ?? 20;
         FormStatusCombo.SelectedIndex = existing?.Status == ChallengeStatus.Active ? 1 : 0;
-        FormSystemCombo.SelectedIndex = existing == null ? 0 : (int)existing.TargetSystem;
         FormDeadlinePicker.Date = existing?.Deadline.HasValue == true
             ? new DateTimeOffset(existing.Deadline.Value) : (DateTimeOffset?)null;
 
@@ -1171,12 +1170,8 @@ public sealed partial class ChallengeLearningPage : Page
             return;
         }
 
-        SimulationType sys = FormSystemCombo.SelectedIndex switch
-        {
-            1 => SimulationType.Level,
-            2 => SimulationType.Temperature,
-            _ => SimulationType.Flow
-        };
+        // The HE rig controls temperature only — there is no other process to target.
+        const SimulationType sys = SimulationType.Temperature;
 
         if (_editing == null)
         {

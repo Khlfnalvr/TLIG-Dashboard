@@ -322,6 +322,8 @@ public sealed class LocalizationManager : INotifyPropertyChanged
     public string Panel_DiagramBlok      => T(nameof(Panel_DiagramBlok));
     public string Panel_ParameterPid     => T(nameof(Panel_ParameterPid));
     public string Panel_ResponSistem     => T(nameof(Panel_ResponSistem));
+    public string Panel_OuterResponse    => T(nameof(Panel_OuterResponse));
+    public string Panel_InnerResponse    => T(nameof(Panel_InnerResponse));
     public string Panel_RiseTime         => T(nameof(Panel_RiseTime));
     public string Panel_Overshoot        => T(nameof(Panel_Overshoot));
     public string Panel_Settling         => T(nameof(Panel_Settling));
@@ -1053,6 +1055,8 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             [nameof(Panel_DiagramBlok)]      = "BLOCK DIAGRAM",
             [nameof(Panel_ParameterPid)]     = "PID PARAMETERS",
             [nameof(Panel_ResponSistem)]     = "SYSTEM RESPONSE",
+            [nameof(Panel_OuterResponse)]    = "OUTER LOOP · TEMPERATURE — PLANT vs SIMULATION",
+            [nameof(Panel_InnerResponse)]    = "INNER LOOP · FLOW — PLANT vs SIMULATION",
             [nameof(Panel_RiseTime)]         = "RISE TIME",
             [nameof(Panel_Overshoot)]        = "OVERSHOOT",
             [nameof(Panel_Settling)]         = "SETTLING",
@@ -1732,6 +1736,8 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             [nameof(Panel_DiagramBlok)]      = "DIAGRAM BLOK",
             [nameof(Panel_ParameterPid)]     = "PARAMETER PID",
             [nameof(Panel_ResponSistem)]     = "RESPON SISTEM",
+            [nameof(Panel_OuterResponse)]    = "LOOP LUAR · TEMPERATUR — PLANT vs SIMULASI",
+            [nameof(Panel_InnerResponse)]    = "LOOP DALAM · FLOW — PLANT vs SIMULASI",
             [nameof(Panel_RiseTime)]         = "RISE TIME",
             [nameof(Panel_Overshoot)]        = "OVERSHOOT",
             [nameof(Panel_Settling)]         = "SETTLING",

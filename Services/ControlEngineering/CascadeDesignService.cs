@@ -33,8 +33,14 @@ public static class CascadeDesignService
 {
     private static readonly CascadeSimulator _sim = new();
 
+    /// <param name="mirrored">
+    /// Run salinan: layar ini hanya menggambar ulang simulasi yang sedang dijalankan Client.
+    /// Penasihat AI dan pencarian gain dilewati — ulasannya milik Client yang menekan RUN, dan
+    /// Server tidak perlu membayar panggilan LLM untuk hal yang tidak ia tampilkan.
+    /// </param>
     public static async Task<CascadeDesignResult> RunAsync(
-        CascadeInput input, IReadOnlyList<CascadeAttempt>? history = null, CancellationToken ct = default)
+        CascadeInput input, IReadOnlyList<CascadeAttempt>? history = null, CancellationToken ct = default,
+        bool mirrored = false)
     {
         // Guard against a cleared/zero setpoint (NumberBox yields NaN) — a flat response
         // would divide the steady-state-error metric by zero.
@@ -54,11 +60,15 @@ public static class CascadeDesignService
         // Gains to offer come from searching the simulator (verified against the same criteria as
         // the diagnosis), not from the LLM — so the card can't contradict the diagnosis. Null when
         // the current tuning is already ideal. The per-setpoint search is cached after the first run.
-        var recommendation = await Task.Run(() => CascadeRecommender.Recommend(metrics, metrics.Stable, input.Setpoint), ct);
+        var recommendation = mirrored
+            ? default
+            : await Task.Run(() => CascadeRecommender.Recommend(metrics, metrics.Stable, input.Setpoint), ct);
 
         // The LLM now only explains the recommended gains; it no longer picks numbers.
-        var advisor = await new CascadeAdvisorService().ReviewAsync(
-            input, metrics, history, recommendation?.gains, recommendation?.metrics, ct, diagnosis);
+        var advisor = mirrored
+            ? new CascadeAdvisorResult()
+            : await new CascadeAdvisorService().ReviewAsync(
+                input, metrics, history, recommendation?.gains, recommendation?.metrics, ct, diagnosis);
 
         return new CascadeDesignResult
         {
