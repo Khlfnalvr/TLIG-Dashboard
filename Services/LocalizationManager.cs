@@ -2214,7 +2214,7 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             ["Ui_ServerOpcNotConnected"] = "PLC: NOT CONNECTED",
             ["Ui_ServerOpcHint"] = "PLC not connected — open the connection flyout to connect to the LabVIEW HMI over TCP",
             ["Ui_ClientNotConnected"] = "SERVER: NOT CONNECTED",
-            ["Ui_ClientNotConnectedHint"] = "Not connected to TLIG Dashboard Server — open the connection flyout and enter the server address",
+            ["Ui_ClientNotConnectedHint"] = "Not connected to TLIG Dashboard Server (icolaboratory.com) — sign in, or check your internet connection",
             ["Ui_ClientConnected"] = "SERVER: {0}",
 
             ["OpcUa_StatusConnected"]   = "Connected — {0}",
@@ -2358,7 +2358,7 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             ["Ui_ServerOpcNotConnected"] = "PLC: TIDAK TERHUBUNG",
             ["Ui_ServerOpcHint"] = "PLC belum terhubung — buka flyout koneksi untuk menyambung ke HMI LabVIEW melalui TCP",
             ["Ui_ClientNotConnected"] = "SERVER: TIDAK TERHUBUNG",
-            ["Ui_ClientNotConnectedHint"] = "Belum terhubung ke TLIG Dashboard Server — buka flyout koneksi dan masukkan alamat server",
+            ["Ui_ClientNotConnectedHint"] = "Belum terhubung ke TLIG Dashboard Server (icolaboratory.com) — silakan login, atau periksa koneksi internet",
             ["Ui_ClientConnected"] = "SERVER: {0}",
 
             ["OpcUa_StatusConnected"]   = "Terhubung — {0}",

@@ -744,30 +744,18 @@ public sealed partial class MainWindow : Window
     // ── Simulation type selector ──────────────────────────────────────────
     // ── Login ─────────────────────────────────────────────────────────────
     // The server flavor authenticates against the local user database; the client
-    // flavor authenticates against a remote server (address entered in the popup)
-    // and, on success, opens the live stream + points the AI proxy at that server.
+    // flavor authenticates against the fixed remote server (ShareProtocol.FixedServerHost,
+    // no address to type) and, on success, opens the live stream + points the AI proxy
+    // at that server.
 
     private void InitLoginOverlay()
     {
-        // The server address field only applies to the client flavor.
-        LoginServerPanel.Visibility = Services.BuildInfo.IsClient
-            ? Visibility.Visible : Visibility.Collapsed;
-
         // Self-registration is a client→server action; the server flavor creates
         // accounts via the User Management page, so the entry point is client-only.
         LoginToSignupLink.Visibility = Services.BuildInfo.IsClient
             ? Visibility.Visible : Visibility.Collapsed;
 
-        var s = AppSettingsService.Load();
-        if (Services.BuildInfo.IsClient)
-        {
-            LoginServerBox.Text   = s.ServerHost;
-            LoginUsernameBox.Text = s.ServerUsername;
-        }
-        else
-        {
-            LoginUsernameBox.Text = s.ServerUsername;
-        }
+        LoginUsernameBox.Text = AppSettingsService.Load().ServerUsername;
     }
 
     private async void LoginSubmit_Click(object sender, RoutedEventArgs e)
@@ -810,13 +798,8 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        // ── Client: authenticate against the remote server ──
-        string host = LoginServerBox.Text.Trim();
-        if (string.IsNullOrEmpty(host))
-        {
-            SetLoginError(Lang.Login_ErrorNoServer);
-            return;
-        }
+        // ── Client: authenticate against the fixed remote server ──
+        string host = ShareProtocol.FixedServerHost;
 
         SetLoginBusy(true);
         var result = await AuthClient.LoginAsync(host, user, pass);
@@ -965,20 +948,13 @@ public sealed partial class MainWindow : Window
     {
         ShowLoginCard();
         if (Services.BuildInfo.IsClient)
-        {
-            var s = AppSettingsService.Load();
-            LoginServerBox.Text   = s.ServerHost;
-            LoginUsernameBox.Text = s.ServerUsername;
-        }
+            LoginUsernameBox.Text = AppSettingsService.Load().ServerUsername;
         LoginPasswordBox.Password = "";
         LoginErrorText.Visibility = Visibility.Collapsed;
         LoginInfoText.Visibility  = Visibility.Collapsed;
         LoginOverlay.Visibility   = Visibility.Visible;
 
-        if (Services.BuildInfo.IsClient && string.IsNullOrWhiteSpace(LoginServerBox.Text))
-            LoginServerBox.Focus(FocusState.Programmatic);
-        else
-            LoginUsernameBox.Focus(FocusState.Programmatic);
+        LoginUsernameBox.Focus(FocusState.Programmatic);
     }
 
     /// <summary>
@@ -1010,12 +986,6 @@ public sealed partial class MainWindow : Window
             NavView.SelectedItem = FirstVisibleNavItem();
     }
 
-    private void LoginServer_KeyDown(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e)
-    {
-        if (e.Key == Windows.System.VirtualKey.Enter)
-            LoginUsernameBox.Focus(FocusState.Programmatic);
-    }
-
     private void LoginUsername_KeyDown(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e)
     {
         if (e.Key == Windows.System.VirtualKey.Enter)
@@ -1034,14 +1004,12 @@ public sealed partial class MainWindow : Window
     }
 
     // ── Signup (client self-registration, @its.ac.id) ─────────────────────
-    // Client-only: the user enters a server address + an @its.ac.id email +
-    // password; the server creates a Viewer account they can then sign in with.
+    // Client-only: the user enters an @its.ac.id email + password; the fixed server
+    // (ShareProtocol.FixedServerHost) creates a Viewer account they can then sign in with.
     // No email verification — a valid address + password registers immediately.
 
     private void ShowSignupCard()
     {
-        // Carry over whatever server address was typed on the login card.
-        SignupServerBox.Text       = LoginServerBox.Text;
         SignupPasswordBox.Password = "";
         SignupConfirmBox.Password  = "";
         SignupErrorText.Visibility = Visibility.Collapsed;
@@ -1061,17 +1029,11 @@ public sealed partial class MainWindow : Window
 
     private void LoginToSignup_Click(object sender, RoutedEventArgs e) => ShowSignupCard();
 
-    private void SignupToLogin_Click(object sender, RoutedEventArgs e)
-    {
-        // Carry the server address back so it isn't lost when switching cards.
-        if (!string.IsNullOrWhiteSpace(SignupServerBox.Text))
-            LoginServerBox.Text = SignupServerBox.Text;
-        ShowLoginCard();
-    }
+    private void SignupToLogin_Click(object sender, RoutedEventArgs e) => ShowLoginCard();
 
     private async void SignupSubmit_Click(object sender, RoutedEventArgs e)
     {
-        string host  = SignupServerBox.Text.Trim();
+        string host  = ShareProtocol.FixedServerHost;
         string email = SignupEmailBox.Text.Trim();
         string pass  = SignupPasswordBox.Password;
         string conf  = SignupConfirmBox.Password;
@@ -1079,11 +1041,6 @@ public sealed partial class MainWindow : Window
         if (string.IsNullOrEmpty(email) || string.IsNullOrEmpty(pass))
         {
             SetSignupError(Lang.Signup_ErrEmpty);
-            return;
-        }
-        if (string.IsNullOrEmpty(host))
-        {
-            SetSignupError(Lang.Login_ErrorNoServer);
             return;
         }
 
@@ -1110,10 +1067,9 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        // Account created. Persist host + email so the login card prefills, then
+        // Account created. Persist the email so the login card prefills, then
         // bounce the user back to sign in (explicit two-step, no auto-login).
         var s = AppSettingsService.Load();
-        s.ServerHost     = AuthClient.NormalizeHost(host);
         s.ServerUsername = EmailPolicy.Normalize(email);
         AppSettingsService.Save(s);
 
@@ -1121,7 +1077,6 @@ public sealed partial class MainWindow : Window
         SignupConfirmBox.Password  = "";
         SignupErrorText.Visibility = Visibility.Collapsed;
 
-        LoginServerBox.Text       = s.ServerHost;
         LoginUsernameBox.Text     = s.ServerUsername;
         LoginPasswordBox.Password = "";
         LoginErrorText.Visibility = Visibility.Collapsed;
@@ -1143,12 +1098,6 @@ public sealed partial class MainWindow : Window
         SignupSubmitBtn.IsEnabled  = !busy;
         SignupBusyPanel.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;
         if (busy) SignupErrorText.Visibility = Visibility.Collapsed;
-    }
-
-    private void SignupServer_KeyDown(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e)
-    {
-        if (e.Key == Windows.System.VirtualKey.Enter)
-            SignupEmailBox.Focus(FocusState.Programmatic);
     }
 
     private void SignupEmail_KeyDown(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e)
@@ -2472,8 +2421,8 @@ public sealed partial class MainWindow : Window
 
     private void SwitchServerBtn_Click(object sender, RoutedEventArgs e)
     {
-        // Drop any current connection and reopen the login popup to sign in
-        // (optionally to a different server).
+        // Drop any current connection and reopen the login popup to sign in again
+        // (e.g. with another account; the server itself is fixed).
         ShareClient.Instance.Disconnect();
         RefreshClientStatus();
         ShowLoginOverlay();

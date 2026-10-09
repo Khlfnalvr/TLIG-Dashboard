@@ -32,6 +32,13 @@ public static class ShareProtocol
     public const byte ChannelCamera = 0;
     public const byte ChannelHmi    = 1;
 
+    /// <summary>
+    /// The one server every Client connects to (Cloudflare Tunnel domain, so HTTPS/WSS —
+    /// see <see cref="AuthClient.NeedsTls"/>). The Client no longer asks for an address at
+    /// login; <see cref="AppSettingsService.Load"/> pins <c>ServerHost</c> to this value.
+    /// </summary>
+    public const string FixedServerHost = "icolaboratory.com";
+
     public const string WsPath            = "/ws";
     public const string AiPath            = "/ai/chat/completions";
     public const string AiConfigPath      = "/ai/config";       // GET = list providers, POST = save (staff)

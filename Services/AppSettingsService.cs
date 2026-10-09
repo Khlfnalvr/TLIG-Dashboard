@@ -176,6 +176,19 @@ public static class AppSettingsService
         }
         catch { }
 
+        // Client: the server address is fixed (ShareProtocol.FixedServerHost) and no longer
+        // typed at login. Pinned here so every reader of ServerHost — login, stream, relays,
+        // AI proxy — gets the same value. A different saved host (an old LAN IP or tunnel
+        // URL) is replaced and its session token dropped: that token was issued by the other
+        // server, so it is meaningless here and must not be sent to this one.
+        if (BuildInfo.IsClient &&
+            !string.Equals(settings.ServerHost, ShareProtocol.FixedServerHost, StringComparison.OrdinalIgnoreCase))
+        {
+            if (!string.IsNullOrWhiteSpace(settings.ServerHost)) settings.ServerToken = "";
+            settings.ServerHost = ShareProtocol.FixedServerHost;
+            if (loadedSettingsFile) Save(settings);
+        }
+
         var persistedLanguage = LoadLanguageFromFiles(settings.Language);
         if (settings.Language != persistedLanguage)
         {

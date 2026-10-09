@@ -25,7 +25,7 @@ Panduan ini menjelaskan cara memakai **TLIG Dashboard** — aplikasi desktop Win
 | Dijalankan di | PC lab yang tersambung langsung ke HMI LabVIEW/PLC | Laptop/PC mahasiswa atau dosen di mana saja |
 | Kamera & layar HMI | **Menyiarkan** (broadcast) ke semua Client yang terhubung | **Menerima** siaran dari Server |
 | Kunci API AI | Disimpan lokal di Server (tidak pernah dikirim ke Client) | Tidak perlu kunci sendiri — chat diteruskan lewat Server |
-| Login | Hanya akun **staf (Admin/Dosen/Asisten)** yang boleh login langsung di Server | Semua peran bisa login, harus mengisi alamat Server |
+| Login | Hanya akun **staf (Admin/Dosen/Asisten)** yang boleh login langsung di Server | Semua peran bisa login; alamat Server sudah tetap (`icolaboratory.com`), tidak perlu diisi |
 | Halaman navigasi | Sama persis dengan Client, ditambah halaman **Settings** dan **Users** | Sama persis dengan Server, kecuali Settings & Users tidak muncul |
 | Registrasi mandiri | Tidak ada (akun dibuat lewat halaman Users) | Ada, lewat tautan "Buat akun" di layar login |
 
@@ -69,7 +69,7 @@ Saat aplikasi dibuka, layar login (overlay) langsung tampil di atas jendela utam
 Isi **Username** dan **Password**, lalu klik tombol login. Server memvalidasi langsung ke database pengguna lokal. Jika akun yang dipakai berperan Mahasiswa, login **ditolak** dengan pesan bahwa akun mahasiswa tidak bisa masuk ke Server — gunakan akun Dosen/Asisten.
 
 ### Login di Client
-Selain Username dan Password, ada kolom tambahan **Alamat Server** (host, boleh dengan port seperti `192.168.1.10:8088`, atau domain seperti `xxxx.trycloudflare.com` tanpa port untuk koneksi HTTPS). Client mengirim kredensial ke Server lewat jaringan; jika berhasil, sesi (token) tersimpan sehingga tidak perlu login ulang setiap membuka aplikasi (kecuali logout).
+Cukup isi **Username** dan **Password** — tidak ada kolom alamat Server. Client selalu tersambung ke Server lab di **`icolaboratory.com`** (lewat HTTPS/WSS Cloudflare Tunnel). Client mengirim kredensial ke Server lewat internet; jika berhasil, sesi (token) tersimpan sehingga tidak perlu login ulang setiap membuka aplikasi (kecuali logout).
 
 ### Registrasi mandiri (khusus Client)
 Klik tautan "Buat akun" di layar login untuk membuka form pendaftaran. Field yang diminta: **Email** dan **Kata sandi + konfirmasi**. Aturan email:
@@ -94,13 +94,13 @@ Kartu **Server** di halaman Settings:
 3. Klik tombol **Start** untuk menyalakan.
 4. Status koneksi, jumlah client yang tersambung, serta alamat LAN dan IP publik ditampilkan otomatis di bawah tombol.
 
-Client di jaringan yang sama (LAN kampus/lab) cukup memasukkan alamat seperti `192.168.x.x:8088` saat login — tidak perlu setup tambahan.
+Client tidak lagi bisa memasukkan alamat LAN (`192.168.x.x:8088`): alamatnya tetap `icolaboratory.com`, jadi Server harus menyalakan Cloudflare Tunnel dengan domain itu (lihat 5.2).
 
 ### 5.2 Akses dari luar jaringan kampus (Cloudflare Tunnel)
 Jika mahasiswa/dosen perlu tersambung dari luar LAN (mis. dari rumah, atau jaringan kampus yang memblokir port masuk), gunakan kartu **Cloudflare Tunnel**:
 - Klik tombol toggle untuk menyalakan **Quick Tunnel** — ini otomatis membuat URL publik acak berbentuk `xxxx.trycloudflare.com` tanpa perlu akun Cloudflare maupun buka port router. URL ini berubah setiap kali tunnel dinyalakan ulang.
 - Untuk domain tetap (tidak berubah-ubah), centang **Gunakan domain kustom**, isi nama domain, lalu klik **Login** untuk autentikasi ke akun Cloudflare (Named Tunnel) — opsi ini butuh akun & domain Cloudflare sendiri.
-- Bagikan URL yang muncul (ada tombol salin) ke Client — mereka memasukkannya sebagai **Alamat Server** saat login (tanpa port, karena otomatis pakai HTTPS/WSS).
+- **Wajib untuk Client:** aplikasi Client selalu menyambung ke **`icolaboratory.com`** dan tidak punya kolom alamat. Jadi Server harus memakai **Gunakan domain kustom** dengan domain `icolaboratory.com` (Named Tunnel). Quick Tunnel (`xxxx.trycloudflare.com`) tidak bisa dipakai Client.
 
 ### 5.3 Menghubungkan PLC (HMI LabVIEW via TCP)
 Kartu **PLC Connection** (label lama "OPC UA" masih terlihat di beberapa tempat, tapi protokolnya sekarang TCP langsung ke HMI LabVIEW, bukan OPC UA/DA):
@@ -110,7 +110,7 @@ Kartu **PLC Connection** (label lama "OPC UA" masih terlihat di beberapa tempat,
 
 Koneksi ini otomatis mencoba menyambung ulang setiap 5 detik jika terputus, sampai pengguna menekan Disconnect secara manual. Tab yang sama juga bisa dibuka lewat ikon status PLC di title bar (pojok kanan atas jendela) tanpa harus membuka halaman Settings.
 
-> **Client tidak pernah menyambung langsung ke PLC/LabVIEW.** Sejak v1.2.0 tab PLC tidak ada di aplikasi Client. Semua data (angka LabVIEW, status PLC/Sensor, metrik PID, kamera, HMI, kurva simulasi PID & Cascade) dikirim Server ke Client, dan semua perintah (RUN/STOP/parameter/valve) dari Client diteruskan Server ke plant. Server adalah satu-satunya relay — Client cukup login ke alamat Server (IP LAN atau URL Cloudflare Tunnel).
+> **Client tidak pernah menyambung langsung ke PLC/LabVIEW.** Sejak v1.2.0 tab PLC tidak ada di aplikasi Client. Semua data (angka LabVIEW, status PLC/Sensor, metrik PID, kamera, HMI, kurva simulasi PID & Cascade) dikirim Server ke Client, dan semua perintah (RUN/STOP/parameter/valve) dari Client diteruskan Server ke plant. Server adalah satu-satunya relay — Client cukup login; alamat Server sudah tetap (`icolaboratory.com`).
 
 ### 5.4 Mengonfigurasi AI
 Kartu **AI** di halaman Settings (atau tab "AI" di flyout title bar) membuka dialog **Pengaturan AI**, berisi satu kartu per provider:
@@ -154,7 +154,7 @@ mengantre tanpa perlu membuka halaman lain:
 
 ## 6. Panduan untuk Client
 
-1. Buka aplikasi, isi **Username**, **Password**, dan **Alamat Server** (minta ke admin lab/dosen — bisa berupa IP LAN `192.168.x.x:port` atau URL Cloudflare Tunnel `xxxx.trycloudflare.com`).
+1. Buka aplikasi, isi **Username** dan **Password**. Alamat Server tidak perlu diisi — Client otomatis tersambung ke `icolaboratory.com`.
 2. Kalau belum punya akun, klik **Buat akun** dan daftar dengan email kampus (lihat [bagian 4](#4-login-registrasi-dan-onboarding)).
 3. Setelah login berhasil, semua halaman navigasi yang sama seperti Server akan tampil (kecuali Settings & Users) — Dashboard, Parameter, Live View, Learning Analytic, AI Chat.
 4. Kamera dan layar HMI di halaman **Live View**/Dashboard otomatis menampilkan siaran dari Server begitu tersambung — Client tidak membuka kamera device sendiri.
@@ -313,7 +313,7 @@ Tersedia di kedua varian, lewat title bar dan menu hamburger (ikon garis tiga):
 | Gejala | Kemungkinan penyebab | Solusi |
 |---|---|---|
 | Login mahasiswa ditolak di Server | Akun Mahasiswa tidak diizinkan login langsung di Server | Login lewat Client, atau gunakan akun Dosen/Asisten |
-| Client gagal konek ke Server | Alamat/port salah, Server belum di-Start, atau firewall memblokir | Pastikan Share Server sudah **Start** di Server; cek port; jika lewat internet gunakan URL Cloudflare Tunnel |
+| Client gagal konek ke Server | Server belum di-Start, Cloudflare Tunnel domain `icolaboratory.com` belum menyala, atau laptop tidak terhubung ke internet | Pastikan Share Server sudah **Start** dan tunnel dengan domain kustom `icolaboratory.com` aktif di Server; pastikan laptop Client punya akses internet |
 | Kamera/HMI kosong di Client | Server belum mencentang Share Camera/Share HMI, atau belum Start | Aktifkan centang yang sesuai di kartu Server, lalu Start ulang |
 | Parameter PID tidak bisa diterapkan (Client) | Sudah mencapai batas 3 kali penerapan | Hubungi staf/gunakan akun Server untuk penerapan lebih lanjut |
 | Chat AI error "tidak ada kunci" | Belum ada provider yang diaktifkan/diberi API key oleh staf | Staf membuka Pengaturan AI (gear icon), aktifkan provider & isi API key |

@@ -810,15 +810,8 @@
 
                         <!-- Form fields -->
                         <StackPanel Padding="28,16,28,0" Spacing="14">
-                            <!-- Server address — client flavor only (toggled in code-behind) -->
-                            <StackPanel x:Name="LoginServerPanel" Spacing="6" Visibility="Collapsed">
-                                <TextBlock Text="{x:Bind Lang.Login_ServerAddress, Mode=OneWay}"
-                                           FontSize="12" FontWeight="SemiBold"/>
-                                <TextBox x:Name="LoginServerBox"
-                                         FontSize="12"
-                                         PlaceholderText="{x:Bind Lang.Login_ServerAddressHint, Mode=OneWay}"
-                                         KeyDown="LoginServer_KeyDown"/>
-                            </StackPanel>
+                            <!-- No server address field: the Client always connects to
+                                 ShareProtocol.FixedServerHost (icolaboratory.com). -->
                             <StackPanel Spacing="6">
                                 <TextBlock Text="{x:Bind Lang.Login_Username, Mode=OneWay}"
                                            FontSize="12" FontWeight="SemiBold"/>
@@ -925,14 +918,6 @@
 
                         <!-- Form fields -->
                         <StackPanel Padding="28,16,28,0" Spacing="14">
-                            <StackPanel Spacing="6">
-                                <TextBlock Text="{x:Bind Lang.Login_ServerAddress, Mode=OneWay}"
-                                           FontSize="12" FontWeight="SemiBold"/>
-                                <TextBox x:Name="SignupServerBox"
-                                         FontSize="12"
-                                         PlaceholderText="{x:Bind Lang.Login_ServerAddressHint, Mode=OneWay}"
-                                         KeyDown="SignupServer_KeyDown"/>
-                            </StackPanel>
                             <StackPanel Spacing="6">
                                 <TextBlock Text="{x:Bind Lang.Signup_Email, Mode=OneWay}"
                                            FontSize="12" FontWeight="SemiBold"/>
