@@ -103,8 +103,6 @@ public sealed partial class DashboardPage : Page
         // From here on, user edits to the controls are forwarded to LabVIEW.
         _controlsReady = true;
 
-        _ = RespChart.InitializeAsync();
-        _ = RespChartInner.InitializeAsync();
 
         ApplyLearningPanelContent();
         App.Session.Changed += OnSessionChanged;

@@ -1,8 +1,9 @@
 <UserControl
     x:Class="TLIGDashboard.Controls.CascadeResponseChart"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:TLIGDashboard.Controls">
 
-    <WebView2 x:Name="Web" DefaultBackgroundColor="Transparent"/>
+    <local:LineChartView x:Name="Chart" Margin="2"/>
 
 </UserControl>

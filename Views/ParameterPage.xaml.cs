@@ -23,7 +23,6 @@ public sealed partial class ParameterPage : Page
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
         Loaded -= OnLoaded;
-        _ = RespChart.InitializeAsync();
 #if CLIENT
         RefreshParamCounter();
 #endif

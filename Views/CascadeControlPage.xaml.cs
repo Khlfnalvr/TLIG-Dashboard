@@ -23,7 +23,6 @@ public sealed partial class CascadeControlPage : Page
         NavigationCacheMode = Microsoft.UI.Xaml.Navigation.NavigationCacheMode.Required;
         WireInputs();
         LoadBlockDiagram();
-        Loaded += OnLoaded;
     }
 
     // Relative XAML image sources don't resolve in this unpackaged WinUI app (see
@@ -34,13 +33,6 @@ public sealed partial class CascadeControlPage : Page
         string path = System.IO.Path.Combine(System.AppContext.BaseDirectory, "cascade-block-diagram.png");
         if (System.IO.File.Exists(path))
             BlockDiagramImage.Source = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage(new System.Uri(path));
-    }
-
-    private void OnLoaded(object sender, RoutedEventArgs e)
-    {
-        Loaded -= OnLoaded;
-        _ = RespChart.InitializeAsync();
-        _ = RespChartInner.InitializeAsync();
     }
 
     protected override void OnNavigatedTo(Microsoft.UI.Xaml.Navigation.NavigationEventArgs e)
