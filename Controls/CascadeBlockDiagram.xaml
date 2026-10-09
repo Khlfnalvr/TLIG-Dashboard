@@ -1,0 +1,131 @@
+<UserControl
+    x:Class="TLIGDashboard.Controls.CascadeBlockDiagram"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!--
+        Cascade block diagram drawn natively: outer temperature PID whose output is the
+        inner flow PI setpoint, with both feedback loops. No background — every colour is a
+        theme resource, so the figure stays readable on light and dark and follows a theme
+        switch immediately. Ink (lines, arrows, text) uses the theme's text colour; the two
+        loops keep their green (outer) / amber (inner) identity, darker on light and brighter
+        on dark. Viewbox + fixed-size Canvas so it scales to whatever space the page gives it.
+    -->
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.ThemeDictionaries>
+                <ResourceDictionary x:Key="Light">
+                    <SolidColorBrush x:Key="BdInk"       Color="#FF1F1F1F"/>
+                    <SolidColorBrush x:Key="BdOuter"     Color="#FF15803D"/>
+                    <SolidColorBrush x:Key="BdOuterFill" Color="#2E22C55E"/>
+                    <SolidColorBrush x:Key="BdInner"     Color="#FFB45309"/>
+                    <SolidColorBrush x:Key="BdInnerFill" Color="#33F59E0B"/>
+                </ResourceDictionary>
+                <ResourceDictionary x:Key="Dark">
+                    <SolidColorBrush x:Key="BdInk"       Color="#FFE6E6E6"/>
+                    <SolidColorBrush x:Key="BdOuter"     Color="#FF4ADE80"/>
+                    <SolidColorBrush x:Key="BdOuterFill" Color="#2E4ADE80"/>
+                    <SolidColorBrush x:Key="BdInner"     Color="#FFFBBF24"/>
+                    <SolidColorBrush x:Key="BdInnerFill" Color="#2EFBBF24"/>
+                </ResourceDictionary>
+                <ResourceDictionary x:Key="HighContrast">
+                    <SolidColorBrush x:Key="BdInk"       Color="{ThemeResource SystemColorWindowTextColor}"/>
+                    <SolidColorBrush x:Key="BdOuter"     Color="{ThemeResource SystemColorWindowTextColor}"/>
+                    <SolidColorBrush x:Key="BdOuterFill" Color="Transparent"/>
+                    <SolidColorBrush x:Key="BdInner"     Color="{ThemeResource SystemColorWindowTextColor}"/>
+                    <SolidColorBrush x:Key="BdInnerFill" Color="Transparent"/>
+                </ResourceDictionary>
+            </ResourceDictionary.ThemeDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <Viewbox Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center">
+        <Canvas Width="470" Height="285">
+            <!-- Loop frames -->
+            <TextBlock Canvas.Left="32" Canvas.Top="2" FontSize="9" FontWeight="SemiBold" Foreground="{ThemeResource BdOuter}" Text="LOOP PRIMER (TEMPERATUR – PID)"/>
+            <Rectangle Canvas.Left="28" Canvas.Top="16" Width="124" Height="86" Stroke="{ThemeResource BdOuter}" StrokeThickness="1.2" StrokeDashArray="5,3" Fill="Transparent" RadiusX="6" RadiusY="6"/>
+            <TextBlock Canvas.Left="188" Canvas.Top="2" FontSize="9" FontWeight="SemiBold" Foreground="{ThemeResource BdInner}" Text="LOOP SEKUNDER (FLOW – PI)"/>
+            <Rectangle Canvas.Left="158" Canvas.Top="16" Width="220" Height="196" Stroke="{ThemeResource BdInner}" StrokeThickness="1.2" StrokeDashArray="5,3" Fill="Transparent" RadiusX="6" RadiusY="6"/>
+    
+            <!-- Forward-path arrows -->
+            <Line X1="24" Y1="80" X2="38" Y2="80" Stroke="{ThemeResource BdInk}" StrokeThickness="1.2"/>
+            <Polygon Points="30,77 38,80 30,83" Fill="{ThemeResource BdInk}"/>
+            <Line X1="64" Y1="80" X2="76" Y2="80" Stroke="{ThemeResource BdInk}" StrokeThickness="1.2"/>
+            <Polygon Points="68,77 76,80 68,83" Fill="{ThemeResource BdInk}"/>
+            <Line X1="146" Y1="80" X2="166" Y2="80" Stroke="{ThemeResource BdInk}" StrokeThickness="1.2"/>
+            <Polygon Points="158,77 166,80 158,83" Fill="{ThemeResource BdInk}"/>
+            <Line X1="192" Y1="80" X2="204" Y2="80" Stroke="{ThemeResource BdInk}" StrokeThickness="1.2"/>
+            <Polygon Points="196,77 204,80 196,83" Fill="{ThemeResource BdInk}"/>
+            <Line X1="268" Y1="80" X2="280" Y2="80" Stroke="{ThemeResource BdInk}" StrokeThickness="1.2"/>
+            <Polygon Points="272,77 280,80 272,83" Fill="{ThemeResource BdInk}"/>
+            <Line X1="346" Y1="80" X2="372" Y2="80" Stroke="{ThemeResource BdInk}" StrokeThickness="1.2"/>
+            <Polygon Points="364,77 372,80 364,83" Fill="{ThemeResource BdInk}"/>
+            <Line X1="444" Y1="80" X2="460" Y2="80" Stroke="{ThemeResource BdInk}" StrokeThickness="1.2"/>
+    
+            <!-- Flow feedback (q -> Flow Tx -> sum2) -->
+            <Line X1="358" Y1="82" X2="358" Y2="172" Stroke="{ThemeResource BdInk}" StrokeThickness="1.2"/>
+            <Line X1="358" Y1="172" X2="302" Y2="172" Stroke="{ThemeResource BdInk}" StrokeThickness="1.2"/>
+            <Polygon Points="310,169 302,172 310,175" Fill="{ThemeResource BdInk}"/>
+            <Line X1="212" Y1="172" X2="175" Y2="172" Stroke="{ThemeResource BdInk}" StrokeThickness="1.2"/>
+            <Line X1="175" Y1="172" X2="175" Y2="95" Stroke="{ThemeResource BdInk}" StrokeThickness="1.2"/>
+            <Polygon Points="172,95 178,95 175,87" Fill="{ThemeResource BdInk}"/>
+    
+            <!-- Temperature feedback (T -> Temp Tx -> sum1) -->
+            <Line X1="444" Y1="82" X2="444" Y2="252" Stroke="{ThemeResource BdInk}" StrokeThickness="1.2"/>
+            <Line X1="444" Y1="252" X2="296" Y2="252" Stroke="{ThemeResource BdInk}" StrokeThickness="1.2"/>
+            <Polygon Points="304,249 296,252 304,255" Fill="{ThemeResource BdInk}"/>
+            <Line X1="186" Y1="252" X2="51" Y2="252" Stroke="{ThemeResource BdInk}" StrokeThickness="1.2"/>
+            <Line X1="51" Y1="252" X2="51" Y2="95" Stroke="{ThemeResource BdInk}" StrokeThickness="1.2"/>
+            <Polygon Points="48,95 54,95 51,87" Fill="{ThemeResource BdInk}"/>
+    
+            <!-- Nodes -->
+            <Ellipse Canvas.Left="356" Canvas.Top="78" Width="4" Height="4" Fill="{ThemeResource BdInk}"/>
+            <Ellipse Canvas.Left="442" Canvas.Top="78" Width="4" Height="4" Fill="{ThemeResource BdInk}"/>
+    
+            <!-- Summing junctions -->
+            <Ellipse Canvas.Left="38" Canvas.Top="67" Width="26" Height="26" Stroke="{ThemeResource BdInk}" StrokeThickness="1.4" Fill="Transparent"/>
+            <TextBlock Canvas.Left="47" Canvas.Top="67" FontSize="8" Text="+"/>
+            <TextBlock Canvas.Left="48" Canvas.Top="79" FontSize="8" Text="−"/>
+            <Ellipse Canvas.Left="166" Canvas.Top="67" Width="26" Height="26" Stroke="{ThemeResource BdInk}" StrokeThickness="1.4" Fill="Transparent"/>
+            <TextBlock Canvas.Left="175" Canvas.Top="67" FontSize="8" Text="+"/>
+            <TextBlock Canvas.Left="176" Canvas.Top="79" FontSize="8" Text="−"/>
+    
+            <!-- Controller / plant blocks -->
+            <Rectangle Canvas.Left="76" Canvas.Top="62" Width="70" Height="36" Stroke="{ThemeResource BdOuter}" StrokeThickness="1.2" Fill="{ThemeResource BdOuterFill}" RadiusX="4" RadiusY="4"/>
+            <TextBlock Canvas.Left="76" Canvas.Top="65" Width="70" TextAlignment="Center" FontSize="9" FontWeight="SemiBold" Text="PID"/>
+            <TextBlock Canvas.Left="76" Canvas.Top="78" Width="70" TextAlignment="Center" FontSize="8" Text="Temperatur"/>
+            <Rectangle Canvas.Left="204" Canvas.Top="62" Width="64" Height="36" Stroke="{ThemeResource BdInner}" StrokeThickness="1.2" Fill="{ThemeResource BdInnerFill}" RadiusX="4" RadiusY="4"/>
+            <TextBlock Canvas.Left="204" Canvas.Top="65" Width="64" TextAlignment="Center" FontSize="9" FontWeight="SemiBold" Text="PI"/>
+            <TextBlock Canvas.Left="204" Canvas.Top="78" Width="64" TextAlignment="Center" FontSize="8" Text="Flow"/>
+            <Rectangle Canvas.Left="280" Canvas.Top="62" Width="66" Height="36" Stroke="{ThemeResource BdInk}" StrokeThickness="1.2" Fill="Transparent" RadiusX="4" RadiusY="4"/>
+            <TextBlock Canvas.Left="280" Canvas.Top="66" Width="66" TextAlignment="Center" FontSize="8" Text="Control"/>
+            <TextBlock Canvas.Left="280" Canvas.Top="77" Width="66" TextAlignment="Center" FontSize="8" Text="Valve"/>
+            <Rectangle Canvas.Left="372" Canvas.Top="62" Width="72" Height="36" Stroke="{ThemeResource BdInk}" StrokeThickness="1.2" Fill="Transparent" RadiusX="4" RadiusY="4"/>
+            <TextBlock Canvas.Left="372" Canvas.Top="66" Width="72" TextAlignment="Center" FontSize="8" Text="Plant"/>
+            <TextBlock Canvas.Left="372" Canvas.Top="77" Width="72" TextAlignment="Center" FontSize="7" Text="(Heat Exch.)"/>
+            <Rectangle Canvas.Left="212" Canvas.Top="157" Width="90" Height="30" Stroke="{ThemeResource BdInk}" StrokeThickness="1.2" Fill="Transparent" RadiusX="4" RadiusY="4"/>
+            <TextBlock Canvas.Left="212" Canvas.Top="159" Width="90" TextAlignment="Center" FontSize="7.5" Text="Flow Transmitter"/>
+            <TextBlock Canvas.Left="212" Canvas.Top="170" Width="90" TextAlignment="Center" FontSize="7" Text="GM2(s)"/>
+            <Rectangle Canvas.Left="186" Canvas.Top="237" Width="110" Height="30" Stroke="{ThemeResource BdInk}" StrokeThickness="1.2" Fill="Transparent" RadiusX="4" RadiusY="4"/>
+            <TextBlock Canvas.Left="186" Canvas.Top="239" Width="110" TextAlignment="Center" FontSize="7.5" Text="Temperature Transmitter"/>
+            <TextBlock Canvas.Left="186" Canvas.Top="250" Width="110" TextAlignment="Center" FontSize="7" Text="GM1(s)"/>
+    
+            <!-- Signal labels -->
+            <TextBlock Canvas.Left="2" Canvas.Top="70" FontSize="10" FontWeight="SemiBold" Text="SP"/>
+            <TextBlock Canvas.Left="14" Canvas.Top="70" FontSize="7" Text="T"/>
+            <TextBlock Canvas.Left="66" Canvas.Top="58" FontSize="8" FontStyle="Italic" Text="eT"/>
+            <TextBlock Canvas.Left="160" Canvas.Top="52" FontSize="7" Text="MV_FSP"/>
+            <TextBlock Canvas.Left="100" Canvas.Top="100" FontSize="7" Text="GC1(s)"/>
+            <TextBlock Canvas.Left="194" Canvas.Top="58" FontSize="8" FontStyle="Italic" Text="eF"/>
+            <TextBlock Canvas.Left="268" Canvas.Top="58" FontSize="8" FontStyle="Italic" Text="u"/>
+            <TextBlock Canvas.Left="220" Canvas.Top="100" FontSize="7" Text="GC2(s)"/>
+            <TextBlock Canvas.Left="304" Canvas.Top="100" FontSize="7" Text="GV(s)"/>
+            <TextBlock Canvas.Left="352" Canvas.Top="58" FontSize="9" FontWeight="SemiBold" Text="q"/>
+            <TextBlock Canvas.Left="398" Canvas.Top="100" FontSize="7" Text="GP(s)"/>
+            <TextBlock Canvas.Left="450" Canvas.Top="58" FontSize="10" FontWeight="SemiBold" Text="T"/>
+            <TextBlock Canvas.Left="216" Canvas.Top="189" FontSize="7.5" Text="PVF (Flow)"/>
+            <TextBlock Canvas.Left="196" Canvas.Top="269" FontSize="7.5" Text="PVT (Temperatur)"/>
+        </Canvas>
+    </Viewbox>
+
+</UserControl>

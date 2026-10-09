@@ -22,17 +22,6 @@ public sealed partial class CascadeControlPage : Page
         InitializeComponent();
         NavigationCacheMode = Microsoft.UI.Xaml.Navigation.NavigationCacheMode.Required;
         WireInputs();
-        LoadBlockDiagram();
-    }
-
-    // Relative XAML image sources don't resolve in this unpackaged WinUI app (see
-    // MainWindow.UpdateLogo), so load the block-diagram picture from the app base directory
-    // by absolute path — same pattern the logo uses.
-    private void LoadBlockDiagram()
-    {
-        string path = System.IO.Path.Combine(System.AppContext.BaseDirectory, "cascade-block-diagram.png");
-        if (System.IO.File.Exists(path))
-            BlockDiagramImage.Source = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage(new System.Uri(path));
     }
 
     protected override void OnNavigatedTo(Microsoft.UI.Xaml.Navigation.NavigationEventArgs e)

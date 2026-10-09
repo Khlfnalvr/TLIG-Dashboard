@@ -78,16 +78,10 @@
                     <TextBlock Grid.Row="0"
                                Text="{x:Bind Lang.Cas_BlockDiagram, Mode=OneWay}"
                                Style="{StaticResource CasCaptionStyle}"/>
-                    <!-- Full cascade control block diagram (two loops with summing junctions,
-                         transmitters in the feedback paths, and transfer-function labels).
-                         Rendered as an image on a white "figure" card. -->
-                    <Border Grid.Row="1" CornerRadius="6" Background="White" Padding="8">
-                        <!-- Source set in code-behind by absolute path: relative XAML image URIs
-                             don't resolve in this unpackaged WinUI app (see MainWindow.UpdateLogo). -->
-                        <Image x:Name="BlockDiagramImage"
-                               Stretch="Uniform" MaxHeight="360"
-                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                    </Border>
+                    <!-- Full cascade control block diagram (two loops with summing junctions and
+                         transmitters in the feedback paths) — the same theme-aware vector figure
+                         as the Dashboard, drawn without a background. -->
+                    <controls:CascadeBlockDiagram Grid.Row="1" MaxHeight="360" Margin="0,4"/>
                     <TextBlock Grid.Row="2"
                                FontFamily="Consolas" FontSize="11" Opacity="0.7"
                                TextWrapping="Wrap" TextAlignment="Center"
