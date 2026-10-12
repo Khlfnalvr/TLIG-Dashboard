@@ -180,7 +180,7 @@ public static class RealHistoryService
             : $"settling {F(m.SettlingTimeSeconds)}s, overshoot {F(m.OvershootPercent)}%, " +
               $"rise {F(m.RiseTimeSeconds)}s, SSE {F(m.SteadyStateError)}°C, durasi {F(r.DurationSeconds)}s";
         string when = r.StartedAtUtc == default ? "-" : r.StartedAtUtc.ToLocalTime().ToString("dd/MM HH:mm");
-        return $"run #{r.RunId} [{when}] SP={N(r.Input.Sp)} Kc={N(r.Input.Kc)} Ti={N(r.Input.Ti)} Td={N(r.Input.Td)} Pump={N(r.Input.Pump)} → {metrics}.";
+        return $"run #{r.RunId} [{when}] SP={N(r.Input.Sp)} Kc={N(r.Input.Kc)} Ti={N(r.Input.Ti)} Td={N(r.Input.Td)} → {metrics}.";
     }
 
     private static string N(double v) =>
