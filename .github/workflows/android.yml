@@ -71,8 +71,10 @@ jobs:
           alias=$(printf '%s\n' "$listing" | sed -n 's/^Alias name: //p' | head -n 1)
           if [ -z "$alias" ]; then echo "::error::No key entry found in the keystore."; exit 1; fi
           printf '%s\n' "$listing" | grep -E 'Owner:|Valid from:|SHA256:'
+          sha=$(printf '%s\n' "$listing" | sed -n 's/^[[:space:]]*SHA256: //p' | head -n 1 | tr -d ': ' | tr 'A-F' 'a-f')
           echo "path=$ks"     >> "$GITHUB_OUTPUT"
           echo "alias=$alias" >> "$GITHUB_OUTPUT"
+          echo "sha256=$sha"  >> "$GITHUB_OUTPUT"
 
       - name: Install .NET Android workload
         run: dotnet workload install android
@@ -120,11 +122,23 @@ jobs:
           echo "file=$out" >> "$GITHUB_OUTPUT"
 
       # Proves the APK carries the release key, not just that a keystore was loaded:
-      # this SHA-256 must match the one printed by "Load signing keystore".
+      # the signer certificate read back out of the APK must be the keystore's. The
+      # whole apksigner output is printed (not grepped down) — its wording differs
+      # between build-tools versions, and a filter that matches nothing hides the one
+      # line that would have explained a failure.
       - name: Verify APK signature
         run: |
           apksigner=$(find "$ANDROID_HOME/build-tools" -name apksigner | sort -V | tail -n 1)
-          "$apksigner" verify --print-certs "${{ steps.apk.outputs.file }}" | grep -E 'Signer #1 certificate (DN|SHA-256)'
+          echo "apksigner: $apksigner"
+          certs=$("$apksigner" verify --print-certs "${{ steps.apk.outputs.file }}" 2>&1) || { printf '%s\n' "$certs"; echo "::error::apksigner could not verify the APK."; exit 1; }
+          printf '%s\n' "$certs"
+          got=$(printf '%s\n' "$certs" | grep -i 'certificate SHA-256 digest' | head -n 1 | sed 's/.*: *//' | tr -d ': ' | tr 'A-F' 'a-f')
+          want="${{ steps.ks.outputs.sha256 }}"
+          if [ -z "$got" ] || [ "$got" != "$want" ]; then
+            echo "::error::APK signer certificate ($got) is not the release key ($want)."
+            exit 1
+          fi
+          echo "OK - APK is signed with the release key"
 
       - name: Remove keystore
         if: always()
