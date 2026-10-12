@@ -41,6 +41,7 @@ public static class AiProviders
     public const string OpenAi    = "openai";
     public const string Anthropic = "anthropic";
     public const string Gemini    = "gemini";
+    public const string MuseSpark = "musespark";
 
     public static readonly IReadOnlyList<AiProviderInfo> All = new[]
     {
@@ -63,6 +64,13 @@ public static class AiProviders
         new AiProviderInfo(
             Gemini, "Google Gemini", "https://generativelanguage.googleapis.com/v1beta/openai", AiProtocols.OpenAi,
             new[] { "gemini-3.1-pro-preview", "gemini-3.5-flash", "gemini-3.1-flash-lite" }, "AIza..."),
+
+        // Meta Model API (dev.meta.ai): OpenAI-compatible Chat Completions at
+        // {BaseUrl}/chat/completions with Bearer <MODEL_API_KEY>, model "muse-spark-1.3".
+        // Same OpenAI protocol path as DeepSeek/OpenAI/Gemini — no new wire code needed.
+        new AiProviderInfo(
+            MuseSpark, "Muse Spark", "https://api.meta.ai/v1", AiProtocols.OpenAi,
+            new[] { "muse-spark-1.3", "muse-spark-1.3-contributor" }, "dev.meta.ai..."),
     };
 
     public static AiProviderInfo? Find(string? id) =>

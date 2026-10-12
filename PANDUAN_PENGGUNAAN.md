@@ -121,6 +121,7 @@ Kartu **AI** di halaman Settings (atau tab "AI" di flyout title bar) membuka dia
 | OpenAI | `gpt-5.5`, `gpt-5.4`, `gpt-5.4-mini`, `gpt-5.4-nano` |
 | Anthropic | `claude-opus-4-8`, `claude-sonnet-5`, `claude-sonnet-4-6`, `claude-haiku-4-5` |
 | Google Gemini | `gemini-3.1-pro-preview`, `gemini-3.5-flash`, `gemini-3.1-flash-lite` |
+| Muse Spark (Meta Model API) | `muse-spark-1.3`, `muse-spark-1.3-contributor` |
 
 Untuk tiap provider yang ingin diaktifkan:
 1. Nyalakan **toggle** provider.

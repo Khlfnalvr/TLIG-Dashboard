@@ -26,6 +26,8 @@ public static class AiContextLimits
         ["gemini-2.5-flash"] = 1000000,
         ["gemini-2.0-flash"] = 1000000,
         ["gemini-2.0-flash-lite"] = 1000000,
+        ["muse-spark-1.3"] = 1048576,
+        ["muse-spark-1.3-contributor"] = 1048576,
     };
 
     public static int ForModel(string? model, out bool known)
@@ -42,6 +44,7 @@ public static class AiContextLimits
             if (id.StartsWith("gpt-", StringComparison.OrdinalIgnoreCase))   { known = true; return 400000; }
             if (id.StartsWith("claude", StringComparison.OrdinalIgnoreCase)) { known = true; return 200000; }
             if (id.StartsWith("deepseek", StringComparison.OrdinalIgnoreCase)) { known = true; return 128000; }
+            if (id.StartsWith("muse-", StringComparison.OrdinalIgnoreCase)) { known = true; return 1048576; }
         }
         known = false;
         return DefaultLimit;
