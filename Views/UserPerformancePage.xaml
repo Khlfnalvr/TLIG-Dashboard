@@ -56,7 +56,7 @@
                         VerticalAlignment="Center"
                         Click="Refresh_Click">
                     <StackPanel Orientation="Horizontal" Spacing="6">
-                        <FontIcon FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                        <FontIcon FontFamily="{StaticResource SymbolThemeFontFamily}"
                                   Glyph="&#xE72C;" FontSize="13"/>
                         <TextBlock Text="{x:Bind Lang.Up_Refresh, Mode=OneWay}"/>
                     </StackPanel>

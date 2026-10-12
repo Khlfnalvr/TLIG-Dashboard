@@ -127,7 +127,7 @@
                         VerticalAlignment="Stretch"
                         Visibility="Collapsed"
                         Click="StopBtn_Click">
-                    <FontIcon FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                    <FontIcon FontFamily="{StaticResource SymbolThemeFontFamily}"
                               FontSize="14" Glyph="&#xE71A;"/>
                 </Button>
 
@@ -139,7 +139,7 @@
                         VerticalAlignment="Stretch"
                         Style="{ThemeResource AccentButtonStyle}"
                         Click="ChatSend_Click">
-                    <FontIcon FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                    <FontIcon FontFamily="{StaticResource SymbolThemeFontFamily}"
                               FontSize="15" Glyph="&#xE725;"/>
                 </Button>
             </Grid>

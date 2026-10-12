@@ -295,7 +295,7 @@
                                         BorderThickness="1" CornerRadius="8" Padding="16,14">
                                     <StackPanel Spacing="4">
                                         <StackPanel Orientation="Horizontal" Spacing="8">
-                                            <FontIcon FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                                            <FontIcon FontFamily="{StaticResource SymbolThemeFontFamily}"
                                                       Glyph="&#xE716;" FontSize="16"
                                                       Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
                                             <TextBlock Text="Nilai Peer"
@@ -320,7 +320,7 @@
                                         BorderThickness="1" CornerRadius="8" Padding="16,14">
                                     <StackPanel Spacing="4">
                                         <StackPanel Orientation="Horizontal" Spacing="8">
-                                            <FontIcon FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                                            <FontIcon FontFamily="{StaticResource SymbolThemeFontFamily}"
                                                       Glyph="&#xE9D9;" FontSize="16"
                                                       Foreground="#0078D4"/>
                                             <TextBlock Text="Nilai Sistem"
@@ -344,7 +344,7 @@
                                         BorderThickness="1" CornerRadius="8" Padding="16,14">
                                     <StackPanel Spacing="4">
                                         <StackPanel Orientation="Horizontal" Spacing="8">
-                                            <FontIcon FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                                            <FontIcon FontFamily="{StaticResource SymbolThemeFontFamily}"
                                                       Glyph="&#xE7EF;" FontSize="16"
                                                       Foreground="#107C10"/>
                                             <TextBlock Text="Nilai Dosen"
@@ -498,7 +498,7 @@
                                                         Width="36" Height="36"
                                                         CornerRadius="18"
                                                         Background="{ThemeResource AccentFillColorTertiaryBrush}">
-                                                    <FontIcon FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                                                    <FontIcon FontFamily="{StaticResource SymbolThemeFontFamily}"
                                                               Glyph="{Binding ActivityIcon}"
                                                               FontSize="16"
                                                               Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"

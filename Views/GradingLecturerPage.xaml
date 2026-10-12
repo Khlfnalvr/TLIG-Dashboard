@@ -50,7 +50,7 @@
                         Margin="0,0,0,1"
                         Click="Export_Click">
                     <StackPanel Orientation="Horizontal" Spacing="8">
-                        <FontIcon FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                        <FontIcon FontFamily="{StaticResource SymbolThemeFontFamily}"
                                   Glyph="&#xE78C;" FontSize="14"/>
                         <TextBlock Text="Ekspor"/>
                     </StackPanel>
@@ -260,7 +260,7 @@
                                                     <StackPanel Orientation="Horizontal" Spacing="6">
                                                         <TextBlock Text="{Binding EvaluatorName}"
                                                                    Style="{ThemeResource BodyStrongTextBlockStyle}"/>
-                                                        <FontIcon FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                                                        <FontIcon FontFamily="{StaticResource SymbolThemeFontFamily}"
                                                                   Glyph="&#xE72A;" FontSize="12" Opacity="0.5"/>
                                                         <TextBlock Text="{Binding EvaluateeName}"
                                                                    Style="{ThemeResource BodyStrongTextBlockStyle}"/>
@@ -402,7 +402,7 @@
                                                 <Border Grid.Column="0"
                                                         Width="36" Height="36" CornerRadius="18"
                                                         Background="{ThemeResource AccentFillColorTertiaryBrush}">
-                                                    <FontIcon FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                                                    <FontIcon FontFamily="{StaticResource SymbolThemeFontFamily}"
                                                               Glyph="{Binding ActivityIcon}" FontSize="16"
                                                               Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"
                                                               HorizontalAlignment="Center" VerticalAlignment="Center"/>

@@ -138,18 +138,7 @@ public sealed partial class LiveViewPage : Page
     {
         try
         {
-            var bitmap = new BitmapImage();
-            using var stream = new InMemoryRandomAccessStream();
-            using (var writer = new DataWriter(stream.GetOutputStreamAt(0)))
-            {
-                writer.WriteBytes(bytes);
-                await writer.StoreAsync();
-                await writer.FlushAsync();
-                writer.DetachStream();
-            }
-            stream.Seek(0);
-            await bitmap.SetSourceAsync(stream);
-            CameraReceiveImage.Source = bitmap;
+            CameraReceiveImage.Source = await Helpers.FrameImage.DecodeAsync(bytes);
             CameraReceiveImage.Visibility = Visibility.Visible;
             CameraPlaceholder.Visibility = Visibility.Collapsed;
             App.Status.CameraConnected = true;

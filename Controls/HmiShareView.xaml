@@ -67,7 +67,7 @@
                             HorizontalAlignment="Center"
                             VerticalAlignment="Center"
                             Margin="18">
-                    <FontIcon FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                    <FontIcon FontFamily="{StaticResource SymbolThemeFontFamily}"
                               Glyph="&#xE7F4;"
                               FontSize="28"
                               Opacity="0.62"

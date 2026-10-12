@@ -37,7 +37,7 @@
                     Style="{ThemeResource AccentButtonStyle}"
                     Click="AddUser_Click">
                 <StackPanel Orientation="Horizontal" Spacing="8">
-                    <FontIcon FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                    <FontIcon FontFamily="{StaticResource SymbolThemeFontFamily}"
                               FontSize="14" Glyph="&#xE8FA;"/>
                     <TextBlock Text="{x:Bind Lang.Um_AddUser, Mode=OneWay}"/>
                 </StackPanel>

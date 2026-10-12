@@ -1,0 +1,138 @@
+# Build the TLIG Dashboard Client APK for Android tablets.
+#
+# Android\TLIGDashboard.Android.csproj is an Uno Platform head: it compiles the SAME
+# XAML + C# as TLIGDashboard.csproj (linked from the repo root) for net10.0-android,
+# Client flavor only. The APK is uploaded as a workflow artifact to sideload on a
+# tablet; nothing is published.
+#
+# Built on a Linux runner: unlike the WinUI flavors this does not need Windows, and
+# the lab PC needs no JDK or Android SDK (several GB) just to get an APK.
+#
+# Runs on a claude/** push ONLY when the commit message contains "[android]", or on
+# manual dispatch — same idea as package.yml.
+#
+# Signing. Android only installs an update over an existing app when both APKs are
+# signed with the SAME key, so every build is signed with one fixed release key kept
+# in two repository secrets:
+#
+#   ANDROID_KEYSTORE_BASE64    base64 of the PKCS#12 keystore
+#   ANDROID_KEYSTORE_PASSWORD  its password (store and key share it)
+#
+# The job fails without them rather than fall back to a throwaway debug key: an APK
+# signed with a different key looks fine but can only be installed after uninstalling
+# the previous one. Keep a copy of the keystore and password outside GitHub — secrets
+# cannot be read back, and a lost key means every tablet has to reinstall from scratch.
+
+name: Android
+
+on:
+  push:
+    branches: [ 'claude/**' ]
+  workflow_dispatch:
+
+jobs:
+  apk:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[android]')
+    runs-on: ubuntu-latest
+
+    env:
+      PROJECT: Android/TLIGDashboard.Android.csproj
+      ANDROID_KS_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.x'
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: microsoft
+          java-version: '21'
+
+      # Done first so a missing or unreadable key fails in seconds, not after the
+      # whole build. The alias is read from the keystore instead of being a third
+      # secret that could drift from it; the fingerprint is printed so two runs can be
+      # compared to confirm they were signed by the same key (it is public — it is in
+      # every APK).
+      - name: Load signing keystore
+        id: ks
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$KEYSTORE_B64" ] || [ -z "$ANDROID_KS_PASS" ]; then
+            echo "::error::Secrets ANDROID_KEYSTORE_BASE64 / ANDROID_KEYSTORE_PASSWORD are not set - refusing to build an APK that could not update the installed one."
+            exit 1
+          fi
+          ks="$RUNNER_TEMP/tlig-release.p12"
+          printf '%s' "$KEYSTORE_B64" | base64 --decode --ignore-garbage > "$ks"
+          listing=$(keytool -list -v -keystore "$ks" -storetype PKCS12 -storepass:env ANDROID_KS_PASS)
+          alias=$(printf '%s\n' "$listing" | sed -n 's/^Alias name: //p' | head -n 1)
+          if [ -z "$alias" ]; then echo "::error::No key entry found in the keystore."; exit 1; fi
+          printf '%s\n' "$listing" | grep -E 'Owner:|Valid from:|SHA256:'
+          echo "path=$ks"     >> "$GITHUB_OUTPUT"
+          echo "alias=$alias" >> "$GITHUB_OUTPUT"
+
+      - name: Install .NET Android workload
+        run: dotnet workload install android
+
+      # Head=Android restricts the project to net10.0-android, so the Skia desktop
+      # preview head (and its packages) is not restored here.
+      - name: Restore
+        run: dotnet restore "$PROJECT" -p:Head=Android
+
+      # Installs whichever Android platform / build-tools this .NET release targets
+      # instead of pinning an API level here that would go stale with the SDK.
+      - name: Install Android SDK components
+        run: >
+          dotnet build "$PROJECT"
+          -t:InstallAndroidDependencies
+          -f net10.0-android
+          -p:Head=Android
+          -p:AndroidSdkDirectory="$ANDROID_HOME"
+          -p:AcceptAndroidSdkLicenses=True
+
+      # The password reaches the signer through the environment (env: prefix), never
+      # on a command line.
+      - name: Publish signed APK
+        run: >
+          dotnet publish "$PROJECT"
+          -c Release
+          -f net10.0-android
+          -p:Head=Android
+          -p:AndroidPackageFormat=apk
+          -p:AndroidKeyStore=true
+          -p:AndroidSigningKeyStore="${{ steps.ks.outputs.path }}"
+          -p:AndroidSigningKeyAlias="${{ steps.ks.outputs.alias }}"
+          -p:AndroidSigningKeyPass=env:ANDROID_KS_PASS
+          -p:AndroidSigningStorePass=env:ANDROID_KS_PASS
+
+      - name: Locate APK
+        id: apk
+        run: |
+          apk=$(find Android/bin -name '*-Signed.apk' | head -n 1)
+          if [ -z "$apk" ]; then echo "::error::No signed APK found under Android/bin"; find Android/bin -name '*.apk'; exit 1; fi
+          version=$(grep -oP '(?<=<Version>)[0-9.]+(?=</Version>)' TLIGDashboard.csproj | head -n 1)
+          out="TLIGDashboard-Client-v${version}-Android.apk"
+          cp "$apk" "$out"
+          ls -lh "$out"
+          echo "file=$out" >> "$GITHUB_OUTPUT"
+
+      # Proves the APK carries the release key, not just that a keystore was loaded:
+      # this SHA-256 must match the one printed by "Load signing keystore".
+      - name: Verify APK signature
+        run: |
+          apksigner=$(find "$ANDROID_HOME/build-tools" -name apksigner | sort -V | tail -n 1)
+          "$apksigner" verify --print-certs "${{ steps.apk.outputs.file }}" | grep -E 'Signer #1 certificate (DN|SHA-256)'
+
+      - name: Remove keystore
+        if: always()
+        run: rm -f "$RUNNER_TEMP/tlig-release.p12"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TLIGDashboard-Client-Android
+          path: ${{ steps.apk.outputs.file }}
+          if-no-files-found: error
+          retention-days: 30

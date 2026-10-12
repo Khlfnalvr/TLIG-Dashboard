@@ -15,7 +15,7 @@
         </Grid.ColumnDefinitions>
 
         <FontIcon Grid.Column="0"
-                  FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                  FontFamily="{StaticResource SymbolThemeFontFamily}"
                   FontSize="14" Glyph="&#xE99A;"
                   Opacity="0.7" VerticalAlignment="Center"/>
 
@@ -44,7 +44,7 @@
                  VerticalAlignment="Center"
                  Visibility="Collapsed"
                  Click="ConfigBtn_Click">
-            <FontIcon FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+            <FontIcon FontFamily="{StaticResource SymbolThemeFontFamily}"
                        FontSize="14" Glyph="&#xE713;"/>
         </Button>
 

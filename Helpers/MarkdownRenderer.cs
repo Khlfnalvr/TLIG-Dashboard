@@ -84,15 +84,8 @@ internal static partial class MarkdownRenderer
         double[] sizes = [22, 18, 16, 15, 14, 13];
         double fs = sizes[Math.Clamp(h.Level - 1, 0, 5)];
 
-        var rtb = new RichTextBlock
-        {
-            IsTextSelectionEnabled = true,
-            Margin = new Thickness(0, h.Level <= 2 ? 4 : 2, 0, 2)
-        };
-        var para = new Paragraph { FontSize = fs, FontWeight = FontWeights.Bold };
-        if (h.Inline is not null)
-            foreach (var i in h.Inline) para.Inlines.Add(ToInline(i, fs, dark));
-        rtb.Blocks.Add(para);
+        var rtb = RichText(h.Inline, fs, dark, FontWeights.Bold);
+        rtb.Margin = new Thickness(0, h.Level <= 2 ? 4 : 2, 0, 2);
 
         if (h.Level > 2) return rtb;
 
@@ -112,13 +105,36 @@ internal static partial class MarkdownRenderer
     // ── Paragraph ─────────────────────────────────────────────────────────────
 
     private static UIElement RenderParagraph(ParagraphBlock p, double fs, bool dark)
+        => RichText(p.Inline, fs, dark);
+
+    /// <summary>
+    /// One wrapping, selectable run of formatted text. WinUI gets the RichTextBlock it
+    /// always had; the Uno head (Android) has no RichTextBlock, and a TextBlock accepts
+    /// the very same inlines.
+    /// </summary>
+    private static FrameworkElement RichText(ContainerInline? inlines, double fs, bool dark,
+                                             Windows.UI.Text.FontWeight? weight = null)
     {
+#if HAS_UNO
+        var tb = new TextBlock
+        {
+            FontSize               = fs,
+            TextWrapping           = TextWrapping.Wrap,
+            IsTextSelectionEnabled = true
+        };
+        if (weight is { } w) tb.FontWeight = w;
+        if (inlines is not null)
+            foreach (var i in inlines) tb.Inlines.Add(ToInline(i, fs, dark));
+        return tb;
+#else
         var rtb  = new RichTextBlock { FontSize = fs, IsTextSelectionEnabled = true };
         var para = new Paragraph();
-        if (p.Inline is not null)
-            foreach (var i in p.Inline) para.Inlines.Add(ToInline(i, fs, dark));
+        if (weight is { } w) para.FontWeight = w;
+        if (inlines is not null)
+            foreach (var i in inlines) para.Inlines.Add(ToInline(i, fs, dark));
         rtb.Blocks.Add(para);
         return rtb;
+#endif
     }
 
     // ── Inline conversion ─────────────────────────────────────────────────────
@@ -378,15 +394,9 @@ internal static partial class MarkdownRenderer
             {
                 var cell = cells[c];
 
-                var rtb  = new RichTextBlock { FontSize = fs, IsTextSelectionEnabled = true };
-                var para = new Paragraph
-                {
-                    FontWeight = row.IsHeader ? FontWeights.SemiBold : FontWeights.Normal
-                };
-                var pb = cell.OfType<ParagraphBlock>().FirstOrDefault();
-                if (pb?.Inline is not null)
-                    foreach (var i in pb.Inline) para.Inlines.Add(ToInline(i, fs, dark));
-                rtb.Blocks.Add(para);
+                var pb  = cell.OfType<ParagraphBlock>().FirstOrDefault();
+                var rtb = RichText(pb?.Inline, fs, dark,
+                    row.IsHeader ? FontWeights.SemiBold : FontWeights.Normal);
 
                 var cellBorder = new Border
                 {

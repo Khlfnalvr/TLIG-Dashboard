@@ -818,18 +818,7 @@ public sealed partial class DashboardPage : Page
     {
         try
         {
-            var bitmap = new BitmapImage();
-            using var stream = new InMemoryRandomAccessStream();
-            using (var writer = new DataWriter(stream.GetOutputStreamAt(0)))
-            {
-                writer.WriteBytes(bytes);
-                await writer.StoreAsync();
-                await writer.FlushAsync();
-                writer.DetachStream();
-            }
-            stream.Seek(0);
-            await bitmap.SetSourceAsync(stream);
-            DashboardCameraReceiveImage.Source = bitmap;
+            DashboardCameraReceiveImage.Source = await FrameImage.DecodeAsync(bytes);
             DashboardCameraReceiveImage.Visibility = Visibility.Visible;
             DashboardCameraPlaceholder.Visibility = Visibility.Collapsed;
             App.Status.CameraConnected = true;

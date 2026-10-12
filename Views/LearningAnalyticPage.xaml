@@ -34,7 +34,7 @@
                     BorderThickness="0,0,0,1" Margin="0,4,0,4">
                 <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
                     <Border Width="32" Height="32" CornerRadius="8" Background="{ThemeResource SubtleFillColorSecondaryBrush}">
-                        <FontIcon FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" Glyph="&#xE7BE;" FontSize="15"
+                        <FontIcon FontFamily="{StaticResource SymbolThemeFontFamily}" Glyph="&#xE7BE;" FontSize="15"
                                   Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
                     </Border>
                     <TextBlock Text="Challenge Learning" FontSize="17" FontWeight="SemiBold" VerticalAlignment="Center"/>
@@ -47,7 +47,7 @@
                     BorderThickness="0,0,0,1" Margin="0,4,0,4">
                 <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
                     <Border Width="32" Height="32" CornerRadius="8" Background="{ThemeResource SubtleFillColorSecondaryBrush}">
-                        <FontIcon FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" Glyph="&#xE9D2;" FontSize="15"
+                        <FontIcon FontFamily="{StaticResource SymbolThemeFontFamily}" Glyph="&#xE9D2;" FontSize="15"
                                   Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
                     </Border>
                     <TextBlock Text="Penilaian" FontSize="17" FontWeight="SemiBold" VerticalAlignment="Center"/>
@@ -62,7 +62,7 @@
                     <Grid>
                         <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
                             <Border Width="38" Height="38" CornerRadius="10" Background="{ThemeResource SubtleFillColorSecondaryBrush}">
-                                <FontIcon FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                                <FontIcon FontFamily="{StaticResource SymbolThemeFontFamily}"
                                           Glyph="&#xE9D2;" FontSize="17" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
                             </Border>
                             <StackPanel VerticalAlignment="Center" Spacing="1">
@@ -74,7 +74,7 @@
                             <ComboBox x:Name="GradingAssignmentCombo" MinWidth="220" FontSize="12"
                                       SelectionChanged="GradingAssignmentCombo_SelectionChanged"/>
                             <Button FontSize="12" Padding="10,4" Click="GradingRefresh_Click">
-                                <FontIcon FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" Glyph="&#xE72C;" FontSize="12"/>
+                                <FontIcon FontFamily="{StaticResource SymbolThemeFontFamily}" Glyph="&#xE72C;" FontSize="12"/>
                             </Button>
                         </StackPanel>
                     </Grid>
@@ -301,7 +301,7 @@
                                                     </Grid.ColumnDefinitions>
                                                     <Border Grid.Column="0" Width="34" Height="34" CornerRadius="17"
                                                             Background="{ThemeResource AccentFillColorTertiaryBrush}">
-                                                        <FontIcon FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                                                        <FontIcon FontFamily="{StaticResource SymbolThemeFontFamily}"
                                                                   Glyph="{Binding ActivityIcon}" FontSize="14"
                                                                   Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"
                                                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
@@ -339,7 +339,7 @@
                                     </StackPanel>
                                     <Button HorizontalAlignment="Right" FontSize="12" Padding="10,4"
                                             Click="ChallengeRecapRefresh_Click">
-                                        <FontIcon FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                                        <FontIcon FontFamily="{StaticResource SymbolThemeFontFamily}"
                                                   Glyph="&#xE72C;" FontSize="12"/>
                                     </Button>
                                 </Grid>
@@ -392,7 +392,7 @@
                                                     </Grid.ColumnDefinitions>
                                                     <Border Grid.Column="0" Width="34" Height="34" CornerRadius="17"
                                                             Background="{ThemeResource AccentFillColorTertiaryBrush}">
-                                                        <FontIcon FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                                                        <FontIcon FontFamily="{StaticResource SymbolThemeFontFamily}"
                                                                   Glyph="{Binding ActivityIcon}" FontSize="14"
                                                                   Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"
                                                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>

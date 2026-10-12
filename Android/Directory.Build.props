@@ -1,0 +1,20 @@
+<Project>
+  <!--
+    File ini sengaja ada supaya proyek Android TIDAK mewarisi Directory.Build.props
+    di akar repo (MSBuild berhenti di Directory.Build.props terdekat). Yang di akar
+    mengatur bin\$(Flavor) / obj\$(Flavor) milik build WinUI Server/Client dan tidak
+    berlaku di sini.
+  -->
+  <PropertyGroup>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+
+    <!--
+      NU1507: banyak sumber paket tanpa source mapping (CPM)
+      NETSDK1201: RID tidak otomatis berarti self-contained
+      PRI257: bahasa bawaan (en) tidak termasuk resource
+    -->
+    <NoWarn>$(NoWarn);NU1507;NETSDK1201;PRI257</NoWarn>
+  </PropertyGroup>
+</Project>

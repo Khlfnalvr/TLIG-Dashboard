@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Latar ikon aplikasi (putih polos). Gambar logonya diambil dari ..\logoblack.png
+     lewat UnoIcon/ForegroundFile di TLIGDashboard.Android.csproj. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="456" height="456" viewBox="0 0 456 456">
+  <rect width="456" height="456" fill="#FFFFFF"/>
+</svg>

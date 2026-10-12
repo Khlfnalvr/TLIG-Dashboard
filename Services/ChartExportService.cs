@@ -476,6 +476,10 @@ internal static class ChartExportService
             var rt = new RenderTargetBitmap();
             await rt.RenderAsync(element, w, h);
 
+#if HAS_UNO
+            // Uno (Android) has no SoftwareBitmapSource; the render target is itself an ImageSource.
+            return rt;
+#else
             var pixels = await rt.GetPixelsAsync();
             var softwareBitmap = new SoftwareBitmap(
                 BitmapPixelFormat.Bgra8,
@@ -487,6 +491,7 @@ internal static class ChartExportService
             var source = new SoftwareBitmapSource();
             await source.SetBitmapAsync(softwareBitmap);
             return source;
+#endif
         }
         catch
         {

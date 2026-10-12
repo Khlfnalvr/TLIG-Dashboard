@@ -115,7 +115,23 @@ public sealed partial class MainWindow : Window
 
         InitHeQueueNotices();
 
-        _ = StartupUpdateCheckAsync();
+        if (Services.BuildInfo.IsWinUI)
+            _ = StartupUpdateCheckAsync();
+        else
+            HideWindowsOnlyMenus();
+    }
+
+    /// <summary>
+    /// Head Android (Uno): pembaruan lewat installer Windows dan membuka folder/berkas
+    /// di Explorer tidak ada padanannya di tablet. Entri menunya disembunyikan supaya
+    /// tidak ada tombol yang berujung galat; APK diperbarui dengan memasang APK baru.
+    /// </summary>
+    private void HideWindowsOnlyMenus()
+    {
+        MenuCheckUpdate.Visibility   = Visibility.Collapsed;
+        MenuOpenLogFolder.Visibility = Visibility.Collapsed;
+        MenuOpenSettings.Visibility  = Visibility.Collapsed;
+        MenuEarlyAccess.Visibility   = Visibility.Collapsed;
     }
 
     // ── Pemberitahuan antrian plant HE ──────────────────────────────────────
@@ -169,14 +185,20 @@ public sealed partial class MainWindow : Window
 
     private void InstallMinimumWindowSizeHook()
     {
-        _hwnd = WindowNative.GetWindowHandle(this);
-        if (_hwnd == IntPtr.Zero) return;
-
-        _newWndProc = WindowProc;
-        _oldWndProc = SetWindowLongPtr(
-            _hwnd,
-            GWLP_WNDPROC,
-            Marshal.GetFunctionPointerForDelegate(_newWndProc));
+        // Hook Win32 hanya ada di build WinUI. Head Android (Uno) tidak punya HWND,
+        // tetapi pembersihan saat jendela ditutup di bawah tetap dipasang.
+        if (Services.BuildInfo.IsWinUI)
+        {
+            _hwnd = WindowNative.GetWindowHandle(this);
+            if (_hwnd != IntPtr.Zero)
+            {
+                _newWndProc = WindowProc;
+                _oldWndProc = SetWindowLongPtr(
+                    _hwnd,
+                    GWLP_WNDPROC,
+                    Marshal.GetFunctionPointerForDelegate(_newWndProc));
+            }
+        }
 
         Closed += (_, _) =>
         {
@@ -318,13 +340,17 @@ public sealed partial class MainWindow : Window
     // ── Mica ─────────────────────────────────────────────────────────────
     private void ApplyMicaBackdrop()
     {
+        if (!Services.BuildInfo.IsWinUI) return;
         if (MicaController.IsSupported())
             SystemBackdrop = new MicaBackdrop { Kind = MicaKind.Base };
     }
 
     // ── Title bar ─────────────────────────────────────────────────────────
+    // Tablet Android tidak punya title bar maupun tombol caption: ketiga fungsi di
+    // bawah ini dilewati di sana dan tata letak XAML dipakai apa adanya.
     private void InitializeTitleBar()
     {
+        if (!Services.BuildInfo.IsWinUI) return;
         if (!AppWindowTitleBar.IsCustomizationSupported()) return;
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(AppTitleBar);
@@ -334,6 +360,7 @@ public sealed partial class MainWindow : Window
     // toggle area is outside the drag region (no passthrough tricks needed).
     private void UpdateTitleBarLayout()
     {
+        if (!Services.BuildInfo.IsWinUI) return;
         if (!AppWindowTitleBar.IsCustomizationSupported()) return;
         var root = Content?.XamlRoot;
         if (root == null) return;
@@ -353,6 +380,7 @@ public sealed partial class MainWindow : Window
 
     private void UpdateTitleBarColors(ElementTheme theme)
     {
+        if (!Services.BuildInfo.IsWinUI) return;
         if (!AppWindowTitleBar.IsCustomizationSupported()) return;
         var bar = AppWindow.TitleBar;
         bool dark = theme == ElementTheme.Dark;
@@ -417,9 +445,15 @@ public sealed partial class MainWindow : Window
     {
         bool dark = theme == ElementTheme.Dark;
         string fileName = dark ? "logowhite.png" : "logoblack.png";
+#if HAS_UNO
+        // Di Android logo ada di dalam APK, bukan berkas di samping exe.
+        var uri = new Uri($"ms-appx:///{fileName}");
+#else
         string path = Path.Combine(AppContext.BaseDirectory, fileName);
         if (!File.Exists(path)) return;
-        var source = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage(new Uri(path));
+        var uri = new Uri(path);
+#endif
+        var source = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage(uri);
         LogoImage.Source = source;
         if (TourLogoImage is not null)
             TourLogoImage.Source = source;
@@ -2024,7 +2058,7 @@ public sealed partial class MainWindow : Window
             Background = TourIconSurfaceBrush(),
             Child = new FontIcon
             {
-                FontFamily = new FontFamily("Segoe Fluent Icons,Segoe MDL2 Assets"),
+                FontFamily = (FontFamily)Application.Current.Resources["SymbolThemeFontFamily"],
                 Glyph = glyph,
                 FontSize = size >= 40 ? 20 : 15,
                 HorizontalAlignment = HorizontalAlignment.Center,

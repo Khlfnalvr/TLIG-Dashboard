@@ -1,0 +1,125 @@
+<Project Sdk="Uno.Sdk">
+  <!--
+    TLIG Dashboard Client untuk tablet Android.
+
+    Proyek ini TIDAK punya salinan kode sendiri: ia mengompilasi file XAML + C# yang
+    sama dengan TLIGDashboard.csproj (WinUI) lewat tautan ke folder induk, memakai
+    Uno Platform sebagai pengganti Windows App SDK (namespace Microsoft.UI.Xaml sama).
+    Hanya flavor CLIENT yang dibangun di sini; Server tetap khusus Windows.
+
+      Android (APK)        : dotnet build -c Release -p:Head=Android
+      Pratinjau di Windows : dotnet run -p:Head=Desktop
+                             (renderer Skia yang sama dengan Android, tanpa perlu
+                              Android SDK; dipakai untuk mengecek tata letak)
+  -->
+  <PropertyGroup>
+    <TargetFrameworks>net10.0-android;net10.0-desktop</TargetFrameworks>
+    <TargetFrameworks Condition="'$(Head)' == 'Android'">net10.0-android</TargetFrameworks>
+    <TargetFrameworks Condition="'$(Head)' == 'Desktop'">net10.0-desktop</TargetFrameworks>
+
+    <OutputType>Exe</OutputType>
+    <UnoSingleProject>true</UnoSingleProject>
+    <RootNamespace>TLIGDashboard</RootNamespace>
+    <AssemblyName>TLIGDashboard.Client</AssemblyName>
+
+    <ApplicationTitle>TLIG Dashboard</ApplicationTitle>
+    <ApplicationId>com.icolaboratory.tligdashboard</ApplicationId>
+    <ApplicationPublisher>ICO Laboratory</ApplicationPublisher>
+    <Description>TLIG Dashboard Client — receives camera + HMI and chats via the server AI proxy</Description>
+    <Product>TLIG Dashboard Client</Product>
+
+    <!-- Selalu flavor Client; lihat Services/BuildInfo.cs. -->
+    <DefineConstants>$(DefineConstants);CLIENT</DefineConstants>
+
+    <UnoFeatures>
+      SkiaRenderer;
+    </UnoFeatures>
+
+    <!--
+      Perkakas desain/Studio Uno tidak dipakai di proyek ini dan paketnya besar
+      (ratusan MB di cache NuGet), jadi tidak ikut di-restore.
+    -->
+    <UnoDisableHotDesign>true</UnoDisableHotDesign>
+    <UnoDisableMCPSupport>true</UnoDisableMCPSupport>
+  </PropertyGroup>
+
+  <!--
+    Versi dibaca dari TLIGDashboard.csproj supaya APK dan installer Windows selalu
+    membawa nomor yang sama (satu sumber kebenaran, seperti di workflow rilis).
+  -->
+  <PropertyGroup>
+    <_TligRootProject>$(MSBuildThisFileDirectory)../TLIGDashboard.csproj</_TligRootProject>
+    <_TligVersion>$([System.Text.RegularExpressions.Regex]::Match($([System.IO.File]::ReadAllText('$(_TligRootProject)')), '&lt;Version&gt;([0-9]+\.[0-9]+\.[0-9]+)&lt;/Version&gt;').Groups[1].Value)</_TligVersion>
+    <_TligVersion Condition="'$(_TligVersion)' == ''">1.0.0</_TligVersion>
+    <_TligMajor>$([System.Version]::Parse('$(_TligVersion)').Major)</_TligMajor>
+    <_TligMinor>$([System.Version]::Parse('$(_TligVersion)').Minor)</_TligMinor>
+    <_TligPatch>$([System.Version]::Parse('$(_TligVersion)').Build)</_TligPatch>
+
+    <Version>$(_TligVersion)</Version>
+    <InformationalVersion>$(_TligVersion)</InformationalVersion>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+    <ApplicationDisplayVersion>$(_TligVersion)</ApplicationDisplayVersion>
+    <!-- versionCode Android harus bilangan bulat yang selalu naik: 2.2.2 → 20202 -->
+    <ApplicationVersion>$([MSBuild]::Add($([MSBuild]::Add($([MSBuild]::Multiply($(_TligMajor), 10000)), $([MSBuild]::Multiply($(_TligMinor), 100)))), $(_TligPatch)))</ApplicationVersion>
+  </PropertyGroup>
+
+  <!-- Ikon launcher + splash dibuat Uno.Resizetizer dari logo yang sudah ada di repo. -->
+  <ItemGroup>
+    <UnoIcon Include="Assets\Icons\icon.svg"
+             ForegroundFile="..\logoblack.png"
+             ForegroundScale="0.6"
+             Color="#FFFFFF" />
+    <!-- Resizetizer menolak berkas yang sama untuk ikon dan splash, jadi splash
+         memakai logo putih di atas latar gelap. -->
+    <UnoSplashScreen Include="..\logowhite.png"
+                     BaseSize="140,132"
+                     Color="#202020" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Markdig" />
+    <PackageReference Include="MathNet.Numerics" />
+    <PackageReference Include="MiniExcel" />
+    <PackageReference Include="CommunityToolkit.Mvvm" />
+    <PackageReference Include="Microsoft.Data.Sqlite" />
+  </ItemGroup>
+
+  <!--
+    arm64 untuk tablet masa kini, arm 32-bit untuk tablet lama/murah yang masih banyak
+    dipakai. x64 (emulator) sengaja tidak ikut supaya APK tidak membengkak.
+  -->
+  <PropertyGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">
+    <RuntimeIdentifiers>android-arm64;android-arm</RuntimeIdentifiers>
+  </PropertyGroup>
+
+  <!--
+    ── Kode bersama dari proyek WinUI ─────────────────────────────────────
+    Link memakai garis miring biasa: APK dibangun di runner Linux (lihat
+    .github/workflows/android.yml), dan di sana "\" bukan pemisah folder.
+  -->
+  <ItemGroup>
+    <Compile Include="..\App.xaml.cs"        Link="App.xaml.cs" />
+    <Compile Include="..\MainWindow.xaml.cs" Link="MainWindow.xaml.cs" />
+    <Compile Include="..\Models\**\*.cs"     Link="Models/%(RecursiveDir)%(Filename)%(Extension)" />
+    <!-- HmiCaptureService asli (GDI, khusus Server) diganti PlatformStubs\HmiCaptureService.cs -->
+    <Compile Include="..\Services\**\*.cs"   Link="Services/%(RecursiveDir)%(Filename)%(Extension)"
+             Exclude="..\Services\HmiCaptureService.cs" />
+    <Compile Include="..\ViewModels\**\*.cs" Link="ViewModels/%(RecursiveDir)%(Filename)%(Extension)" />
+    <Compile Include="..\Converters\**\*.cs" Link="Converters/%(RecursiveDir)%(Filename)%(Extension)" />
+    <Compile Include="..\Helpers\**\*.cs"    Link="Helpers/%(RecursiveDir)%(Filename)%(Extension)" />
+    <Compile Include="..\Controls\**\*.cs"   Link="Controls/%(RecursiveDir)%(Filename)%(Extension)" />
+    <Compile Include="..\Views\**\*.cs"      Link="Views/%(RecursiveDir)%(Filename)%(Extension)" />
+
+    <ApplicationDefinition Include="..\App.xaml" Link="App.xaml" />
+    <Page Include="..\MainWindow.xaml"       Link="MainWindow.xaml" />
+    <Page Include="..\Controls\**\*.xaml"    Link="Controls/%(RecursiveDir)%(Filename)%(Extension)" />
+    <Page Include="..\Views\**\*.xaml"       Link="Views/%(RecursiveDir)%(Filename)%(Extension)" />
+
+    <EmbeddedResource Include="..\Database\HeQueueSchema.sql"          Link="Database/HeQueueSchema.sql" />
+    <EmbeddedResource Include="..\Database\HeParameterCacheSchema.sql" Link="Database/HeParameterCacheSchema.sql" />
+
+    <Content Include="..\logo.png"      Link="logo.png" />
+    <Content Include="..\logoblack.png" Link="logoblack.png" />
+    <Content Include="..\logowhite.png" Link="logowhite.png" />
+  </ItemGroup>
+</Project>

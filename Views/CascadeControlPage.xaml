@@ -202,7 +202,7 @@
                                 Click="RunBtn_Click"
                                 Style="{ThemeResource AccentButtonStyle}">
                             <StackPanel Orientation="Horizontal" Spacing="6">
-                                <FontIcon FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" Glyph="&#xE768;" FontSize="11"/>
+                                <FontIcon FontFamily="{StaticResource SymbolThemeFontFamily}" Glyph="&#xE768;" FontSize="11"/>
                                 <TextBlock Text="{x:Bind Lang.Cas_Run, Mode=OneWay}"/>
                             </StackPanel>
                         </Button>

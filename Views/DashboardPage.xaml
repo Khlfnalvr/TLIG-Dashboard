@@ -173,7 +173,7 @@
                             VerticalAlignment="Center"
                             Padding="0"
                             Click="LeftFullscreen_Click">
-                        <FontIcon FontFamily="Segoe MDL2 Assets" Glyph="&#xE740;" FontSize="9"/>
+                        <FontIcon FontFamily="{StaticResource SymbolThemeFontFamily}" Glyph="&#xE740;" FontSize="9"/>
                     </Button>
                 </Grid>
             </Border>
@@ -530,7 +530,7 @@
                                             <SolidColorBrush x:Key="ButtonBorderBrushPressed"     Color="{ThemeResource SystemFillColorSuccess}"/>
                                         </Button.Resources>
                                         <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Center">
-                                            <FontIcon FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" Glyph="&#xE768;" FontSize="11"/>
+                                            <FontIcon FontFamily="{StaticResource SymbolThemeFontFamily}" Glyph="&#xE768;" FontSize="11"/>
                                             <TextBlock Text="{x:Bind Lang.Ctl_Run, Mode=OneWay}"/>
                                         </StackPanel>
                                     </Button>
@@ -548,7 +548,7 @@
                                             <SolidColorBrush x:Key="ButtonBorderBrushPressed"     Color="{ThemeResource SystemFillColorCritical}"/>
                                         </Button.Resources>
                                         <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Center">
-                                            <FontIcon FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" Glyph="&#xE71A;" FontSize="11"/>
+                                            <FontIcon FontFamily="{StaticResource SymbolThemeFontFamily}" Glyph="&#xE71A;" FontSize="11"/>
                                             <TextBlock Text="{x:Bind Lang.Ctl_Stop, Mode=OneWay}"/>
                                         </StackPanel>
                                     </Button>
@@ -566,7 +566,7 @@
                                             <SolidColorBrush x:Key="ButtonBorderBrushPressed"     Color="{ThemeResource SystemFillColorSolidNeutral}"/>
                                         </Button.Resources>
                                         <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Center">
-                                            <FontIcon FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" Glyph="&#xE72C;" FontSize="11"/>
+                                            <FontIcon FontFamily="{StaticResource SymbolThemeFontFamily}" Glyph="&#xE72C;" FontSize="11"/>
                                             <TextBlock Text="{x:Bind Lang.Ctl_Reset, Mode=OneWay}"/>
                                         </StackPanel>
                                     </Button>
@@ -584,7 +584,7 @@
                                             <SolidColorBrush x:Key="ButtonBorderBrushPressed"     Color="{ThemeResource SystemFillColorCritical}"/>
                                         </Button.Resources>
                                         <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Center">
-                                            <FontIcon FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" Glyph="&#xE783;" FontSize="11"/>
+                                            <FontIcon FontFamily="{StaticResource SymbolThemeFontFamily}" Glyph="&#xE783;" FontSize="11"/>
                                             <TextBlock Text="{x:Bind Lang.Ctl_EStop, Mode=OneWay}"/>
                                         </StackPanel>
                                     </Button>
@@ -674,7 +674,7 @@
                                                 Spacing="8"
                                                 HorizontalAlignment="Center"
                                                 VerticalAlignment="Center">
-                                        <FontIcon FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                                        <FontIcon FontFamily="{StaticResource SymbolThemeFontFamily}"
                                                   Glyph="&#xE930;"
                                                   FontSize="12"
                                                   Foreground="{StaticResource DashAlarmTextBrush}"/>
@@ -723,7 +723,7 @@
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
                     <FontIcon Grid.Column="0"
-                              FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                              FontFamily="{StaticResource SymbolThemeFontFamily}"
                               Glyph="&#xE714;"
                               FontSize="12"
                               Opacity="0.78"
@@ -738,7 +738,7 @@
                             Padding="0"
                             VerticalAlignment="Center"
                             Click="CenterFullscreen_Click">
-                        <FontIcon FontFamily="Segoe MDL2 Assets" Glyph="&#xE740;" FontSize="9"/>
+                        <FontIcon FontFamily="{StaticResource SymbolThemeFontFamily}" Glyph="&#xE740;" FontSize="9"/>
                     </Button>
                 </Grid>
             </Border>
@@ -885,7 +885,7 @@
                                     Padding="0"
                                     ToolTipService.ToolTip="{x:Bind Lang.Learn_OpenFull, Mode=OneWay}"
                                     Click="LearningAnalyticFullscreen_Click">
-                                <FontIcon FontFamily="Segoe MDL2 Assets" Glyph="&#xE740;" FontSize="9"/>
+                                <FontIcon FontFamily="{StaticResource SymbolThemeFontFamily}" Glyph="&#xE740;" FontSize="9"/>
                             </Button>
                         </Grid>
                     </Border>
@@ -928,7 +928,7 @@
                             VerticalAlignment="Center"
                             Padding="0"
                             Click="RightFullscreen_Click">
-                        <FontIcon FontFamily="Segoe MDL2 Assets" Glyph="&#xE740;" FontSize="9"/>
+                        <FontIcon FontFamily="{StaticResource SymbolThemeFontFamily}" Glyph="&#xE740;" FontSize="9"/>
                     </Button>
                 </Grid>
             </Border>
@@ -1048,7 +1048,7 @@
                                     VerticalAlignment="Center"
                                     Style="{ThemeResource AccentButtonStyle}"
                                     Click="ChatSend_Click">
-                                <FontIcon FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                                <FontIcon FontFamily="{StaticResource SymbolThemeFontFamily}"
                                           FontSize="15"
                                           Glyph="&#xE725;"/>
                             </Button>

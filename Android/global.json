@@ -1,0 +1,6 @@
+{
+  // Versi Uno Platform untuk head Android. Menaikkan Uno cukup dengan mengubah angka ini.
+  "msbuild-sdks": {
+    "Uno.Sdk": "6.7.30"
+  }
+}

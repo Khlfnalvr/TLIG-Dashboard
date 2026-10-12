@@ -32,7 +32,7 @@
 
             <Button Click="Back_Click" Padding="10,5" HorizontalAlignment="Left">
                 <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                    <FontIcon FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" Glyph="&#xE72B;" FontSize="12"/>
+                    <FontIcon FontFamily="{StaticResource SymbolThemeFontFamily}" Glyph="&#xE72B;" FontSize="12"/>
                     <TextBlock Text="{x:Bind Lang.LearnDash_Back, Mode=OneWay}"/>
                 </StackPanel>
             </Button>
@@ -47,7 +47,7 @@
                     <Border x:Name="StatusBorder" HorizontalAlignment="Right" VerticalAlignment="Top"
                             CornerRadius="10" Padding="10,4">
                         <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                            <FontIcon x:Name="StatusIcon" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" FontSize="12"/>
+                            <FontIcon x:Name="StatusIcon" FontFamily="{StaticResource SymbolThemeFontFamily}" FontSize="12"/>
                             <TextBlock x:Name="StatusText" FontSize="12"/>
                         </StackPanel>
                     </Border>
@@ -84,7 +84,7 @@
                                 Background="{ThemeResource AccentFillColorTertiaryBrush}"
                                 VerticalAlignment="Center">
                             <FontIcon x:Name="SimTimerIcon"
-                                      FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                                      FontFamily="{StaticResource SymbolThemeFontFamily}"
                                       Glyph="&#xE823;" FontSize="20"
                                       Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"
                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
@@ -109,7 +109,7 @@
                                 Click="SimStart_Click">
                             <StackPanel Orientation="Horizontal" Spacing="6">
                                 <FontIcon x:Name="SimBtnIcon"
-                                          FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                                          FontFamily="{StaticResource SymbolThemeFontFamily}"
                                           Glyph="&#xE768;" FontSize="12"/>
                                 <TextBlock x:Name="SimBtnText"
                                            Text="{x:Bind Lang.Sim_Start, Mode=OneWay}"/>

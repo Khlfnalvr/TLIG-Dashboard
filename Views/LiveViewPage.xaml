@@ -61,7 +61,7 @@
                 </Grid.ColumnDefinitions>
 
                 <FontIcon Grid.Column="0"
-                          FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                          FontFamily="{StaticResource SymbolThemeFontFamily}"
                           Glyph="&#xE714;"
                           FontSize="11"
                           Opacity="0.82"

@@ -82,7 +82,7 @@
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <Border Grid.Column="0" Width="40" Height="40" CornerRadius="11" Background="{ThemeResource SubtleFillColorSecondaryBrush}" VerticalAlignment="Center">
-                            <FontIcon FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" Glyph="&#xE9D5;" FontSize="18" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
+                            <FontIcon FontFamily="{StaticResource SymbolThemeFontFamily}" Glyph="&#xE9D5;" FontSize="18" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
                         </Border>
                         <TextBlock Grid.Column="1" VerticalAlignment="Center" Text="{x:Bind Lang.LearnDash_TotalTasks, Mode=OneWay}" FontSize="13" FontWeight="SemiBold"/>
                         <TextBlock Grid.Column="2" x:Name="TotalTasksText" Text="0" FontSize="20" FontWeight="Bold" VerticalAlignment="Center"/>
@@ -95,7 +95,7 @@
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <Border Grid.Column="0" Width="40" Height="40" CornerRadius="11" Background="{ThemeResource SystemFillColorSuccessBackgroundBrush}" VerticalAlignment="Center">
-                            <FontIcon FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" Glyph="&#xE930;" FontSize="18" Foreground="{ThemeResource SystemFillColorSuccessBrush}"/>
+                            <FontIcon FontFamily="{StaticResource SymbolThemeFontFamily}" Glyph="&#xE930;" FontSize="18" Foreground="{ThemeResource SystemFillColorSuccessBrush}"/>
                         </Border>
                         <TextBlock Grid.Column="1" VerticalAlignment="Center" Text="{x:Bind Lang.LearnDash_Completed, Mode=OneWay}" FontSize="13" FontWeight="SemiBold"/>
                         <TextBlock Grid.Column="2" x:Name="DoneTasksText" Text="0" FontSize="20" FontWeight="Bold" Foreground="{ThemeResource SystemFillColorSuccessBrush}" VerticalAlignment="Center"/>
@@ -108,7 +108,7 @@
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <Border Grid.Column="0" Width="40" Height="40" CornerRadius="11" Background="{ThemeResource SystemFillColorCautionBackgroundBrush}" VerticalAlignment="Center">
-                            <FontIcon FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" Glyph="&#xE823;" FontSize="18" Foreground="{ThemeResource SystemFillColorCautionBrush}"/>
+                            <FontIcon FontFamily="{StaticResource SymbolThemeFontFamily}" Glyph="&#xE823;" FontSize="18" Foreground="{ThemeResource SystemFillColorCautionBrush}"/>
                         </Border>
                         <TextBlock Grid.Column="1" VerticalAlignment="Center" Text="{x:Bind Lang.LearnDash_Remaining, Mode=OneWay}" FontSize="13" FontWeight="SemiBold"/>
                         <TextBlock Grid.Column="2" x:Name="RemainingTasksText" Text="0" FontSize="20" FontWeight="Bold" Foreground="{ThemeResource SystemFillColorCautionBrush}" VerticalAlignment="Center"/>

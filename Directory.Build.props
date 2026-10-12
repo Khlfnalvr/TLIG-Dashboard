@@ -23,7 +23,11 @@
       would otherwise be swept in, double-including the generated XAML *.g.i.cs
       and breaking the build. Exclude the whole obj/bin trees — the XAML targets
       add the current flavor's generated files explicitly, so nothing is lost.
+
+      Android\** is the separate Uno Platform head (Android\TLIGDashboard.Android.csproj).
+      It links these same source files itself; its own platform files must not be
+      globbed into the WinUI build.
     -->
-    <DefaultItemExcludes>$(DefaultItemExcludes);obj\**;bin\**</DefaultItemExcludes>
+    <DefaultItemExcludes>$(DefaultItemExcludes);obj\**;bin\**;Android\**</DefaultItemExcludes>
   </PropertyGroup>
 </Project>

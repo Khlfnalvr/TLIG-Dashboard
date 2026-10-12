@@ -22,7 +22,7 @@
                 VerticalAlignment="Center"
                 Click="NewBtn_Click"
                 ToolTipService.ToolTip="Percakapan baru">
-            <FontIcon FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+            <FontIcon FontFamily="{StaticResource SymbolThemeFontFamily}"
                       FontSize="12" Glyph="&#xE710;"/>
         </Button>
 
@@ -31,7 +31,7 @@
                 VerticalAlignment="Center"
                 Click="DeleteBtn_Click"
                 ToolTipService.ToolTip="Hapus percakapan ini">
-            <FontIcon FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+            <FontIcon FontFamily="{StaticResource SymbolThemeFontFamily}"
                       FontSize="12" Glyph="&#xE74D;"/>
         </Button>
     </Grid>

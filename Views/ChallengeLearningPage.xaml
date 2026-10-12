@@ -138,7 +138,7 @@
             <StackPanel x:Name="EmptyState"
                         VerticalAlignment="Center" HorizontalAlignment="Center"
                         Spacing="10">
-                <FontIcon FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                <FontIcon FontFamily="{StaticResource SymbolThemeFontFamily}"
                           Glyph="&#xE8F9;" FontSize="48"
                           Foreground="{ThemeResource TextFillColorTertiaryBrush}" HorizontalAlignment="Center"/>
                 <TextBlock x:Name="EmptyHint"
@@ -457,7 +457,7 @@
                         Spacing="8" Padding="24">
                 <FontIcon Glyph="&#xE82D;" FontSize="32"
                           Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" HorizontalAlignment="Center"
-                          FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"/>
+                          FontFamily="{StaticResource SymbolThemeFontFamily}"/>
                 <TextBlock Text="Pilih challenge di kiri untuk melihat detail dan submit jawabanmu."
                            Style="{StaticResource CL_Label}"
                            TextWrapping="Wrap" TextAlignment="Center"/>

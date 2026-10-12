@@ -612,7 +612,7 @@ public sealed partial class ChallengeLearningPage : Page
                 titleRow.Children.Add(new FontIcon
                 {
                     Glyph = "", FontSize = 12, Foreground = Success,
-                    FontFamily = new FontFamily("Segoe Fluent Icons,Segoe MDL2 Assets"),
+                    FontFamily = (FontFamily)Application.Current.Resources["SymbolThemeFontFamily"],
                     VerticalAlignment = VerticalAlignment.Center
                 });
             vstack.Children.Add(titleRow);
