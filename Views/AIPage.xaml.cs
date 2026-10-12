@@ -207,11 +207,12 @@ public sealed partial class AIPage : Page
         // A request that names a performance target ("gain untuk overshoot < 5%") is answered from
         // the verified simulator search, not the LLM (which can't compute this plant's overshoot).
         // A question about the simulation-vs-LabVIEW error is answered the same way, from the
-        // computed comparison — checked second so an ambiguous tuning phrasing still wins.
+        // computed comparison — checked before the real-history archive, so "berapa error antara
+        // labview versus dashboard" gets the current run's numbers instead of old runs.
         var routed = await Services.ControlEngineering.LiveProgressService.TryAnswerProgressRequestAsync(text)
                    ?? Services.ControlEngineering.TuningChat.TryAnswerTargetRequest(text, (float)App.CascadeSession.Setpoint)
-                   ?? await Services.ControlEngineering.RealHistoryService.TryAnswerRealRequestAsync(text)
-                   ?? Services.ControlEngineering.ProcessErrorService.TryAnswerErrorRequest(text);
+                   ?? Services.ControlEngineering.ProcessErrorService.TryAnswerErrorRequest(text)
+                   ?? await Services.ControlEngineering.RealHistoryService.TryAnswerRealRequestAsync(text);
         if (routed is not null)
         {
             var (rBorder, rBlock) = AddAiBubble(routed);
