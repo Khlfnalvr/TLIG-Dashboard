@@ -86,7 +86,12 @@ public static class TuningChat
             sb.AppendLine($"**Tidak ada tuning yang memenuhi {targetStr}** di rentang pencarian.");
             sb.AppendLine();
             sb.AppendLine($"Paling mendekati: OUTER Kp = {g.OuterKp:0.###}, Ki = {g.OuterKi:0.###}, Kd = {g.OuterKd:0.###} → overshoot {m.Overshoot:0.0}%, settling {m.SettlingTime:0}s.");
-            sb.Append("Coba longgarkan targetnya — loop suhu plant ini lag-dominan (Gp1 τ≈267 s, tanpa dead time) dan loop flow sangat dead-time-dominan (θ≈13,6 s lawan τ≈1,3 s), jadi settling yang sangat kecil memang tak tercapai.");
+            sb.AppendLine();
+            sb.AppendLine("Mengapa mustahil pada plant ini:");
+            sb.AppendLine("1. Plant suhunya lambat (lag-dominan): Gp1 = 1,2 / (267,3s + 1). Tuning SIMC yang sudah optimal saja rise ≈ 183 s dan settling ≈ 315 s.");
+            sb.AppendLine("2. Inner loop mengunci kecepatan outer: flow Gp2 sangat dead-time-dominan (θ ≈ 13,6 s lawan τ ≈ 1,3 s) sehingga closed-loop tercepatnya ≈ 34 s, dan outer harus beberapa kali lebih lambat dari itu.");
+            sb.AppendLine("3. Syaratnya saling bertentangan: overshoot kecil menuntut tuning kalem (lambat), settling kecil menuntut tuning agresif (overshoot) — valve 0–100% tidak memberi ruang untuk keduanya.");
+            sb.Append("Coba longgarkan targetnya (mis. overshoot ≤ 5% tanpa batas settling yang ketat), lalu tanyakan lagi.");
         }
         return sb.ToString();
     }
