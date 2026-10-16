@@ -21,15 +21,17 @@ public class CascadeInput
     public float OuterKd { get; set; } = 0f;
 
     // ── Inner loop — Flow (PI, secondary) ────────────────────────────────────
-    // SIMC for the identified Gp2 (K=1.0, τ=1.34 s, θ=13.56 s) at τc = 1.5θ. The flow
-    // plant is strongly dead-time-dominant (θ/τ ≈ 10.1), so the inner PI must stay
-    // gentle — its closed-loop speed is the effective delay the outer loop feels.
-    public float InnerKp { get; set; } = 0.0395f;
-    public float InnerKi { get; set; } = 0.0295f;
+    // SIMC for the identified Gp2 (K=0.06 L/min per % valve for the 1–7 L/min
+    // operating range, τ=1.34 s, θ=13.56 s) at τc = 1.5θ. The flow plant is strongly
+    // dead-time-dominant (θ/τ ≈ 10.1), so the inner PI must stay gentle — its
+    // closed-loop speed is the effective delay the outer loop feels.
+    public float InnerKp { get; set; } = 0.66f;
+    public float InnerKi { get; set; } = 0.49f;
 
     /// <summary>Temperature setpoint (°C) the outer loop drives to.</summary>
     public float Setpoint { get; set; } = 60f;
-    // Default 60 °C needs ~50 L/min of flow (60 / K1), which is what sizes the disturbance below.
+    // 60 °C needs ~4 L/min of flow (mid of the 1–7 operating range, see
+    // CascadeSimulator.TempBias), which is what sizes the disturbance below.
 
     /// <summary>
     /// Step change in the flow path (e.g. a supply-pressure drop), in flow units, injected once
@@ -37,8 +39,9 @@ public class CascadeInput
     /// setpoint. The inner loop sees and corrects it fast; a single-loop temperature controller
     /// does not — this is what makes cascade shine. Zero disables the disturbance entirely (no
     /// injection, and the disturbance-rejection cards read "--") for a pure setpoint-tracking view.
+    /// Sized ~33% of the 1–7 L/min operating span.
     /// </summary>
-    public float Disturbance { get; set; } = -21f;
+    public float Disturbance { get; set; } = -2f;
 }
 
 /// <summary>Time series produced by <see cref="Services.ControlEngineering.CascadeSimulator"/>.</summary>
@@ -49,10 +52,20 @@ public class CascadeSimulationResult
     public double[] Temperature      { get; set; } = Array.Empty<double>();
     /// <summary>Secondary process variable — flow (L/min).</summary>
     public double[] Flow             { get; set; } = Array.Empty<double>();
-    /// <summary>Inner-loop setpoint = outer PID output (L/min).</summary>
+    /// <summary>Inner-loop setpoint = outer PID output (L/min, 1–7).</summary>
     public double[] FlowSetpoint     { get; set; } = Array.Empty<double>();
-    /// <summary>Actuator command — valve opening (%).</summary>
+    /// <summary>Actuator command — valve opening (%, 0–100).</summary>
     public double[] Valve            { get; set; } = Array.Empty<double>();
+    /// <summary>
+    /// Permintaan MENTAH outer (L/min) sebelum saturasi 1–7 — dipakai filter
+    /// constraint recommender (meminta di luar batas = ditolak).
+    /// </summary>
+    public double[] RawFlowSetpoint  { get; set; } = Array.Empty<double>();
+    /// <summary>
+    /// Permintaan MENTAH inner (%) sebelum saturasi 0–100 — dipakai filter
+    /// constraint recommender.
+    /// </summary>
+    public double[] RawValve         { get; set; } = Array.Empty<double>();
     /// <summary>
     /// Temperature response of a single-loop PID (same outer gains, no inner flow loop)
     /// on the identical plant + disturbance — the baseline cascade is compared against.

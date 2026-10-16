@@ -54,7 +54,8 @@ public class PidSimulator
 
     // Actuator saturation (valve %): the single-loop PID drives the valve directly, so
     // the command is clamped exactly like the cascade's inner loop, with conditional
-    // (clamping) anti-windup on the integrator. Mirrors CascadeSimulator.ValveMin/Max.
+    // (clamping) anti-windup on the integrator. Mirrors CascadeSimulator.ValveMin/Max
+    // and OperatingConstraints.ValveMin/Max.
     public const double OutputMin = 0.0, OutputMax = 100.0;
 
     /// <summary>
@@ -83,6 +84,8 @@ public class PidSimulator
 
         var time = new List<double>(Math.Min(maxSteps, 8192));
         var amplitude = new List<double>(Math.Min(maxSteps, 8192));
+        var valveTrace = new List<double>(Math.Min(maxSteps, 8192));
+        var rawTrace = new List<double>(Math.Min(maxSteps, 8192));
         // Plant-input history feeding the dead-time buffer (u delayed by `delay` samples).
         var uHist = new List<double>(Math.Min(maxSteps, 8192));
 
@@ -108,8 +111,13 @@ public class PidSimulator
 
             // RK4 Integration. uDel is a known past value, held constant across the four
             // sub-steps; the valve command issued now (k1's u) is recorded for future steps.
-            Derivatives(y, z, uDel, reference, kp, ki, kd, out double dydt1, out double dzdt1, out double u);
+            // u = saturated valve (0–100%), raw = unsaturated demand (for constraint check:
+            // a tuning that *asks* beyond the actuator / flow range is rejected even though
+            // the saturated trace looks inside the limits).
+            Derivatives(y, z, uDel, reference, kp, ki, kd, out double dydt1, out double dzdt1, out double u, out double raw);
             uHist.Add(u);
+            valveTrace.Add(u);
+            rawTrace.Add(raw);
 
             // The loop has settled once the recent window is flat, the output has stopped
             // moving, AND it has actually reached the setpoint band (see SettleBandFraction).
@@ -120,9 +128,9 @@ public class PidSimulator
                 break;
             }
 
-            Derivatives(y + 0.5 * dt * dydt1, z + 0.5 * dt * dzdt1, uDel, reference, kp, ki, kd, out double dydt2, out double dzdt2, out _);
-            Derivatives(y + 0.5 * dt * dydt2, z + 0.5 * dt * dzdt2, uDel, reference, kp, ki, kd, out double dydt3, out double dzdt3, out _);
-            Derivatives(y + dt * dydt3, z + dt * dzdt3, uDel, reference, kp, ki, kd, out double dydt4, out double dzdt4, out _);
+            Derivatives(y + 0.5 * dt * dydt1, z + 0.5 * dt * dzdt1, uDel, reference, kp, ki, kd, out double dydt2, out double dzdt2, out _, out _);
+            Derivatives(y + 0.5 * dt * dydt2, z + 0.5 * dt * dzdt2, uDel, reference, kp, ki, kd, out double dydt3, out double dzdt3, out _, out _);
+            Derivatives(y + dt * dydt3, z + dt * dzdt3, uDel, reference, kp, ki, kd, out double dydt4, out double dzdt4, out _, out _);
 
             y += (dt / 6.0) * (dydt1 + 2 * dydt2 + 2 * dydt3 + dydt4);
             z += (dt / 6.0) * (dzdt1 + 2 * dzdt2 + 2 * dzdt3 + dzdt4);
@@ -132,6 +140,8 @@ public class PidSimulator
         {
             Time = time.ToArray(),
             Amplitude = amplitude.ToArray(),
+            Valve = valveTrace.ToArray(),
+            RawOutput = rawTrace.ToArray(),
             UsedParameters = pid
         };
     }
@@ -180,7 +190,48 @@ public class PidSimulator
             oa[j] = a[i];
         }
 
-        return new SimulationResult { Time = ot, Amplitude = oa, UsedParameters = full.UsedParameters };
+        // Valve/raw ikut dipotong dengan stride yang sama bila panjangnya penuh.
+        double[] ov = Array.Empty<double>(), oraw = Array.Empty<double>();
+        if (full.Valve.Length == t.Length)
+        {
+            ov = new double[outLen];
+            for (int i = 0, j = 0; i < count && j < outLen; i += stride, j++) ov[j] = full.Valve[i];
+        }
+        if (full.RawOutput.Length == t.Length)
+        {
+            oraw = new double[outLen];
+            for (int i = 0, j = 0; i < count && j < outLen; i += stride, j++) oraw[j] = full.RawOutput[i];
+        }
+
+        return new SimulationResult { Time = ot, Amplitude = oa, Valve = ov, RawOutput = oraw, UsedParameters = full.UsedParameters };
+    }
+
+    /// <summary>
+    /// True bila tuning MEMINTA di luar batas operasi valve 0–100% / flow 1–7 L/min
+    /// (lihat <see cref="OperatingConstraints"/>). Permintaan mentah di luar batas
+    /// dihitung sebagai pelanggaran walau sinyal jenuhnya tampak di dalam batas —
+    /// inilah yang membuat recommender MENOLAK gain agresif yang hanya "lolos"
+    /// karena saturasi. Flow di sini adalah pemetaan valve→flow
+    /// (valve 0% = 1 L/min, 100% = 7 L/min).
+    /// </summary>
+    public static bool ViolatesOperatingConstraints(SimulationResult sim)
+    {
+        var raw = sim.RawOutput;
+        if (raw is null || raw.Length == 0)
+        {
+            // Hasil lama tanpa trace mentah: fallback ke trace jenuh.
+            raw = sim.Valve;
+            if (raw is null || raw.Length == 0) return false;
+        }
+        foreach (double r in raw)
+        {
+            if (double.IsNaN(r) || double.IsInfinity(r)) return true;
+            if (r < OperatingConstraints.ValveMin - 1e-9 || r > OperatingConstraints.ValveMax + 1e-9)
+                return true;
+            double f = OperatingConstraints.FlowFromValve(r);
+            if (!OperatingConstraints.IsFlowWithin(f)) return true;
+        }
+        return false;
     }
 
     // Closed-loop first-order plant with input dead time:
@@ -192,11 +243,11 @@ public class PidSimulator
     // u depends on dy/dt, which uses the DELAYED input (a known past value), so there is
     // no algebraic loop. Out-params (no per-sub-step allocation) mirror CascadeSimulator.
     private static void Derivatives(double y, double z, double uDel, double r, double kp, double ki, double kd,
-        out double dydt, out double dzdt, out double u)
+        out double dydt, out double dzdt, out double u, out double raw)
     {
         dydt = (Gain * uDel - y) / Tau;
         double e = r - y;
-        double raw = kp * e + ki * z - kd * dydt;
+        raw = kp * e + ki * z - kd * dydt;
         u = Math.Max(OutputMin, Math.Min(OutputMax, raw));
         dzdt = AntiWindup(e, raw);
     }

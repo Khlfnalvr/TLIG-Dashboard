@@ -85,7 +85,7 @@
                     <TextBlock Grid.Row="2"
                                FontFamily="Consolas" FontSize="11" Opacity="0.7"
                                TextWrapping="Wrap" TextAlignment="Center"
-                               Text="Gp1 (suhu) = 1,2 / (267,3s + 1)&#x00A0;&#x00A0;&#x00A0;·&#x00A0;&#x00A0;&#x00A0;Gp2 (flow) = 1 / (1,34s + 1) · e^(−13,56s)"/>
+                               Text="Gp1 (suhu) = 1,2 / (267,3s + 1) + bias 55,2 °C&#x00A0;&#x00A0;&#x00A0;·&#x00A0;&#x00A0;&#x00A0;Gp2 (flow) = 0,06 / (1,34s + 1) · e^(−13,56s) + bias 1 L/min&#x0a;Valve 0–100% ↔ Flow 1–7 L/min — rekomendasi yang meminta di luar batas ditolak"/>
                 </Grid>
             </Border>
 
@@ -182,9 +182,9 @@
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="Kp" FontSize="13" FontWeight="SemiBold" Opacity="0.65" VerticalAlignment="Center"/>
-                                <NumberBox x:Name="InnerKpBox" Grid.Column="1" Value="0.04" Minimum="0" SmallChange="0.01" Style="{StaticResource CasNumberBoxStyle}"/>
+                                <NumberBox x:Name="InnerKpBox" Grid.Column="1" Value="0.66" Minimum="0" SmallChange="0.05" Style="{StaticResource CasNumberBoxStyle}"/>
                                 <TextBlock Grid.Column="2" Text="Ki" FontSize="13" FontWeight="SemiBold" Opacity="0.65" VerticalAlignment="Center"/>
-                                <NumberBox x:Name="InnerKiBox" Grid.Column="3" Value="0.1" Minimum="0" SmallChange="0.05" Style="{StaticResource CasNumberBoxStyle}"/>
+                                <NumberBox x:Name="InnerKiBox" Grid.Column="3" Value="0.49" Minimum="0" SmallChange="0.05" Style="{StaticResource CasNumberBoxStyle}"/>
                             </Grid>
                         </StackPanel>
                     </Grid>
@@ -218,7 +218,7 @@
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
-                            <NumberBox x:Name="DisturbanceBox" Value="-40" SmallChange="5" Style="{StaticResource CasNumberBoxStyle}"/>
+                            <NumberBox x:Name="DisturbanceBox" Value="-2" SmallChange="0.5" Style="{StaticResource CasNumberBoxStyle}"/>
                             <TextBlock Grid.Column="1" Text="L/min" FontSize="12" Opacity="0.6" VerticalAlignment="Center"/>
                         </Grid>
 

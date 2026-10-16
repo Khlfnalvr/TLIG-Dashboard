@@ -66,6 +66,10 @@ public static class PidRecommender
         {
             var gains = new PidPrediction { Kp = (float)kp, Ki = (float)ki, Kd = (float)kd };
             var sim = _sim.SimulateStepResponse(gains, reference: 1.0, duration: 0, dt: SearchDt);
+            // Constraint valve 0–100% / flow 1–7 L/min (OperatingConstraints): gain yang
+            // MEMINTA di luar batas ditolak — walau saturasi membuatnya tampak lolos.
+            if (PidSimulator.ViolatesOperatingConstraints(sim))
+                continue;
             var (rise, os, settle, ssePct) =
                 PidSimulator.ComputeStepMetrics(sim.Time, sim.Amplitude, 1.0);
             bool stable = PidSimulator.IsResponseStable(sim.Amplitude, 1.0);

@@ -53,8 +53,9 @@ public static class CascadeRecommender
     private static readonly double[] KiGrid = { 0.003, 0.005, 0.007, 0.01, 0.015, 0.02 };
     private static readonly double[] KdGrid = { 0, 2, 5, 10 };
 
-    // The known-good inner flow PI (SIMC for Gp2 at τc = 1.5θ) the recommendation pairs with every outer.
-    private const float InnerKpFixed = 0.0395f, InnerKiFixed = 0.0295f;
+    // The known-good inner flow PI (SIMC for Gp2 at τc = 1.5θ, K2 = 0.06 for the
+    // 1–7 L/min operating range) the recommendation pairs with every outer.
+    private const float InnerKpFixed = 0.66f, InnerKiFixed = 0.49f;
 
     // Fixed, bounded search run: long enough that any tuning that would count as ideal (settling
     // < 400 s) is fully settled and measured exactly; slower candidates are rejected on their
@@ -70,12 +71,13 @@ public static class CascadeRecommender
     // The grid is mildly setpoint-dependent (valve/flow saturation makes the cascade non-linear).
     // Bounded (a handful of setpoints) so the cache can't grow without limit.
     private const int MaxCachedGrids = 8;
-    private static readonly ConcurrentDictionary<int, List<(CascadeRecommendation gains, CascadeMetrics metrics)>> _gridCache = new();
+    private static readonly ConcurrentDictionary<int, List<(CascadeRecommendation gains, CascadeMetrics metrics, bool violates)>> _gridCache = new();
     private static readonly ConcurrentQueue<int> _gridOrder = new();
 
     /// <summary>
     /// Gains to recommend for a temperature response with the given metrics, or null when the current
-    /// tuning already meets every criterion (nothing to fix) or the search found nothing feasible.
+    /// tuning already meets every criterion (nothing to fix) or the search found nothing feasible
+    /// inside valve 0–100% / flow 1–7 L/min.
     /// </summary>
     public static (CascadeRecommendation gains, CascadeMetrics metrics)? Recommend(
         CascadeMetrics currentMetrics, bool currentStable, float setpoint)
@@ -87,24 +89,29 @@ public static class CascadeRecommender
         double bestCost = double.PositiveInfinity;
         foreach (var c in EvaluateGrid(setpoint))
         {
+            // Constraint operasi dulu: yang meminta valve/flow di luar 0–100% /
+            // 1–7 L/min langsung ditolak, walau saturasi membuatnya tampak lolos.
+            if (c.violates) continue;
             // Keep only tunings the diagnosis itself would call ideal — same thresholds, so the
             // recommendation and the diagnosis can never disagree.
             if (PidDiagnosisCalculator.Evaluate(c.metrics.PrimaryStepMetrics(), c.metrics.Stable) != PidDiagnosisCode.Ideal)
                 continue;
             double cost = Cost(c.metrics);
-            if (cost < bestCost) { bestCost = cost; best = c; }
+            if (cost < bestCost) { bestCost = cost; best = (c.gains, c.metrics); }
         }
         return best;
     }
 
     /// <summary>
-    /// Best verified tuning meeting <paramref name="target"/> (all specified constraints, and stable).
+    /// Best verified tuning meeting <paramref name="target"/> (all specified constraints, stable,
+    /// AND inside valve 0–100% / flow 1–7 L/min).
     /// If none of the grid meets it, returns the closest stable tuning with <c>MetTarget = false</c> so
     /// the caller can be honest ("no tuning meets that; the closest is…"). Never invents numbers.
+    /// Tunings violating the operating constraints are never returned — not even as "closest".
     /// </summary>
     public static TargetTuningResult RecommendForTarget(float setpoint, TuningTarget target)
     {
-        var grid = EvaluateGrid(setpoint);
+        var grid = EvaluateGrid(setpoint).Where(c => !c.violates).ToList();
 
         // Meets every requested constraint (unset constraints don't filter) and is stable.
         var passing = grid.Where(c => c.metrics.Stable && Meets(c.metrics, target)).ToList();
@@ -125,6 +132,8 @@ public static class CascadeRecommender
     /// <summary>
     /// Simulates one OUTER-gain set (inner PI fixed at SIMC) and returns its temperature step
     /// metrics — the ground truth for verifying gains a student or the AI proposes.
+    /// Metrics are read on the deviation (T−T0 vs SP−T0); T0 is the absolute start
+    /// (TempBias+K1·FlowBias ≈ 56.4 °C).
     /// </summary>
     public static CascadeMetrics SimulateOuter(float setpoint, float kp, float ki, float kd)
     {
@@ -136,8 +145,15 @@ public static class CascadeRecommender
             Setpoint = sp, Disturbance = 0f,
         };
         var sim = _sim.Simulate(input, duration: SearchDuration, dt: SearchDt, withComparison: false);
-        var (rise, os, settle, ssePct) = PidSimulator.ComputeStepMetrics(sim.Time, sim.Temperature, sp);
-        bool stable = PidSimulator.IsResponseStable(sim.Temperature, sp);
+        double y0 = sim.Temperature.Length > 0 ? sim.Temperature[0] : 0.0;
+        double spDev = sp - y0;
+        double[] yDev = new double[sim.Temperature.Length];
+        for (int i = 0; i < yDev.Length; i++) yDev[i] = sim.Temperature[i] - y0;
+        var (rise, os, settle, ssePct) = PidSimulator.ComputeStepMetrics(sim.Time, yDev, spDev);
+        // Fixed-duration search run never sets the adaptive Settled flag — use the
+        // bounded-amplitude check on the deviation (as before), plus the constraint.
+        bool stable = PidSimulator.IsResponseStable(yDev, spDev)
+            && !CascadeSimulator.ViolatesOperatingConstraints(sim);
         return new CascadeMetrics
         {
             Overshoot = (float)os, RiseTime = (float)rise, SettlingTime = (float)settle,
@@ -174,7 +190,7 @@ public static class CascadeRecommender
     // Simulates every grid point once and caches the result per setpoint. The sweep runs in
     // parallel (CascadeSimulator keeps no mutable state, so concurrent Simulate calls are safe)
     // and outside any lock, so a first-time search never blocks other readers.
-    private static List<(CascadeRecommendation gains, CascadeMetrics metrics)> EvaluateGrid(float setpoint)
+    private static List<(CascadeRecommendation gains, CascadeMetrics metrics, bool violates)> EvaluateGrid(float setpoint)
     {
         int key = (int)Math.Round(Math.Max(1f, setpoint));
         if (_gridCache.TryGetValue(key, out var cached)) return cached;
@@ -185,7 +201,7 @@ public static class CascadeRecommender
         foreach (double kd in KdGrid)
             combos.Add((kp, ki, kd));
 
-        var results = new (CascadeRecommendation gains, CascadeMetrics metrics)[combos.Count];
+        var results = new (CascadeRecommendation gains, CascadeMetrics metrics, bool violates)[combos.Count];
         Parallel.For(0, combos.Count, i =>
         {
             var (kp, ki, kd) = combos[i];
@@ -200,7 +216,7 @@ public static class CascadeRecommender
         return list;
     }
 
-    private static (CascadeRecommendation gains, CascadeMetrics metrics) EvaluateCandidate(
+    private static (CascadeRecommendation gains, CascadeMetrics metrics, bool violates) EvaluateCandidate(
         int setpoint, double kp, double ki, double kd)
     {
         var input = new CascadeInput
@@ -210,8 +226,16 @@ public static class CascadeRecommender
             Setpoint = setpoint, Disturbance = 0f,
         };
         var sim = _sim.Simulate(input, duration: SearchDuration, dt: SearchDt, withComparison: false);
-        var (rise, os, settle, ssePct) = PidSimulator.ComputeStepMetrics(sim.Time, sim.Temperature, setpoint);
-        bool stable = PidSimulator.IsResponseStable(sim.Temperature, setpoint);
+        bool violates = CascadeSimulator.ViolatesOperatingConstraints(sim);
+        // Metrics on deviation (see ComputeMetrics): T0 = absolute start.
+        double y0 = sim.Temperature.Length > 0 ? sim.Temperature[0] : 0.0;
+        double spDev = setpoint - y0;
+        double[] yDev = new double[sim.Temperature.Length];
+        for (int i = 0; i < yDev.Length; i++) yDev[i] = sim.Temperature[i] - y0;
+        var (rise, os, settle, ssePct) = PidSimulator.ComputeStepMetrics(sim.Time, yDev, spDev);
+        // Same fixed-duration stability rule as EvaluateCandidate (see above).
+        bool stable = PidSimulator.IsResponseStable(yDev, spDev)
+            && !CascadeSimulator.ViolatesOperatingConstraints(sim);
 
         return (
             new CascadeRecommendation
@@ -223,6 +247,7 @@ public static class CascadeRecommender
             {
                 Overshoot = (float)os, RiseTime = (float)rise, SettlingTime = (float)settle,
                 SteadyStateError = (float)(ssePct / 100.0), Stable = stable,
-            });
+            },
+            violates);
     }
 }

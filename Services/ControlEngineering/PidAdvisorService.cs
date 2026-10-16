@@ -54,7 +54,9 @@ public class PidAdvisorService
             $"with a steady-state (DC) gain of about {dcGain:F1} and a dominant time constant of about " +
             $"{tau:F1} s — it is strongly lag-dominant and slow in open loop. The controller output drives " +
             $"a valve saturated at {PidSimulator.OutputMin:F0}–{PidSimulator.OutputMax:F0}% with conditional-integration " +
-            "anti-windup, so integral-heavy tunings dwell at the limit instead of winding up. Writing the plant as " +
+            "anti-windup, so integral-heavy tunings dwell at the limit instead of winding up. The rig's " +
+            "operating range is valve 0–100% ↔ flow 1–7 L/min (flow = 1 + 0.06·valve); recommended gains " +
+            "are verified to never demand beyond it — a tuning that asks for more is rejected, not clamped. Writing the plant as " +
             "B/(s^2 + A1*s + A0) and using an ideal PID on the error under unity feedback, the closed-loop " +
             "transfer function is B(Kp*s + Ki) / (s^3 + (A1 + B*Kd)*s^2 + (A0 + B*Kp)*s + B*Ki). It carries a " +
             "zero at s = -Ki/Kp: when Kp is small the loop is integral-dominated, that slow zero sits among the " +

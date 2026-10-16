@@ -57,6 +57,17 @@ public class SimulationResult
     public double[] Time { get; set; } = Array.Empty<double>();
     public double[] Amplitude { get; set; } = Array.Empty<double>();
     public PidPrediction UsedParameters { get; set; } = new();
+    /// <summary>
+    /// Perintah valve jenuh 0–100% per langkah (lihat <c>OperatingConstraints</c>).
+    /// Kosong untuk hasil lama / dari server lama.
+    /// </summary>
+    public double[] Valve { get; set; } = Array.Empty<double>();
+    /// <summary>
+    /// Permintaan kontrol MENTAH sebelum saturasi — dipakai untuk menilai apakah
+    /// tuning MEMINTA di luar batas valve/flow (harus ditolak recommender),
+    /// walau sinyal jenuhnya tampak masih di dalam batas.
+    /// </summary>
+    public double[] RawOutput { get; set; } = Array.Empty<double>();
 }
 
 /// Step-response metrics (Overshoot, RiseTime, SettlingTime, SteadyStateError) read
