@@ -101,7 +101,7 @@ public sealed partial class ParameterPage : Page
         if (CtlSetpointLabel != null) CtlSetpointLabel.Text = svc.SetpointLabel;
         if (CtlSetpointUnit  != null) CtlSetpointUnit.Text  = svc.ProcessVariableUnit;
         // NOTE: TransferFunctionText is intentionally NOT updated here — that card shows
-        // the Smart PID Designer's fixed plant (see PidSimulator.cs), not the selected
+        // the fixed cascade plant (same Gp1/Gp2 as the Dashboard), not the selected
         // System Model's own transfer function. Same rule as the Dashboard.
     }
 
