@@ -10,8 +10,13 @@ namespace TLIGDashboard.Services.ControlEngineering;
 /// using the <b>lab-identified FOPDT plants</b> (open-loop step test, validated against
 /// experiment):
 /// <code>
-///   Gp1(s) = 1.2 / (267.3 s + 1)                          primary : temperature (shell out), input = flow
-///   Gp2(s) = 1.0 / (1.34 s + 1) · e^(-13.56 s)             secondary: flow (tube),            input = valve
+///   Gp1(s) = 10.0 / (267.3 s + 1)                         primary : temperature (shell out), input = flow
+///   Gp2(s) = 0.06 / (1.34 s + 1) · e^(-13.56 s)            secondary: flow deviation,         input = valve
+///   F(t)   = FlowBias + Gp2(s)·valve  (1 + 0.06·valve → 1…7 L/min)
+///
+/// <para>The primary loop models the temperature <b>rise above the inlet water temperature</b>:
+/// <c>T(t) = T_inlet + ΔT(t)</c>, with <c>ΔT</c> driven by the flow above its floor
+/// (<c>F − FlowBias</c>). <c>T_inlet</c> is an input (default 30 °C), not a fixed bias.</para>
 /// </code>
 ///
 /// <para><b>Structure</b></para>
@@ -48,23 +53,23 @@ public class CascadeSimulator
     // (θ/τ ≈ 10.1), so the inner PI must stay gentle — its closed loop is what the
     // outer loop feels as delay.
     //
-    // Operating-range rescaling to the rig's instruments (valve 0–100% ↔ flow 1–7
-    // L/min, see OperatingConstraints): the DYNAMIC gains/times stay identified
-    // (K1=1.2, Tau1=267.3, K2span=0.06, Tau2=1.34, dead times), but absolute levels
-    // carry biases so the default 60 °C setpoint stays reachable inside 1–7 L/min:
-    //   flow  F = FlowBias + K2·valve          (1 + 0.06·valve → 1…7 L/min)
-    //   temp  T = TempBias + K1·flow           (55.2 + 1.2·flow → 56.4…63.6 °C,
-    //                                          60 °C at mid-flow 4 L/min).
-    // Temp max (63.6 °C) matches the single-loop designer's 0.6361·100 ≈ 63.6 °C,
-    // so both designers share one operating window.
-    /// Primary (temperature) plant Gp1: gain, time constant (s), dead time (s). Input = flow.
-    public const double K1 = 1.2, Tau1 = 267.3, Theta1 = 0.0;
-    /// <summary>Absolute-temperature bias (°C) — operating-point shift, not dynamics.</summary>
-    public const double TempBias = 55.2;
+    // The temperature gain is sized so the rig can reach 90 °C at full valve with a
+    // 30 °C inlet: T = T_inlet + K1·(F − FlowBias), and with K1 = 10,
+    // F − FlowBias = 7 − 1 = 6 L/min the rise is exactly 60 °C.
+    // Flow still maps valve 0–100% to 1–7 L/min (see OperatingConstraints):
+    //   flow  F = FlowBias + K2·valve             (1 + 0.06·valve → 1…7 L/min)
+    //   temp  T = T_inlet + K1·(flow − FlowBias)  (T_inlet + 0…60 °C)
+    // The inlet water temperature is an INPUT (default 30 °C), not a hard-coded bias,
+    // so the reachable window shifts with the lab's actual incoming temperature.
+    /// Primary (temperature) plant Gp1: gain (°C per L/min above the flow floor),
+    /// time constant (s), dead time (s). Input = flow.
+    public const double K1 = 10.0, Tau1 = 267.3, Theta1 = 0.0;
+    /// <summary>Inlet water temperature (°C) used when the caller does not supply one.</summary>
+    public const double DefaultInletTemperature = 30.0;
     /// Secondary (flow) plant Gp2: gain, time constant (s), dead time (s). Input = valve.
     /// K2 = (7−1)/100 = 0.06 L/min per % valve so 0–100% ↔ 1–7 L/min.
     public const double K2 = 0.06, Tau2 = 1.34, Theta2 = 13.56;
-    /// <summary>Absolute-flow bias (L/min): flow at valve 0%.</summary>
+    /// <summary>Flow floor (L/min): flow at valve 0%, i.e. the zero of the ΔF deviation.</summary>
     public const double FlowBias = 1.0;
 
     // ── Actuator / setpoint saturation ───────────────────────────────────────
@@ -72,6 +77,33 @@ public class CascadeSimulator
     // Mirrors OperatingConstraints.FlowMin/Max and ValveMin/Max.
     public const double FlowSpMin = 1.0, FlowSpMax = 7.0;   // outer output (inner SP, L/min)
     public const double ValveMin  = 0.0, ValveMax  = 100.0;   // inner output (valve %)
+
+    // ── Jangkauan suhu yang SECARA FISIK bisa dicapai plant ──────────────────
+    // Valve 0%   → flow FlowBias (1 L/min) → T = T_inlet                        (ΔT = 0)
+    // Valve 100% → flow 7 L/min            → T = T_inlet + 10·(7−1) = T_inlet+60
+    // Di luar rentang ini tidak ada nilai Kp/Ki/Kd yang bisa mencapai setpoint:
+    // aktuator sudah di batas, jadi "tidak pernah settle" adalah batas otoritas
+    // aktuator, bukan ketidakstabilan loop.
+    public static double MinReachableTemperature(double inletTemp) =>
+        inletTemp + K1 * (FlowSpMin - FlowBias);
+
+    public static double MaxReachableTemperature(double inletTemp) =>
+        inletTemp + K1 * (FlowSpMax - FlowBias);
+
+    /// <summary>
+    /// True bila <paramref name="setpoint"/> berada di dalam jangkauan tunak plant untuk
+    /// suhu air masuk <paramref name="inletTemp"/>. Toleransi kecil menyerap pembulatan
+    /// float dari kotak input.
+    /// </summary>
+    public static bool IsSetpointReachable(double setpoint, double inletTemp) =>
+        setpoint >= MinReachableTemperature(inletTemp) - 0.05 &&
+        setpoint <= MaxReachableTemperature(inletTemp) + 0.05;
+
+    /// <summary>
+    /// Suhu masuk yang dipakai simulator: nilai pemanggil bila finite, selain itu default 30 °C.
+    /// </summary>
+    public static double NormalizeInletTemperature(double inletTemp) =>
+        double.IsFinite(inletTemp) ? inletTemp : DefaultInletTemperature;
 
     // ── Dead-time lookup ──────────────────────────────────────────────────────
     /// <summary>
@@ -154,10 +186,14 @@ public class CascadeSimulator
         var uHist = new List<double>(cap);   // valve command  → flow plant (delay d2)
         var fHist = new List<double>(cap);   // flow           → temp plant (delay d1)
 
+        // Inlet water temperature: caller-supplied (default 30 °C). The absolute level is
+        // T_inlet + ΔT, so a colder/hotter inlet shifts the whole response; the dynamics
+        // depend only on the flow above its floor.
+        input.InletTemperature = (float)NormalizeInletTemperature(input.InletTemperature);
+
         // State scalars: T, F, IT, IF (kept as locals, not an array, so the RK4
-        // sub-steps allocate nothing per step). Absolute operating point:
-        // valve 0% → flow FlowBias (1 L/min) → temp TempBias+K1·FlowBias (56.4 °C).
-        double sT = TempBias + K1 * FlowBias, sF = FlowBias, sIT = 0, sIF = 0;
+        // sub-steps allocate nothing per step). Valve 0% → flow FlowBias (1 L/min) → T = T_inlet.
+        double sT = input.InletTemperature, sF = FlowBias, sIT = 0, sIF = 0;
 
         // Disturbance injection step: preset for a fixed-length run, discovered at the step's
         // settle for an adaptive one. phase 0 = settling the step, 1 = settling the recovery.
@@ -243,9 +279,9 @@ public class CascadeSimulator
         // Outer loop (temperature PID, derivative-on-measurement). The temp plant sees the
         // DELAYED flow, or — with θ1 = 0, as the latest identification puts it — the flow of
         // this very instant, which is the one the state vector is carrying.
-        // Absolute form: T → TempBias + K1·flow.
+        // Deviation form: ΔT = K1·(flow − FlowBias), absolute T = T_inlet + ΔT.
         double fIn = double.IsNaN(fDel) ? F : fDel;
-        dTdt = (TempBias + K1 * fIn - T) / Tau1;
+        dTdt = (g.InletTemperature + K1 * (fIn - FlowBias) - T) / Tau1;
         double eT = g.Setpoint - T;
         double outerRaw = g.OuterKp * eT + g.OuterKi * IT - g.OuterKd * dTdt;
         fspRaw = outerRaw;
@@ -276,7 +312,7 @@ public class CascadeSimulator
         double[] temp = new double[steps];
         double[] uHist = new double[steps];
         double[] fHist = new double[steps];
-        double sT = TempBias + K1 * FlowBias, sF = FlowBias, sIT = 0;
+        double sT = g.InletTemperature, sF = FlowBias, sIT = 0;
 
         for (int i = 0; i < steps; i++)
         {
@@ -304,7 +340,7 @@ public class CascadeSimulator
         out double dTdt, out double dFdt, out double dIT, out double u)
     {
         double fIn = double.IsNaN(fDel) ? F : fDel;
-        dTdt = (TempBias + K1 * fIn - T) / Tau1;
+        dTdt = (g.InletTemperature + K1 * (fIn - FlowBias) - T) / Tau1;
         double eT = g.Setpoint - T;
         double uRaw = g.OuterKp * eT + g.OuterKi * IT - g.OuterKd * dTdt;
         u = Clamp(uRaw, ValveMin, ValveMax);
@@ -328,24 +364,21 @@ public class CascadeSimulator
     /// True bila run MELANGGAR batas operasi valve 0–100% / flow 1–7 L/min
     /// (lihat <see cref="OperatingConstraints"/>). Diperiksa:
     /// permintaan mentah outer (flow SP) &amp; inner (valve), plus trace aktual
-    /// flow &amp; valve. Meminta di luar batas = pelanggaran walau sinyal jenuhnya
+    /// flow &amp; valve. Meminta JELAS di luar batas = pelanggaran walau sinyal jenuhnya
     /// tampak di dalam batas — inilah yang membuat recommender MENOLAK gain agresif.
+    /// Sentuhan batas setara noise numerik (slack
+    /// <see cref="OperatingConstraints.RawValveTolerance"/>,
+    /// <see cref="OperatingConstraints.RawFlowTolerance"/>) bukan pelanggaran;
+    /// trace AKTUAL harus benar-benar di dalam batas.
     /// </summary>
     public static bool ViolatesOperatingConstraints(CascadeSimulationResult r)
     {
         if (r.RawFlowSetpoint is { Length: > 0 } rfsp)
             foreach (double v in rfsp)
-            {
-                if (double.IsNaN(v) || double.IsInfinity(v)) return true;
-                if (v < OperatingConstraints.FlowMin - 1e-9 || v > OperatingConstraints.FlowMax + 1e-9)
-                    return true;
-            }
+                if (!OperatingConstraints.IsRawFlowOk(v)) return true;
         if (r.RawValve is { Length: > 0 } rv)
             foreach (double v in rv)
-            {
-                if (double.IsNaN(v) || double.IsInfinity(v)) return true;
-                if (!OperatingConstraints.IsValveWithin(v)) return true;
-            }
+                if (!OperatingConstraints.IsRawValveOk(v)) return true;
         if (r.Flow is { Length: > 0 } fl)
             foreach (double v in fl)
             {
@@ -388,10 +421,10 @@ public class CascadeSimulator
     /// pre-disturbance portion (so the injected disturbance dip doesn't corrupt the
     /// settling time); disturbance rejection is measured after it.
     /// <para>
-    /// The run is ABSOLUTE (T0 = <see cref="TempBias"/>+K1·<see cref="FlowBias"/> ≈ 56.4 °C
-    /// at valve 0%), so metrics are read on the DEVIATION (T−T0 vs SP−T0) — otherwise a
-    /// 56.4→60 °C step would already sit above the 10/90% lines of SP=60 and report
-    /// rise ≈ 0. Error indices use the same deviation (identical error to absolute).
+    /// The run is ABSOLUTE (T0 = T_inlet at valve 0%), so metrics are read on the
+    /// DEVIATION (T−T0 vs SP−T0) — otherwise a 30→60 °C step would already sit above the
+    /// 10/90% lines of SP=60 and report rise ≈ 0. Error indices use the same deviation
+    /// (identical error to absolute).
     /// </para>
     /// </summary>
     public static CascadeMetrics ComputeMetrics(CascadeSimulationResult r, CascadeInput input)
@@ -416,7 +449,15 @@ public class CascadeSimulator
         // budget. The valve/flow limits keep every response bounded, so a "did it blow up?"
         // test can never fail here; "did it reach and hold the setpoint?" is the signal that
         // separates a usable tuning from one that oscillates or is hopelessly sluggish.
-        bool stable = r.Settled;
+        //
+        // KECUALI bila setpoint berada di luar jangkauan plant (lihat
+        // MinReachableTemperature/MaxReachableTemperature untuk suhu masuk ini): saat itu
+        // valve memang sudah jenuh dan plant tidak mampu mencapai setpoint, jadi "tidak
+        // settle" bukan ketidakstabilan. Perlakukan sebagai steady-state error — label yang
+        // sama yang dipakai PidSimulator untuk loop tunggal — supaya grafik yang datar/stabil
+        // tidak dilabeli "tidak stabil" dan saran "turunkan Kp/Ki" tidak menyesatkan.
+        bool reachable = IsSetpointReachable(sp, input.InletTemperature);
+        bool stable = r.Settled || !reachable;
 
         double flowPeak = 0, flowSettled = 0;
         if (cut > 0)

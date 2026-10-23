@@ -437,13 +437,13 @@
 
                 <!-- AI Diagnosis — multiclass classification of the current gains'
                      actual response (SISTEM_SUDAH_IDEAL / TURUNKAN_KP_DAN_KI / dst.) -->
-                <Border Grid.Column="0" Style="{StaticResource ParamCardStyle}" MinHeight="66">
+                <Border x:Name="DiagnosisCard" Grid.Column="0" Style="{StaticResource ParamCardStyle}" MinHeight="66">
                     <StackPanel Spacing="6" VerticalAlignment="Center">
                         <TextBlock Text="{x:Bind Lang.Pid_DiagnosisTitle, Mode=OneWay}"
                                    Style="{StaticResource ParamCaptionStyle}"/>
                         <TextBlock x:Name="DiagnosisValue"
                                    Text="--" FontSize="14" FontWeight="SemiBold"
-                                   TextWrapping="Wrap"/>
+                                   TextWrapping="Wrap" TextAlignment="Left"/>
                     </StackPanel>
                 </Border>
 

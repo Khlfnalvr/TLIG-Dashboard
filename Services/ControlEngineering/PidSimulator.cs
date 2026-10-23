@@ -59,6 +59,18 @@ public class PidSimulator
     public const double OutputMin = 0.0, OutputMax = 100.0;
 
     /// <summary>
+    /// Jangkauan tunak plant loop tunggal: valve 0% → 0 °C, valve 100% → 0.6361·100 ≈
+    /// 63.61 °C. Setpoint di atas ini tidak bisa dicapai gain apa pun — aktuator sudah
+    /// di batas. Dipakai untuk menjelaskan kegagalan capai setpoint (bukan masalah tuning).
+    /// </summary>
+    public const double MinReachableTemperature = 0.0;
+    public const double MaxReachableTemperature = Gain * OutputMax;
+
+    /// <summary>True bila <paramref name="setpoint"/> masih di dalam jangkauan tunak plant.</summary>
+    public static bool IsSetpointReachable(double setpoint) =>
+        setpoint >= MinReachableTemperature - 0.05 && setpoint <= MaxReachableTemperature + 0.05;
+
+    /// <summary>
     /// Integrates the closed-loop step response with RK4.
     /// <paramref name="duration"/> &lt;= 0 (the default) runs until the response actually
     /// settles, capped at <see cref="MaxDuration"/>.
@@ -212,7 +224,9 @@ public class PidSimulator
     /// dihitung sebagai pelanggaran walau sinyal jenuhnya tampak di dalam batas —
     /// inilah yang membuat recommender MENOLAK gain agresif yang hanya "lolos"
     /// karena saturasi. Flow di sini adalah pemetaan valve→flow
-    /// (valve 0% = 1 L/min, 100% = 7 L/min).
+    /// (valve 0% = 1 L/min, 100% = 7 L/min). Sentuhan batas setara noise numerik /
+    /// respons normal (slack <see cref="OperatingConstraints.RawValveTolerance"/>,
+    /// <see cref="OperatingConstraints.RawFlowTolerance"/>) bukan pelanggaran.
     /// </summary>
     public static bool ViolatesOperatingConstraints(SimulationResult sim)
     {
@@ -225,11 +239,8 @@ public class PidSimulator
         }
         foreach (double r in raw)
         {
-            if (double.IsNaN(r) || double.IsInfinity(r)) return true;
-            if (r < OperatingConstraints.ValveMin - 1e-9 || r > OperatingConstraints.ValveMax + 1e-9)
-                return true;
-            double f = OperatingConstraints.FlowFromValve(r);
-            if (!OperatingConstraints.IsFlowWithin(f)) return true;
+            if (!OperatingConstraints.IsRawValveOk(r)) return true;
+            if (!OperatingConstraints.IsRawFlowOk(OperatingConstraints.FlowFromValve(r))) return true;
         }
         return false;
     }

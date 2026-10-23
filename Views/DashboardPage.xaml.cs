@@ -619,7 +619,10 @@ public sealed partial class DashboardPage : Page
         // own language. The outer loop is the identical Gp1 plant PidDiagnosisCalculator is
         // anchored to (see CascadeDesignService).
         DiagnosisValue.Text = string.IsNullOrEmpty(result.Diagnosis)
-            ? "--" : PidDiagnosisCalculator.Describe(result.Diagnosis, m.PrimaryStepMetrics());
+            ? "--"
+            : !SetpointReachability.IsCascadeReachable(result.Input.Setpoint, result.Input.InletTemperature)
+                ? SetpointReachability.DescribeUnreachableCascade(result.Input.Setpoint, result.Input.InletTemperature)
+                : PidDiagnosisCalculator.Describe(result.Diagnosis, m.PrimaryStepMetrics());
 
         // Read the pending gains from the session, not from result: a decline made on the
         // Cascade page must stay declined here too. The panel shows the outer gains it edits;
@@ -665,8 +668,39 @@ public sealed partial class DashboardPage : Page
     /// </summary>
     private void FoldAdvisorIntoChat(CascadeDesignResult result)
     {
-        if (string.IsNullOrWhiteSpace(result.AdvisorExplanation)) return;
+        // Kartu transfer function hanya menampilkan Gp1/Gp2. Hubungan operating point
+        // (T = T_masuk + ΔT, F = 1 + 0,06·valve, batas suhu) dikirim ke chat sebagai
+        // penjelasan deterministik, sekali per kombinasi inlet/setpoint.
+        string modelNote = SetpointReachability.ExplainModel(result.Input);
+        if (!App.Ai.History.Any(m => m.Content == modelNote))
+        {
+            AddChatBubble("ai", modelNote);
+            App.Ai.AddHistoryEntry("assistant", modelNote);
+            ChatSessionService.Instance.SaveActive();
+            _renderedCount = App.Ai.History.Count;
+        }
 
+        // Setpoint di luar jangkauan plant dijelaskan secara deterministik (bukan oleh
+        // LLM): persamaan plant + batas otoritas aktuator. Teks yang sama juga dikirim
+        // sebagai konteks ke advisor (CascadeDesignService) supaya ulasannya tidak
+        // menyalahkan gain untuk sesuatu yang mustahil dicapai.
+        if (!SetpointReachability.IsCascadeReachable(result.Input.Setpoint, result.Input.InletTemperature))
+        {
+            string note = SetpointReachability.ExplainCascade(result.Input.Setpoint, result.Input.InletTemperature);
+            if (!App.Ai.History.Any(m => m.Content == note))
+            {
+                AddChatBubble("ai", note);
+                App.Ai.AddHistoryEntry("assistant", note);
+                ChatSessionService.Instance.SaveActive();
+                _renderedCount = App.Ai.History.Count;
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(result.AdvisorExplanation))
+        {
+            _renderedCount = App.Ai.History.Count;
+            return;
+        }
         AddChatBubble("ai", result.AdvisorExplanation);
         ScrollChat();
 
@@ -1381,7 +1415,7 @@ public sealed partial class DashboardPage : Page
         // computed comparison — checked before the real-history archive, so "berapa error antara
         // labview versus dashboard" gets the current run's numbers instead of old runs.
         var routed = await Services.ControlEngineering.LiveProgressService.TryAnswerProgressRequestAsync(text)
-                   ?? Services.ControlEngineering.TuningChat.TryAnswerTargetRequest(text, (float)App.CascadeSession.Setpoint)
+                   ?? Services.ControlEngineering.TuningChat.TryAnswerTargetRequest(text, (float)App.CascadeSession.Setpoint, (float)App.CascadeSession.InletTemperature)
                    ?? Services.ControlEngineering.ProcessErrorService.TryAnswerErrorRequest(text)
                    ?? await Services.ControlEngineering.RealHistoryService.TryAnswerRealRequestAsync(text);
         if (routed is not null)
@@ -1428,7 +1462,7 @@ public sealed partial class DashboardPage : Page
         else
         {
             // Safety net: simulate any Kp/Ki/Kd the LLM proposed and append the real result.
-            var note = Services.ControlEngineering.TuningChat.VerifyGainsNote(aiBubble.Text, (float)App.CascadeSession.Setpoint);
+            var note = Services.ControlEngineering.TuningChat.VerifyGainsNote(aiBubble.Text, (float)App.CascadeSession.Setpoint, (float)App.CascadeSession.InletTemperature);
             string finalText = note is null ? aiBubble.Text : aiBubble.Text + note;
             if (note is not null) App.Ai.AmendLastAssistantEntry(note);
             aiBubbleBorder.Child = MarkdownRenderer.Render(finalText, 12, ActualTheme == ElementTheme.Dark);

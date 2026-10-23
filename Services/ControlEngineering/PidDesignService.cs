@@ -166,10 +166,13 @@ public static class PidDesignService
 
             // Gains to offer come from searching the simulator (verified against the same
             // criteria as the diagnosis), not from the LLM — so the card can't contradict the
-            // diagnosis. Null when the current tuning is already ideal. The one-time grid
+            // diagnosis. Null when the current tuning is already ideal AND constraint-compliant.
+            // A metric-ideal tuning that violates valve/flow limits still gets a compliant
+            // recommendation. The one-time grid
             // search is cached, so this is O(1) after the first run; wrap it anyway to keep
             // the first run off the caller's thread.
-            var recommendation = await Task.Run(() => PidRecommender.Recommend(metrics, stable), ct);
+            bool violates = PidSimulator.ViolatesOperatingConstraints(simResult);
+            var recommendation = await Task.Run(() => PidRecommender.Recommend(metrics, stable, input.Setpoint, violates), ct);
 
             var (iae, ise, itae) = PidSimulator.ComputePerformanceIndices(simResult.Time, simResult.Amplitude, input.Setpoint);
 

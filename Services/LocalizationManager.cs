@@ -347,6 +347,7 @@ public sealed class LocalizationManager : INotifyPropertyChanged
     public string Cas_OuterGains            => T(nameof(Cas_OuterGains));
     public string Cas_InnerGains            => T(nameof(Cas_InnerGains));
     public string Cas_Setpoint              => T(nameof(Cas_Setpoint));
+    public string Cas_InletTemperature      => T(nameof(Cas_InletTemperature));
     public string Cas_Disturbance           => T(nameof(Cas_Disturbance));
     public string Cas_Run                   => T(nameof(Cas_Run));
     public string Cas_RunHint               => T(nameof(Cas_RunHint));
@@ -365,6 +366,11 @@ public sealed class LocalizationManager : INotifyPropertyChanged
     public string Diag_SteadyStateError => T(nameof(Diag_SteadyStateError));
     public string Diag_SlowResponse     => T(nameof(Diag_SlowResponse));
     public string Diag_Ideal            => T(nameof(Diag_Ideal));
+
+    // ── Setpoint di luar jangkauan plant (SetpointReachability) ──────────
+    public string Diag_Unreachable      => T(nameof(Diag_Unreachable));
+    public string Reach_Cascade         => T(nameof(Reach_Cascade));
+    public string Reach_SingleLoop      => T(nameof(Reach_SingleLoop));
 
     // ── Live view / HMI ──────────────────────────────────────────────────
     public string Live_Header      => T(nameof(Live_Header));
@@ -1078,6 +1084,7 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             [nameof(Cas_OuterGains)]           = "OUTER LOOP · TEMPERATURE (PID)",
             [nameof(Cas_InnerGains)]           = "INNER LOOP · FLOW (PI)",
             [nameof(Cas_Setpoint)]             = "Temp Setpoint",
+            [nameof(Cas_InletTemperature)]     = "Inlet Water Temp",
             [nameof(Cas_Disturbance)]          = "Flow Disturbance",
             [nameof(Cas_Run)]                  = "RUN SIMULATION",
             [nameof(Cas_RunHint)]              = "The inner (flow) loop is tuned first and must be several times faster than the outer (temperature) loop — that is what lets cascade reject flow disturbances before they move the temperature. Operating range: valve 0–100% ↔ flow 1–7 L/min; recommendations demanding beyond it are rejected.",
@@ -1093,6 +1100,10 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             [nameof(Diag_SteadyStateError)] = "Steady-state error {0}% exceeds {1}% — raise Ki.",
             [nameof(Diag_SlowResponse)]     = "Settling time {0} s is slow (limit {1} s) — raise Kp.",
             [nameof(Diag_Ideal)]            = "Response is good — overshoot {0}%, settling {1} s.",
+
+            [nameof(Diag_Unreachable)]      = "Setpoint {0} °C is outside the plant's reachable range ({1}–{2} °C) — this is an actuator/inlet limit, not a tuning fault. Move the setpoint into {1}–{2} °C or change the inlet temperature / plant capacity.",
+            [nameof(Reach_Cascade)]         = "Setpoint {0} °C is outside what this plant can deliver for inlet water at {5} °C, so no Kp/Ki/Kd can reach it.\n\nThe equations: the valve sets the flow, F = {1} + {2}·u (L/min, u = valve % from {3} to {4}), and the temperature is the inlet plus a rise driven by flow above its floor, T_ss = T_inlet + {6}·(F − {1}) = {5} + {6}·(F − {1}). At full valve ({4}%) the flow is F_max = {1} + {2}·{4} = {7} L/min, so the highest steady temperature is T_ss,max = {5} + {6}·({7} − {1}) = {8} °C; the floor is {9} °C at valve {3}%, where the rise is zero. The smallest achievable steady-state error is therefore {10} °C.\n\nFrom control theory this is an actuator-authority (rangeability) limit, not a tuning problem: any nonzero error makes the outer integrator raise its output until the valve saturates at {4}%, conditional anti-windup freezes the integrator there, and the plant can only produce {8} °C. Raising Kp/Ki/Kd only saturates the valve sooner — it cannot raise the plant's overall gain ({6}·{2} °C per % valve, fixed by the equipment). The correct fixes are to move the setpoint into {9}–{8} °C, change the inlet water temperature, or increase plant/actuator capacity (heater capacity, valve size, flow rate).",
+            [nameof(Reach_SingleLoop)]      = "Setpoint {0} °C is outside what this plant can deliver, so no Kp/Ki/Kd can reach it.\n\nThe equation: T_ss = K·u = {1}·u, with the valve u limited to {2}–{3}%. At full valve the highest steady temperature is {1}·{3} = {4} °C, so the smallest achievable steady-state error is {5} °C.\n\nFrom control theory this is an actuator-authority (rangeability) limit, not a tuning problem: the error makes the integrator raise the output until the valve saturates at {3}%, anti-windup freezes it there, and the plant can only produce {4} °C. Raising Kp/Ki/Kd only saturates the valve sooner — the plant gain K is fixed by the equipment. The correct fixes are to lower the setpoint to {4} °C or below, or to increase plant/actuator capacity.",
 
             [nameof(Ai_Title)]         = "AI ASSISTANT",
             [nameof(Ai_UserLabel)]     = "USER",
@@ -1759,6 +1770,7 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             [nameof(Cas_OuterGains)]           = "LOOP LUAR · TEMPERATUR (PID)",
             [nameof(Cas_InnerGains)]           = "LOOP DALAM · FLOW (PI)",
             [nameof(Cas_Setpoint)]             = "Setpoint Suhu",
+            [nameof(Cas_InletTemperature)]     = "Suhu Air Masuk",
             [nameof(Cas_Disturbance)]          = "Gangguan Flow",
             [nameof(Cas_Run)]                  = "JALANKAN SIMULASI",
             [nameof(Cas_RunHint)]              = "Loop dalam (flow) dituning lebih dulu dan harus beberapa kali lebih cepat dari loop luar (temperatur) — inilah yang membuat cascade mampu menolak gangguan flow sebelum sempat menggeser suhu. Batas operasi: valve 0–100% ↔ flow 1–7 L/min; rekomendasi yang meminta di luar batas ditolak.",
@@ -1774,6 +1786,10 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             [nameof(Diag_SteadyStateError)] = "Error steady-state {0}% melebihi {1}% — naikkan Ki.",
             [nameof(Diag_SlowResponse)]     = "Settling time {0} s terlalu lama (batas {1} s) — naikkan Kp.",
             [nameof(Diag_Ideal)]            = "Respons sudah baik — overshoot {0}%, settling {1} s.",
+
+            [nameof(Diag_Unreachable)]      = "Setpoint {0} °C berada di luar jangkauan plant ({1}–{2} °C) — ini batas aktuator/suhu masuk, bukan kesalahan tuning. Sesuaikan setpoint ke {1}–{2} °C atau ubah suhu air masuk/kapasitas plant.",
+            [nameof(Reach_Cascade)]         = "Setpoint {0} °C berada di luar kemampuan plant ini untuk suhu air masuk {5} °C, jadi tidak ada Kp/Ki/Kd yang bisa mencapainya.\n\nDari persamaannya: valve menentukan flow, F = {1} + {2}·u (L/min, u = valve % dari {3} sampai {4}), dan suhu adalah suhu masuk ditambah kenaikan yang digerakkan flow di atas batas bawahnya, T_ss = T_masuk + {6}·(F − {1}) = {5} + {6}·(F − {1}). Pada valve penuh ({4}%) flow menjadi F_maks = {1} + {2}·{4} = {7} L/min, sehingga suhu tunak tertinggi adalah T_ss,maks = {5} + {6}·({7} − {1}) = {8} °C; batas bawahnya {9} °C pada valve {3}%, saat kenaikannya nol. Jadi error tunak terkecil yang mungkin adalah {10} °C.\n\nDari ilmu pengendalian ini batas otoritas (rangeability) aktuator, bukan masalah tuning: error yang tak nol membuat integrator loop luar terus menaikkan output sampai valve jenuh di {4}%, anti-windup kondisional membekukan integrator di sana, dan plant hanya bisa mengeluarkan {8} °C. Menaikkan Kp/Ki/Kd hanya membuat valve jenuh lebih cepat — ia tidak bisa menaikkan gain keseluruhan plant ({6}·{2} °C per % valve, sudah ditentukan peralatan). Perbaikan yang benar: sesuaikan setpoint ke {9}–{8} °C, ubah suhu air masuk, atau tambah kapasitas plant/aktuator (kapasitas heater, ukuran valve, laju alir).",
+            [nameof(Reach_SingleLoop)]      = "Setpoint {0} °C berada di luar kemampuan plant ini, jadi tidak ada Kp/Ki/Kd yang bisa mencapainya.\n\nDari persamaannya: T_ss = K·u = {1}·u, dengan valve u dibatasi {2}–{3}%. Pada valve penuh, suhu tunak tertinggi adalah {1}·{3} = {4} °C, sehingga error tunak terkecil yang mungkin adalah {5} °C.\n\nDari ilmu pengendalian ini batas otoritas (rangeability) aktuator, bukan masalah tuning: error membuat integrator menaikkan output sampai valve jenuh di {3}%, anti-windup membekukannya di sana, dan plant hanya bisa mengeluarkan {4} °C. Menaikkan Kp/Ki/Kd hanya membuat valve jenuh lebih cepat — gain plant K sudah ditentukan peralatan. Perbaikan yang benar: turunkan setpoint ke {4} °C atau di bawahnya, atau tambah kapasitas plant/aktuator.",
 
             [nameof(Ai_Title)]         = "ASISTEN AI",
             [nameof(Ai_UserLabel)]     = "PENGGUNA",

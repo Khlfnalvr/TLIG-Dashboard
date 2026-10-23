@@ -4,7 +4,7 @@
 ; ============================================================
 
 #define AppName      "TLIG Dashboard Client"
-#define AppVersion   "2.2.4"
+#define AppVersion   "2.2.5"
 #define AppPublisher "ICO Laboratory"
 #define AppExe       "TLIGDashboard.Client.exe"
 

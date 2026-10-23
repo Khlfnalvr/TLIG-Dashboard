@@ -1249,9 +1249,11 @@ public sealed class ShareServer
 
             // Gains to offer come from searching the simulator (verified against the same
             // criteria as the diagnosis), not the LLM, so the card can't contradict the
-            // diagnosis. Null when the current tuning is already ideal.
+            // diagnosis. Null when the current tuning is already ideal AND constraint-compliant.
+            bool violates = TLIGDashboard.Services.ControlEngineering.PidSimulator
+                .ViolatesOperatingConstraints(simResult);
             var recommendation = await Task.Run(
-                () => TLIGDashboard.Services.ControlEngineering.PidRecommender.Recommend(metrics, stable), ct);
+                () => TLIGDashboard.Services.ControlEngineering.PidRecommender.Recommend(metrics, stable, input.Setpoint, violates), ct);
 
             var (iae, ise, itae) = TLIGDashboard.Services.ControlEngineering.PidSimulator
                 .ComputePerformanceIndices(simResult.Time, simResult.Amplitude, input.Setpoint);
@@ -1351,9 +1353,10 @@ public sealed class ShareServer
             // Sisa masukan simulasi cascade milik Client (gain loop dalam + gangguan). Hanya dipakai
             // untuk menggambar ulang simulasi yang sama di layar Server; plant tidak membacanya.
             // Absen dari Client lama: Server lalu memakai nilai sesinya sendiri.
-            double? innerKp     = (double?)node["ikp"];
-            double? innerKi     = (double?)node["iki"];
-            double? disturbance = (double?)node["dist"];
+            double? innerKp          = (double?)node["ikp"];
+            double? innerKi          = (double?)node["iki"];
+            double? disturbance      = (double?)node["dist"];
+            double? inletTemperature = (double?)node["tin"];
 
             var bridge = PythonBridgeService.Instance;
             switch (action)
@@ -1400,7 +1403,8 @@ public sealed class ShareServer
                     // Layar Server ikut menggambar simulasi yang sama. Dijalankan terpisah supaya
                     // balasan HTTP tidak menunggu simulasinya; hasilnya sampai ke layar lewat
                     // ResultChanged milik sesi cascade.
-                    _ = App.CascadeSession.RunMirroredAsync(kp, ki, kd, sp, innerKp, innerKi, disturbance);
+                    _ = App.CascadeSession.RunMirroredAsync(
+                        kp, ki, kd, sp, innerKp, innerKi, disturbance, inletTemperature);
                     break;
                 }
 

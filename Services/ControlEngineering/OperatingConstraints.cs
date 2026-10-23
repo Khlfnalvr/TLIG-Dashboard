@@ -34,6 +34,27 @@ public static class OperatingConstraints
         flow >= FlowMin - 1e-9 && flow <= FlowMax + 1e-9;
 
     /// <summary>
+    /// Slack rekayasa untuk PERMINTAAN MENTAH (sebelum saturasi): aktuator menutup
+    /// sentuhan batas (mis. meminta 100.0035% → keluar 100% → flow tepat 7 L/min),
+    /// jadi permintaan yang hanya menyentuh batas bukanlah pelanggaran. Yang ditolak
+    /// adalah permintaan yang JELAS di luar batas (mis. 150% valve / 10.8 L/min).
+    /// </summary>
+    public const double RawValveTolerance = 0.5;   // % valve
+    public const double RawFlowTolerance = 0.05;   // L/min (~0.8% span)
+
+    /// <summary>True bila permintaan valve mentah masih dapat dipenuhi aktuator.</summary>
+    public static bool IsRawValveOk(double valvePct) =>
+        !double.IsNaN(valvePct) && !double.IsInfinity(valvePct)
+        && valvePct >= ValveMin - RawValveTolerance
+        && valvePct <= ValveMax + RawValveTolerance;
+
+    /// <summary>True bila permintaan flow mentah masih di dalam jangkauan operasi.</summary>
+    public static bool IsRawFlowOk(double flow) =>
+        !double.IsNaN(flow) && !double.IsInfinity(flow)
+        && flow >= FlowMin - RawFlowTolerance
+        && flow <= FlowMax + RawFlowTolerance;
+
+    /// <summary>
     /// True bila ada satu sampel pun di luar batas (dipakai filter recommender).
     /// NaN / Infinity ikut dihitung sebagai pelanggaran.
     /// </summary>

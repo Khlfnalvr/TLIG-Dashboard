@@ -16,16 +16,17 @@ public sealed class CascadeSessionService
     public static CascadeSessionService Instance { get; } = new();
     private CascadeSessionService() { }
 
-    // SIMC defaults for the identified FOPDT plants, verified on the simulator itself:
-    // overshoot 0.8%, rise 183 s, settling 315 s, no steady-state offset. Kept identical to
-    // CascadeInput's defaults — see the derivation there. The disturbance is sized at ~33%
-    // of the 1–7 L/min flow operating span (see OperatingConstraints).
-    public double OuterKp     { get; set; } = 1.8;
-    public double OuterKi     { get; set; } = 0.007;
+    // SIMC defaults for the FOPDT plants at Gp1 gain K=10, scaled from the identified-K
+    // tuning and kept identical to CascadeInput's defaults — see the derivation there.
+    // The recommender verifies faster alternatives against the simulator. The disturbance
+    // is sized at ~33% of the 1–7 L/min flow operating span (see OperatingConstraints).
+    public double OuterKp     { get; set; } = 0.216;
+    public double OuterKi     { get; set; } = 0.00084;
     public double OuterKd     { get; set; } = 0;
     public double InnerKp     { get; set; } = 0.66;
     public double InnerKi     { get; set; } = 0.49;
     public double Setpoint    { get; set; } = 60;
+    public double InletTemperature { get; set; } = 30;
     public double Disturbance { get; set; } = -2;
 
     public CascadeDesignResult? LastResult { get; private set; }
@@ -61,7 +62,7 @@ public sealed class CascadeSessionService
     /// </summary>
     public async Task<CascadeDesignResult?> RunMirroredAsync(
         double outerKp, double outerKi, double outerKd, double setpoint,
-        double? innerKp, double? innerKi, double? disturbance)
+        double? innerKp, double? innerKi, double? disturbance, double? inletTemperature = null)
     {
         // Run Server sendiri yang sedang berjalan tidak boleh ditimpa kiriman Client.
         if (IsRunning) return null;
@@ -70,9 +71,10 @@ public sealed class CascadeSessionService
         OuterKi  = outerKi;
         OuterKd  = outerKd;
         Setpoint = setpoint;
-        if (innerKp is { } ikp)     InnerKp     = ikp;
-        if (innerKi is { } iki)     InnerKi     = iki;
-        if (disturbance is { } dst) Disturbance = dst;
+        if (innerKp is { } ikp)      InnerKp          = ikp;
+        if (innerKi is { } iki)      InnerKi          = iki;
+        if (disturbance is { } dst)  Disturbance      = dst;
+        if (inletTemperature is { } tin) InletTemperature = tin;
 
         try { RemoteInputsApplied?.Invoke(this, EventArgs.Empty); } catch { }
         return await RunAsync(default, mirrored: true);
@@ -162,12 +164,14 @@ public sealed class CascadeSessionService
         InnerKp = (float)InnerKp,
         InnerKi = (float)InnerKi,
         Setpoint = (float)Setpoint,
+        InletTemperature = (float)InletTemperature,
         Disturbance = (float)Disturbance,
     };
 
     private void NormalizeInputs()
     {
         if (!double.IsFinite(Setpoint) || Setpoint <= 0) Setpoint = 60;
+        if (!double.IsFinite(InletTemperature)) InletTemperature = 30;
         OuterKp = GainValidator.Sanitize(OuterKp);
         OuterKi = GainValidator.Sanitize(OuterKi);
         OuterKd = GainValidator.Sanitize(OuterKd);

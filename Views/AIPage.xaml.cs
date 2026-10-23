@@ -210,7 +210,7 @@ public sealed partial class AIPage : Page
         // computed comparison — checked before the real-history archive, so "berapa error antara
         // labview versus dashboard" gets the current run's numbers instead of old runs.
         var routed = await Services.ControlEngineering.LiveProgressService.TryAnswerProgressRequestAsync(text)
-                   ?? Services.ControlEngineering.TuningChat.TryAnswerTargetRequest(text, (float)App.CascadeSession.Setpoint)
+                   ?? Services.ControlEngineering.TuningChat.TryAnswerTargetRequest(text, (float)App.CascadeSession.Setpoint, (float)App.CascadeSession.InletTemperature)
                    ?? Services.ControlEngineering.ProcessErrorService.TryAnswerErrorRequest(text)
                    ?? await Services.ControlEngineering.RealHistoryService.TryAnswerRealRequestAsync(text);
         if (routed is not null)
@@ -279,7 +279,7 @@ public sealed partial class AIPage : Page
         {
             // Safety net: if the LLM proposed Kp/Ki/Kd, simulate them and append the real result so a
             // guessed tuning can't pass unchecked.
-            var note = Services.ControlEngineering.TuningChat.VerifyGainsNote(aiBubble.Text, (float)App.CascadeSession.Setpoint);
+            var note = Services.ControlEngineering.TuningChat.VerifyGainsNote(aiBubble.Text, (float)App.CascadeSession.Setpoint, (float)App.CascadeSession.InletTemperature);
             string finalText = note is null ? aiBubble.Text : aiBubble.Text + note;
             if (note is not null) _ai.AmendLastAssistantEntry(note);
             aiBubbleBorder.Child = MarkdownRenderer.Render(finalText, 13, ActualTheme == ElementTheme.Dark);

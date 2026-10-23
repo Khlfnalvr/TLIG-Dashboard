@@ -74,9 +74,18 @@ public static class CascadeDesignService
         // Guard against a cleared/zero setpoint (NumberBox yields NaN) — a flat response
         // would divide the steady-state-error metric by zero.
         if (float.IsNaN(input.Setpoint) || input.Setpoint <= 0) input.Setpoint = 60f;
+        input.InletTemperature =
+            (float)CascadeSimulator.NormalizeInletTemperature(input.InletTemperature);
 
         var simResult = await Task.Run(() => _sim.Simulate(input), ct);
         var metrics   = CascadeSimulator.ComputeMetrics(simResult, input);
+
+        // Setpoint di luar jangkauan valve/plant: bukan masalah tuning, dan tidak ada
+        // kandidat gain yang bisa mencapainya — pencarian dilewati (juga mahal: setiap
+        // kandidat akan berjalan sampai batas 8000 s). Penjelasannya dikirim ke advisor
+        // agar ulasan menyebut batas otoritas aktuator, bukan menyalahkan gain.
+        bool unreachable = !SetpointReachability.IsCascadeReachable(
+            input.Setpoint, input.InletTemperature);
 
         // Diagnose the OUTER temperature loop by direct calculation on its step metrics
         // (PidDiagnosisCalculator), not the ML classifier the single-loop designer
@@ -88,16 +97,21 @@ public static class CascadeDesignService
 
         // Gains to offer come from searching the simulator (verified against the same criteria as
         // the diagnosis), not from the LLM — so the card can't contradict the diagnosis. Null when
-        // the current tuning is already ideal. The per-setpoint search is cached after the first run.
-        var recommendation = mirrored
+        // the current tuning is already ideal AND constraint-compliant; a metric-ideal tuning
+        // that violates valve/flow limits still gets a compliant recommendation.
+        // The per-setpoint search is cached after the first run.
+        bool violates = CascadeSimulator.ViolatesOperatingConstraints(simResult);
+        var recommendation = mirrored || unreachable
             ? default
-            : await Task.Run(() => CascadeRecommender.Recommend(metrics, metrics.Stable, input.Setpoint), ct);
+            : await Task.Run(() => CascadeRecommender.Recommend(
+                metrics, metrics.Stable, input.Setpoint, input.InletTemperature, violates), ct);
 
         // The LLM now only explains the recommended gains; it no longer picks numbers.
         var advisor = mirrored
             ? new CascadeAdvisorResult()
             : await new CascadeAdvisorService(language).ReviewAsync(
-                input, metrics, history, recommendation?.gains, recommendation?.metrics, ct, diagnosis);
+                input, metrics, history, recommendation?.gains, recommendation?.metrics, ct, diagnosis,
+                unreachable);
 
         return new CascadeDesignResult
         {
@@ -328,8 +342,9 @@ public static class CascadeJson
         ["OuterKd"]     = F(i.OuterKd),
         ["InnerKp"]     = F(i.InnerKp),
         ["InnerKi"]     = F(i.InnerKi),
-        ["Setpoint"]    = F(i.Setpoint),
-        ["Disturbance"] = F(i.Disturbance),
+        ["Setpoint"]         = F(i.Setpoint),
+        ["InletTemperature"] = F(i.InletTemperature),
+        ["Disturbance"]      = F(i.Disturbance),
     };
 
     // Missing fields keep CascadeInput's own defaults rather than becoming 0 / NaN.
@@ -342,8 +357,9 @@ public static class CascadeJson
         i.OuterKd     = (float?)n["OuterKd"]     ?? i.OuterKd;
         i.InnerKp     = (float?)n["InnerKp"]     ?? i.InnerKp;
         i.InnerKi     = (float?)n["InnerKi"]     ?? i.InnerKi;
-        i.Setpoint    = (float?)n["Setpoint"]    ?? i.Setpoint;
-        i.Disturbance = (float?)n["Disturbance"] ?? i.Disturbance;
+        i.Setpoint         = (float?)n["Setpoint"]         ?? i.Setpoint;
+        i.InletTemperature = (float?)n["InletTemperature"] ?? i.InletTemperature;
+        i.Disturbance      = (float?)n["Disturbance"]      ?? i.Disturbance;
         return i;
     }
 

@@ -311,7 +311,11 @@ public sealed partial class ParameterPage : Page
         });
 
     private void OnPidRecommendationCleared(object? sender, EventArgs e)
-        => DispatcherQueue.TryEnqueue(() => PidAdvisorPanel.Visibility = Visibility.Collapsed);
+        => DispatcherQueue.TryEnqueue(() =>
+        {
+            PidAdvisorPanel.Visibility = Visibility.Collapsed;
+            Grid.SetColumnSpan(DiagnosisCard, 2);
+        });
 
     private async Task RunPidAsync()
     {
@@ -367,6 +371,11 @@ public sealed partial class ParameterPage : Page
 
         PidAdvisorPanel.Visibility = hasExplanation || pending is not null
             ? Visibility.Visible : Visibility.Collapsed;
+
+        // Kartu diagnosis memakai lebar penuh saat panel advisor kosong, supaya teks
+        // panjang tidak terjepit di kolom 1/3 dan tinggi kartu mengikuti isinya.
+        Grid.SetColumnSpan(DiagnosisCard,
+            PidAdvisorPanel.Visibility == Visibility.Visible ? 1 : 2);
     }
 
     // "Ya (Terapkan)" — fills Kp/Ki/Kd with the Advisor's recommendation and

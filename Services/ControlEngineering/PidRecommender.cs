@@ -1,4 +1,8 @@
 using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
 using TLIGDashboard.Models.ControlEngineering;
 
 namespace TLIGDashboard.Services.ControlEngineering;
@@ -7,17 +11,18 @@ namespace TLIGDashboard.Services.ControlEngineering;
 /// Recommends replacement gains by <b>searching the RK4 simulator</b> — not by asking an LLM
 /// or an ML model to guess. It sweeps a grid of Kp/Ki/Kd, simulates each with the same
 /// <see cref="PidSimulator"/> the metric cards use, keeps only the tunings that pass the exact
-/// acceptance criteria <see cref="PidDiagnosisCalculator"/> uses, and returns one canonical
-/// pick. Because every candidate is verified against the same metrics the diagnosis reads, the
-/// recommendation can never contradict the diagnosis — the failure mode of the LLM advisor,
-/// whose numbers were never simulated before being shown (a student who applied them saw
-/// overshoot go <i>up</i>, from 72.7% to 76.6%).
+/// acceptance criteria <see cref="PidDiagnosisCalculator"/> uses AND respect the operating
+/// constraints (valve 0–100% ↔ flow 1–7 L/min, see <see cref="OperatingConstraints"/>),
+/// and returns one canonical pick. Because every candidate is verified against the same
+/// metrics the diagnosis reads, the recommendation can never contradict the diagnosis — the
+/// failure mode of the LLM advisor, whose numbers were never simulated before being shown
+/// (a student who applied them saw overshoot go <i>up</i>, from 72.7% to 76.6%).
 ///
-    /// <para>The plant is linear within the valve range, so overshoot %, settling time and
-    /// steady-state error % are all independent of the setpoint for tunings that don't
-    /// saturate (a larger step just scales the whole response). The feasible set
-    /// and the canonical pick are therefore identical for every setpoint, so the search runs once
-    /// and is cached.</para>
+/// <para>The search runs <b>per setpoint</b> (cached): metrics are setpoint-independent only
+/// for tunings that never saturate, but valve/flow saturation makes both the response and
+/// the feasible set setpoint-dependent — a gain that is gentle at reference 1.0 can slam
+/// the actuator at setpoint 60. Evaluating at the actual setpoint keeps the recommendation
+/// compliant where it will really run.</para>
 /// </summary>
 public static class PidRecommender
 {
@@ -25,7 +30,8 @@ public static class PidRecommender
     // fixed grid keeps the pick reproducible. The ranges bracket the useful region for this
     // plant and stop well short of the gains that merely run to the grid edge; the
     // simulator saturates the valve at 0–100% with anti-windup (see PidSimulator), so
-    // edge-riding tunings pay for their saturation in the metrics.
+    // edge-riding tunings pay for their saturation in the metrics — and tunings that
+    // DEMAND beyond valve 0–100% / flow 1–7 L/min are rejected outright.
     private static readonly double[] KpGrid = { 0.2, 0.3, 0.5, 0.8, 1, 1.5, 2, 3, 4, 5, 7, 10 };
     private static readonly double[] KiGrid = { 0.01, 0.02, 0.05, 0.1, 0.2, 0.4, 0.8, 1.5 };
     private static readonly double[] KdGrid = { 0, 0.1, 0.25, 0.5, 1, 2 };
@@ -35,73 +41,102 @@ public static class PidRecommender
     // (tau ~101 s + 52 s dead time) runs for a few hundred simulated seconds per candidate.
     private const double SearchDt = 0.1;
 
-    // PidSimulator holds no mutable state, so a single shared instance is safe to reuse.
+    // PidSimulator holds no mutable state, so a single shared instance is safe to reuse,
+    // including from the parallel grid sweep below.
     private static readonly PidSimulator _sim = new();
 
-    /// <summary>The canonical feasible tuning and its measured response, computed once.</summary>
-    private static readonly Lazy<(PidPrediction gains, PidMetricsPrediction metrics)?> _canonical
-        = new(ComputeCanonical);
+    // The whole evaluated grid cached per setpoint (rounded), so repeat RUNs at one
+    // operating point never re-simulate. Bounded so the cache can't grow without limit.
+    // Mirrors CascadeRecommender's per-setpoint cache.
+    private const int MaxCachedGrids = 8;
+    private static readonly ConcurrentDictionary<int, List<(PidPrediction gains, PidMetricsPrediction metrics)>> _gridCache = new();
+    private static readonly ConcurrentQueue<int> _gridOrder = new();
 
     /// <summary>
-    /// Gains to recommend for a response with the given metrics, or null when the current
-    /// tuning already meets every criterion (nothing to fix — don't nudge a student off a
-    /// working tuning) or, defensively, when the search found nothing feasible.
+    /// Gains to recommend for a response with the given metrics at the given setpoint,
+    /// or null when the current tuning already meets every criterion AND respects the
+    /// operating constraints (nothing to fix — don't nudge a student off a working
+    /// tuning) or, defensively, when the search found nothing feasible.
+    /// A metric-ideal tuning that VIOLATES valve/flow constraints still gets a
+    /// compliant recommendation — it is not a working tuning.
     /// </summary>
     public static (PidPrediction gains, PidMetricsPrediction metrics)? Recommend(
-        PidMetricsPrediction currentMetrics, bool currentStable)
+        PidMetricsPrediction currentMetrics, bool currentStable, float setpoint, bool currentViolates = false)
     {
-        if (PidDiagnosisCalculator.Evaluate(currentMetrics, currentStable) == PidDiagnosisCode.Ideal)
+        // Setpoint di luar jangkauan plant tidak mungkin dicapai gain apa pun; lewati
+        // pencarian grid yang mahal dan jangan tawarkan tuning yang tetap gagal.
+        if (!SetpointReachability.IsSingleLoopReachable(setpoint))
             return null;
-        return _canonical.Value;
-    }
 
-    private static (PidPrediction, PidMetricsPrediction)? ComputeCanonical()
-    {
+        if (!currentViolates
+            && PidDiagnosisCalculator.Evaluate(currentMetrics, currentStable) == PidDiagnosisCode.Ideal)
+            return null;
+
         (PidPrediction gains, PidMetricsPrediction metrics)? best = null;
         double bestCost = double.PositiveInfinity;
+        foreach (var c in EvaluateGrid(setpoint))
+        {
+            // Keep only tunings the diagnosis itself would call ideal — same thresholds,
+            // so the recommendation and the diagnosis can never disagree. The grid only
+            // holds constraint-compliant candidates (see EvaluateCandidate).
+            if (PidDiagnosisCalculator.Evaluate(c.metrics, true) != PidDiagnosisCode.Ideal)
+                continue;
 
+            double cost = c.metrics.SettlingTime + (c.gains.Kp + c.gains.Ki + c.gains.Kd);
+            if (cost < bestCost)
+            {
+                bestCost = cost;
+                best = c;
+            }
+        }
+
+        return best;
+    }
+
+    // Simulates every grid point once at the given setpoint and caches the result.
+    // Only constraint-compliant, stable candidates are kept — the grid therefore IS the
+    // feasible set. The sweep runs in parallel (PidSimulator keeps no mutable state).
+    private static List<(PidPrediction gains, PidMetricsPrediction metrics)> EvaluateGrid(float setpoint)
+    {
+        float sp = float.IsNaN(setpoint) || setpoint <= 0 ? 1f : setpoint;
+        int key = (int)Math.Round(sp);
+        if (_gridCache.TryGetValue(key, out var cached)) return cached;
+
+        var combos = new List<(double kp, double ki, double kd)>(KpGrid.Length * KiGrid.Length * KdGrid.Length);
         foreach (double kp in KpGrid)
         foreach (double ki in KiGrid)
         foreach (double kd in KdGrid)
-        {
-            var gains = new PidPrediction { Kp = (float)kp, Ki = (float)ki, Kd = (float)kd };
-            var sim = _sim.SimulateStepResponse(gains, reference: 1.0, duration: 0, dt: SearchDt);
-            // Constraint valve 0–100% / flow 1–7 L/min (OperatingConstraints): gain yang
-            // MEMINTA di luar batas ditolak — walau saturasi membuatnya tampak lolos.
-            if (PidSimulator.ViolatesOperatingConstraints(sim))
-                continue;
-            var (rise, os, settle, ssePct) =
-                PidSimulator.ComputeStepMetrics(sim.Time, sim.Amplitude, 1.0);
-            bool stable = PidSimulator.IsResponseStable(sim.Amplitude, 1.0);
+            combos.Add((kp, ki, kd));
 
-            var metrics = new PidMetricsPrediction
+        var kept = new ConcurrentQueue<(PidPrediction gains, PidMetricsPrediction metrics)>();
+        Parallel.For(0, combos.Count, i =>
+        {
+            var (kp, ki, kd) = combos[i];
+            var gains = new PidPrediction { Kp = (float)kp, Ki = (float)ki, Kd = (float)kd };
+            var sim = _sim.SimulateStepResponse(gains, reference: sp, duration: 0, dt: SearchDt);
+            // Constraint valve 0–100% / flow 1–7 L/min: a gain that DEMANDS beyond the
+            // limits is rejected — even though saturation makes its curve look fine.
+            if (PidSimulator.ViolatesOperatingConstraints(sim))
+                return;
+            var (rise, os, settle, ssePct) =
+                PidSimulator.ComputeStepMetrics(sim.Time, sim.Amplitude, sp);
+            bool stable = PidSimulator.IsResponseStable(sim.Amplitude, sp);
+            if (!stable)
+                return;
+            kept.Enqueue((gains, new PidMetricsPrediction
             {
                 Overshoot        = (float)os,
                 RiseTime         = (float)rise,
                 SettlingTime     = (float)settle,
                 SteadyStateError = (float)(ssePct / 100.0),
-            };
+            }));
+        });
 
-            // Keep only tunings the diagnosis itself would call ideal — same thresholds,
-            // so the recommendation and the diagnosis can never disagree.
-            if (PidDiagnosisCalculator.Evaluate(metrics, stable) != PidDiagnosisCode.Ideal)
-                continue;
-
-            // Canonical rule — a deliberate policy choice, isolated here so it is easy to
-            // swap. Balance response speed against total control effort: pure "fastest" runs
-            // to the grid edge in an actuator-free sim, and pure "gentlest" recommends a
-            // sluggish tuning that only just passes; their sum picks a crisp, well-damped,
-            // moderate-gain response (Kp=0.8, Ki=0.01, Kd=0 for this FOPDT plant). Kd falls
-            // out at 0 because a large dead time makes derivative action unhelpful here —
-            // a correct, teachable result, not a bug.
-            double cost = settle + (kp + ki + kd);
-            if (cost < bestCost)
-            {
-                bestCost = cost;
-                best = (gains, metrics);
-            }
-        }
-
-        return best;
+        var list = kept.ToList();
+        _gridCache[key] = list;
+        _gridOrder.Enqueue(key);
+        while (_gridOrder.Count > MaxCachedGrids && _gridOrder.TryDequeue(out int oldest))
+            _gridCache.TryRemove(oldest, out _);
+        return list;
     }
 }

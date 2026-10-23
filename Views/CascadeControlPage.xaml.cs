@@ -56,7 +56,7 @@ public sealed partial class CascadeControlPage : Page
                 SignificantDigits = 5,
             },
         };
-        foreach (var box in new[] { OuterKpBox, OuterKiBox, OuterKdBox, InnerKpBox, InnerKiBox, SetpointBox, DisturbanceBox })
+        foreach (var box in new[] { OuterKpBox, OuterKiBox, OuterKdBox, InnerKpBox, InnerKiBox, SetpointBox, InletTemperatureBox, DisturbanceBox })
             box.NumberFormatter = fmt;
 
         OuterKpBox.ValueChanged     += Input_ValueChanged;
@@ -65,6 +65,7 @@ public sealed partial class CascadeControlPage : Page
         InnerKpBox.ValueChanged     += Input_ValueChanged;
         InnerKiBox.ValueChanged     += Input_ValueChanged;
         SetpointBox.ValueChanged    += Input_ValueChanged;
+        InletTemperatureBox.ValueChanged += Input_ValueChanged;
         DisturbanceBox.ValueChanged += Input_ValueChanged;
     }
 
@@ -83,6 +84,7 @@ public sealed partial class CascadeControlPage : Page
         s.InnerKp     = InnerKpBox.Value;
         s.InnerKi     = InnerKiBox.Value;
         s.Setpoint    = SetpointBox.Value;
+        s.InletTemperature = InletTemperatureBox.Value;
         s.Disturbance = DisturbanceBox.Value;
     }
 
@@ -96,6 +98,7 @@ public sealed partial class CascadeControlPage : Page
         InnerKpBox.Value     = s.InnerKp;
         InnerKiBox.Value     = s.InnerKi;
         SetpointBox.Value    = s.Setpoint;
+        InletTemperatureBox.Value = s.InletTemperature;
         DisturbanceBox.Value = s.Disturbance;
         _syncing = false;
     }
@@ -149,7 +152,12 @@ public sealed partial class CascadeControlPage : Page
         });
 
     private void OnRecommendationCleared(object? sender, System.EventArgs e)
-        => DispatcherQueue.TryEnqueue(() => AdvisorActions.Visibility = Visibility.Collapsed);
+        => DispatcherQueue.TryEnqueue(() =>
+        {
+            AdvisorActions.Visibility = Visibility.Collapsed;
+            Grid.SetColumnSpan(DiagnosisCard,
+                AdvisorPanel.Visibility == Visibility.Visible ? 1 : 2);
+        });
 
     // ── Run ──────────────────────────────────────────────────────────────────
 
@@ -191,13 +199,49 @@ public sealed partial class CascadeControlPage : Page
 
         // result.Diagnosis is a PidDiagnosisCode name, not display text — localize it here
         // (from the outer-loop step metrics) so a Client shows its own language, not the Server's.
+        // Setpoint di luar jangkauan plant diberi label batas aktuator, bukan saran retuning
+        // yang tidak mungkin berhasil.
         DiagnosisValue.Text = string.IsNullOrEmpty(result.Diagnosis)
-            ? "--" : PidDiagnosisCalculator.Describe(result.Diagnosis, result.Metrics.PrimaryStepMetrics());
+            ? "--"
+            : !SetpointReachability.IsCascadeReachable(result.Input.Setpoint, result.Input.InletTemperature)
+                ? SetpointReachability.DescribeUnreachableCascade(result.Input.Setpoint, result.Input.InletTemperature)
+                : PidDiagnosisCalculator.Describe(result.Diagnosis, result.Metrics.PrimaryStepMetrics());
 
-        bool hasExplanation = !string.IsNullOrWhiteSpace(result.AdvisorExplanation);
+        // Penjelasan deterministik (persamaan + teori pengendalian) ikut ditampilkan
+        // bersama ulasan advisor saat setpoint mustahil dicapai.
+        string explanation = result.AdvisorExplanation;
+        if (!SetpointReachability.IsCascadeReachable(result.Input.Setpoint, result.Input.InletTemperature))
+        {
+            string note = SetpointReachability.ExplainCascade(result.Input.Setpoint, result.Input.InletTemperature);
+            explanation = string.IsNullOrWhiteSpace(explanation) ? note : note + "\n\n" + explanation;
+        }
+
+        bool hasExplanation = !string.IsNullOrWhiteSpace(explanation);
         AdvisorExplanationHost.Child = hasExplanation
-            ? MarkdownRenderer.Render(result.AdvisorExplanation, 12, ActualTheme == ElementTheme.Dark)
+            ? MarkdownRenderer.Render(explanation, 12, ActualTheme == ElementTheme.Dark)
             : null;
+
+        // Kartu transfer function hanya menampilkan Gp1/Gp2; hubungan operating point
+        // dikirim ke AI chat (riwayat bersama) sebagai penjelasan deterministik.
+        string modelNote = SetpointReachability.ExplainModel(result.Input);
+        if (!App.Ai.History.Any(m => m.Content == modelNote))
+        {
+            App.Ai.AddHistoryEntry("assistant", modelNote);
+            ChatSessionService.Instance.SaveActive();
+        }
+
+        // Setpoint yang mustahil dicapai juga dikirim ke AI chat (riwayat bersama
+        // Dashboard/AIPage) supaya alasannya terbaca di sana. Dedupe per teks: halaman
+        // ini me-render ulang hasil terakhir saat navigasi.
+        if (!SetpointReachability.IsCascadeReachable(result.Input.Setpoint, result.Input.InletTemperature))
+        {
+            string note = SetpointReachability.ExplainCascade(result.Input.Setpoint, result.Input.InletTemperature);
+            if (!App.Ai.History.Any(m => m.Content == note))
+            {
+                App.Ai.AddHistoryEntry("assistant", note);
+                ChatSessionService.Instance.SaveActive();
+            }
+        }
 
         var pending = App.CascadeSession.PendingRecommendation;
         if (pending is { } rec)
@@ -214,6 +258,11 @@ public sealed partial class CascadeControlPage : Page
 
         AdvisorPanel.Visibility = hasExplanation || pending is not null
             ? Visibility.Visible : Visibility.Collapsed;
+
+        // Kartu diagnosis memakai lebar penuh saat panel advisor kosong, supaya teks
+        // panjang tidak terjepit di kolom 1/3 dan tinggi kartu mengikuti isinya.
+        Grid.SetColumnSpan(DiagnosisCard,
+            AdvisorPanel.Visibility == Visibility.Visible ? 1 : 2);
     }
 
     // ── Advisor accept / decline ─────────────────────────────────────────────

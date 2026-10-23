@@ -85,7 +85,7 @@
                     <TextBlock Grid.Row="2"
                                FontFamily="Consolas" FontSize="11" Opacity="0.7"
                                TextWrapping="Wrap" TextAlignment="Center"
-                               Text="Gp1 (suhu) = 1,2 / (267,3s + 1) + bias 55,2 °C&#x00A0;&#x00A0;&#x00A0;·&#x00A0;&#x00A0;&#x00A0;Gp2 (flow) = 0,06 / (1,34s + 1) · e^(−13,56s) + bias 1 L/min&#x0a;Valve 0–100% ↔ Flow 1–7 L/min — rekomendasi yang meminta di luar batas ditolak"/>
+                               Text="T = T_masuk + ΔT&#x00A0;&#x00A0;&#x00A0;·&#x00A0;&#x00A0;&#x00A0;Gp1 (suhu) = 10 / (267,3s + 1)&#x00A0;&#x00A0;&#x00A0;·&#x00A0;&#x00A0;&#x00A0;Gp2 (flow) = 0,06 / (1,34s + 1) · e^(−13,56s)&#x0a;F = 1 + Gp2·valve (1–7 L/min); T_maks = T_masuk + 10·6 = T_masuk + 60 °C (default 90 °C)"/>
                 </Grid>
             </Border>
 
@@ -162,11 +162,11 @@
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="Kp" FontSize="13" FontWeight="SemiBold" Opacity="0.65" VerticalAlignment="Center"/>
-                                <NumberBox x:Name="OuterKpBox" Grid.Column="1" Value="1.5"   Minimum="0" SmallChange="0.1"   Style="{StaticResource CasNumberBoxStyle}"/>
+                                <NumberBox x:Name="OuterKpBox" Grid.Column="1" Value="0.216"   Minimum="0" SmallChange="0.01"  Style="{StaticResource CasNumberBoxStyle}"/>
                                 <TextBlock Grid.Column="2" Text="Ki" FontSize="13" FontWeight="SemiBold" Opacity="0.65" VerticalAlignment="Center"/>
-                                <NumberBox x:Name="OuterKiBox" Grid.Column="3" Value="0.015" Minimum="0" SmallChange="0.005" Style="{StaticResource CasNumberBoxStyle}"/>
+                                <NumberBox x:Name="OuterKiBox" Grid.Column="3" Value="0.00084" Minimum="0" SmallChange="0.0001" Style="{StaticResource CasNumberBoxStyle}"/>
                                 <TextBlock Grid.Column="4" Text="Kd" FontSize="13" FontWeight="SemiBold" Opacity="0.65" VerticalAlignment="Center"/>
-                                <NumberBox x:Name="OuterKdBox" Grid.Column="5" Value="8"     Minimum="0" SmallChange="0.5"   Style="{StaticResource CasNumberBoxStyle}"/>
+                                <NumberBox x:Name="OuterKdBox" Grid.Column="5" Value="0"       Minimum="0" SmallChange="0.1"   Style="{StaticResource CasNumberBoxStyle}"/>
                             </Grid>
                         </StackPanel>
 
@@ -196,6 +196,8 @@
                             <ColumnDefinition Width="1.4*"/>
                             <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="1.4*"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="1.4*"/>
                             <ColumnDefinition Width="2*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
@@ -211,9 +213,20 @@
                             <TextBlock Grid.Column="1" Text="&#176;C" FontSize="13" Opacity="0.6" VerticalAlignment="Center"/>
                         </Grid>
 
-                        <TextBlock Grid.Column="2" Text="{x:Bind Lang.Cas_Disturbance, Mode=OneWay}"
+                        <TextBlock Grid.Column="2" Text="{x:Bind Lang.Cas_InletTemperature, Mode=OneWay}"
                                    FontSize="12" FontWeight="SemiBold" Opacity="0.65" VerticalAlignment="Center"/>
                         <Grid Grid.Column="3" ColumnSpacing="6">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <NumberBox x:Name="InletTemperatureBox" Value="30" Minimum="-50" SmallChange="1" Style="{StaticResource CasNumberBoxStyle}"/>
+                            <TextBlock Grid.Column="1" Text="&#176;C" FontSize="13" Opacity="0.6" VerticalAlignment="Center"/>
+                        </Grid>
+
+                        <TextBlock Grid.Column="4" Text="{x:Bind Lang.Cas_Disturbance, Mode=OneWay}"
+                                   FontSize="12" FontWeight="SemiBold" Opacity="0.65" VerticalAlignment="Center"/>
+                        <Grid Grid.Column="5" ColumnSpacing="6">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
@@ -222,7 +235,7 @@
                             <TextBlock Grid.Column="1" Text="L/min" FontSize="12" Opacity="0.6" VerticalAlignment="Center"/>
                         </Grid>
 
-                        <Button x:Name="RunBtn" Grid.Column="5"
+                        <Button x:Name="RunBtn" Grid.Column="7"
                                 Height="34" Padding="16,0"
                                 Click="RunBtn_Click"
                                 Style="{ThemeResource AccentButtonStyle}"
@@ -375,11 +388,12 @@
                     <ColumnDefinition Width="2*"/>
                 </Grid.ColumnDefinitions>
 
-                <Border Grid.Column="0" Style="{StaticResource CasCardStyle}" MinHeight="66">
+                <Border x:Name="DiagnosisCard" Grid.Column="0" Style="{StaticResource CasCardStyle}" MinHeight="66">
                     <StackPanel Spacing="6" VerticalAlignment="Center">
                         <TextBlock Text="{x:Bind Lang.Pid_DiagnosisTitle, Mode=OneWay}"
                                    Style="{StaticResource CasCaptionStyle}"/>
-                        <TextBlock x:Name="DiagnosisValue" Text="--" FontSize="14" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                        <TextBlock x:Name="DiagnosisValue" Text="--" FontSize="14" FontWeight="SemiBold"
+                                   TextWrapping="Wrap" TextAlignment="Left"/>
                     </StackPanel>
                 </Border>
 

@@ -106,7 +106,7 @@ public class CascadeAdvisorService
         CascadeInput gains, CascadeMetrics metrics,
         IReadOnlyList<CascadeAttempt>? history = null,
         CascadeRecommendation? recommended = null, CascadeMetrics? recommendedMetrics = null,
-        CancellationToken ct = default, string diagnosis = "")
+        CancellationToken ct = default, string diagnosis = "", bool setpointUnreachable = false)
     {
         string task = recommended is not null
             ? "A better tuning has already been found for these plants by simulating candidate gains " +
@@ -124,7 +124,8 @@ public class CascadeAdvisorService
               "well. Do not recommend changes.";
 
         string prompt =
-            $"Temperature setpoint: {gains.Setpoint:F1} °C.\n" +
+            $"Temperature setpoint: {gains.Setpoint:F1} °C; inlet water temperature: " +
+            $"{gains.InletTemperature:F1} °C.\n" +
             FormatHistory(history) +
             $"Current gains — OUTER temperature PID: Kp = {gains.OuterKp:F3}, Ki = {gains.OuterKi:F3}, Kd = {gains.OuterKd:F3}; " +
             $"INNER flow PI: Kp = {gains.InnerKp:F3}, Ki = {gains.InnerKi:F3}.\n" +
@@ -132,6 +133,19 @@ public class CascadeAdvisorService
             $"Settling Time = {metrics.SettlingTime:F1}s, Steady-State Error = {metrics.SteadyStateError:F3}" +
             (metrics.Stable ? "" : " (the temperature never settled at the setpoint — the loop is oscillating or far too slow)") + ".\n" +
             (string.IsNullOrEmpty(diagnosis) ? "" : $"Diagnosis: {diagnosis}.\n") +
+            (setpointUnreachable
+                ? $"CRITICAL — UNREACHABLE SETPOINT: {gains.Setpoint:F1} °C lies outside this plant's " +
+                  $"reachable range [{CascadeSimulator.MinReachableTemperature(gains.InletTemperature):F1}, " +
+                  $"{CascadeSimulator.MaxReachableTemperature(gains.InletTemperature):F1}] °C for inlet " +
+                  $"water at {gains.InletTemperature:F1} °C. Explain from the equations " +
+                  $"(F = {CascadeSimulator.FlowBias:F1} + {CascadeSimulator.K2:F2}·valve, " +
+                  $"T_ss = inlet + {CascadeSimulator.K1:F1}·(F − {CascadeSimulator.FlowBias:F1})) and from " +
+                  "control theory (actuator authority/rangeability, saturation, integral windup, fixed plant gain) " +
+                  "that NO Kp/Ki/Kd can reach this setpoint — the valve is already at the nearest limit and " +
+                  $"the plant tops out at {CascadeSimulator.MaxReachableTemperature(gains.InletTemperature):F1} °C. " +
+                  "Do not blame the gains or suggest retuning; the only remedies are moving the setpoint into " +
+                  "the reachable range, changing the inlet temperature, or increasing plant/actuator capacity.\n"
+                : "") +
             $"Error performance indices over the step (integrals of the tracking error, lower is better): " +
             $"IAE = {metrics.IAE:F0}, ISE = {metrics.ISE:F0}, ITAE = {metrics.ITAE:F0}.\n" +
             (metrics.DisturbanceImprovement >= 1f

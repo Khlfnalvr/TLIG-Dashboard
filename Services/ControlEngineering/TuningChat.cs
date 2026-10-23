@@ -26,7 +26,7 @@ public static class TuningChat
     /// answer (real gains + measured metrics, or an honest "no tuning meets that"); otherwise null so
     /// the normal chat handles it.
     /// </summary>
-    public static string? TryAnswerTargetRequest(string message, float setpoint)
+    public static string? TryAnswerTargetRequest(string message, float setpoint, float inletTemperature)
     {
         if (string.IsNullOrWhiteSpace(message)) return null;
         string m = message.ToLowerInvariant();
@@ -35,8 +35,8 @@ public static class TuningChat
         var target = ParseTarget(m);
         if (target is null || !target.Any) return null;
 
-        var res = CascadeRecommender.RecommendForTarget(setpoint, target);
-        return ComposeAnswer(target, res, setpoint);
+        var res = CascadeRecommender.RecommendForTarget(setpoint, inletTemperature, target);
+        return ComposeAnswer(target, res, setpoint, inletTemperature);
     }
 
     private static bool LooksLikeGainRequest(string m) =>
@@ -62,18 +62,19 @@ public static class TuningChat
         return match.Success && TryNum(match.Groups[1].Value, out float v) ? v : null;
     }
 
-    private static string ComposeAnswer(TuningTarget t, TargetTuningResult res, float setpoint)
+    private static string ComposeAnswer(
+        TuningTarget t, TargetTuningResult res, float setpoint, float inletTemperature)
     {
         string targetStr = DescribeTarget(t);
         if (!res.HasGains)
-            return $"Tidak ada tuning stabil di rentang pencarian untuk target {targetStr} pada setpoint {setpoint:F0}°C.";
+            return $"Tidak ada tuning stabil di rentang pencarian untuk target {targetStr} pada setpoint {setpoint:F0}°C (suhu masuk {inletTemperature:F0}°C).";
 
         var g = res.Gains!;
         var m = res.Metrics!;
         var sb = new StringBuilder();
         if (res.MetTarget)
         {
-            sb.AppendLine($"**Gain terverifikasi untuk target {targetStr}** (setpoint {setpoint:F0}°C):");
+            sb.AppendLine($"**Gain terverifikasi untuk target {targetStr}** (setpoint {setpoint:F0}°C, suhu masuk {inletTemperature:F0}°C):");
             sb.AppendLine();
             sb.AppendLine($"- **OUTER** (PID suhu): Kp = {g.OuterKp:0.###}, Ki = {g.OuterKi:0.###}, Kd = {g.OuterKd:0.###}");
             sb.AppendLine($"- **INNER** (PI flow, SIMC): Kp = {g.InnerKp:0.###}, Ki = {g.InnerKi:0.###}");
@@ -88,7 +89,7 @@ public static class TuningChat
             sb.AppendLine($"Paling mendekati: OUTER Kp = {g.OuterKp:0.###}, Ki = {g.OuterKi:0.###}, Kd = {g.OuterKd:0.###} → overshoot {m.Overshoot:0.0}%, settling {m.SettlingTime:0}s.");
             sb.AppendLine();
             sb.AppendLine("Mengapa mustahil pada plant ini:");
-            sb.AppendLine("1. Plant suhunya lambat (lag-dominan): Gp1 = 1,2 / (267,3s + 1). Tuning SIMC yang sudah optimal saja rise ≈ 183 s dan settling ≈ 315 s.");
+            sb.AppendLine("1. Plant suhunya lambat (lag-dominan): Gp1 = 10 / (267,3s + 1). Bahkan tuning awal SIMC butuh settling ratusan detik pada step 30 °C.");
             sb.AppendLine("2. Inner loop mengunci kecepatan outer: flow Gp2 sangat dead-time-dominan (θ ≈ 13,6 s lawan τ ≈ 1,3 s) sehingga closed-loop tercepatnya ≈ 34 s, dan outer harus beberapa kali lebih lambat dari itu.");
             sb.AppendLine("3. Syaratnya saling bertentangan: overshoot kecil menuntut tuning kalem (lambat), settling kecil menuntut tuning agresif (overshoot) — batas operasi valve 0–100% ↔ flow 1–7 L/min tidak memberi ruang untuk keduanya, dan gain yang meminta di luar batas langsung ditolak.");
             sb.Append("Coba longgarkan targetnya (mis. overshoot ≤ 5% tanpa batas settling yang ketat), lalu tanyakan lagi.");
@@ -112,7 +113,7 @@ public static class TuningChat
     /// a note stating the real result. Returns null when no complete gain set is present. Meant to be
     /// appended to the LLM's reply so a guessed tuning can't pass unchecked.
     /// </summary>
-    public static string? VerifyGainsNote(string reply, float setpoint)
+    public static string? VerifyGainsNote(string reply, float setpoint, float inletTemperature)
     {
         if (ParseOuterGains(reply) is not (float kp, float ki, float kd)) return null;
 
@@ -126,7 +127,7 @@ public static class TuningChat
             return sbInvalid.ToString();
         }
 
-        var m = CascadeRecommender.SimulateOuter(setpoint, kp, ki, kd);
+        var m = CascadeRecommender.SimulateOuter(setpoint, inletTemperature, kp, ki, kd);
 
         var sb = new StringBuilder();
         sb.AppendLine();
@@ -134,7 +135,7 @@ public static class TuningChat
         if (!m.Stable)
             sb.Append($"⚠️ **Verifikasi simulasi:** gain OUTER Kp={kp:0.###}, Ki={ki:0.###}, Kd={kd:0.###} membuat suhu **tidak settle** (osilasi / terlalu lambat) pada plant ini — jangan dipakai.");
         else
-            sb.Append($"✅ **Verifikasi simulasi** (plant Gp1/Gp2, setpoint {setpoint:F0}°C, inner PI SIMC): OUTER Kp={kp:0.###}, Ki={ki:0.###}, Kd={kd:0.###} → overshoot **{m.Overshoot:0.0}%**, settling **{m.SettlingTime:0}s**, rise {m.RiseTime:0.0}s.");
+            sb.Append($"✅ **Verifikasi simulasi** (plant Gp1/Gp2, setpoint {setpoint:F0}°C, suhu masuk {inletTemperature:F0}°C, inner PI SIMC): OUTER Kp={kp:0.###}, Ki={ki:0.###}, Kd={kd:0.###} → overshoot **{m.Overshoot:0.0}%**, settling **{m.SettlingTime:0}s**, rise {m.RiseTime:0.0}s.");
 
         if (ParseInnerGains(reply) is (float ikp, float iki))
         {

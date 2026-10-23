@@ -281,16 +281,17 @@ public sealed class PythonBridgeService : IDisposable
         double kp = _kp, ki = _ki, kd = _kd, sp = _sp, pump = _pump;
         int    cmd = _cmd;
 
-        // Untuk RUN, bawa juga sisa masukan simulasi cascade (gain loop dalam + gangguan) supaya
-        // Server bisa menggambar simulasi yang sama persis dengan yang dilihat Client. Hanya
-        // dibaca di sini, di thread pemanggil: sesi cascade tidak thread-safe.
-        double? innerKp = null, innerKi = null, disturbance = null;
+        // Untuk RUN, bawa juga sisa masukan simulasi cascade (gain loop dalam, gangguan, suhu
+        // air masuk) supaya Server bisa menggambar simulasi yang sama persis dengan yang dilihat
+        // Client. Hanya dibaca di sini, di thread pemanggil: sesi cascade tidak thread-safe.
+        double? innerKp = null, innerKi = null, disturbance = null, inletTemperature = null;
         if (action == "run")
         {
             var cascade = App.CascadeSession;
-            innerKp     = cascade.InnerKp;
-            innerKi     = cascade.InnerKi;
-            disturbance = cascade.Disturbance;
+            innerKp          = cascade.InnerKp;
+            innerKi          = cascade.InnerKi;
+            disturbance      = cascade.Disturbance;
+            inletTemperature = cascade.InletTemperature;
         }
 
         if (string.IsNullOrWhiteSpace(AuthClient.NormalizeHost(host)) || string.IsNullOrWhiteSpace(token))
@@ -308,7 +309,7 @@ public sealed class PythonBridgeService : IDisposable
         _ = Task.Run(async () =>
         {
             bool ok = await PidRunClient.PostAsync(host, token, action, kp, ki, kd, sp, pump, cmd,
-                                                   innerKp, innerKi, disturbance);
+                                                   innerKp, innerKi, disturbance, inletTemperature);
             switch (action)
             {
                 case "run":
@@ -511,7 +512,8 @@ public static class PidRunClient
     public static async Task<bool> PostAsync(
         string host, string token, string action, double kp, double ki, double kd, double sp,
         double pump, int cmd,
-        double? innerKp = null, double? innerKi = null, double? disturbance = null)
+        double? innerKp = null, double? innerKi = null, double? disturbance = null,
+        double? inletTemperature = null)
     {
         if (string.IsNullOrWhiteSpace(AuthClient.NormalizeHost(host)) || string.IsNullOrWhiteSpace(token))
             return false;
@@ -529,9 +531,10 @@ public static class PidRunClient
                 ["cmd"] = cmd,
             };
             // Hanya dikirim untuk RUN; absen = Server memakai nilai sesinya sendiri.
-            if (innerKp is { } ikp)     body["ikp"]  = ikp;
-            if (innerKi is { } iki)     body["iki"]  = iki;
-            if (disturbance is { } dst) body["dist"] = dst;
+            if (innerKp is { } ikp)          body["ikp"]  = ikp;
+            if (innerKi is { } iki)          body["iki"]  = iki;
+            if (disturbance is { } dst)      body["dist"] = dst;
+            if (inletTemperature is { } tin) body["tin"]  = tin;
 
             using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
             using var req  = new HttpRequestMessage(HttpMethod.Post, $"{AuthClient.BaseUrl(host)}{ShareProtocol.PidRunPath}")

@@ -11,13 +11,15 @@ namespace TLIGDashboard.Models.ControlEngineering;
 public class CascadeInput
 {
     // ── Outer loop — Temperature (PID, primary) ──────────────────────────────
-    // SIMC for the identified Gp1 (K=1.2, τ=267.3 s, θ=0), taking the inner loop's
-    // closed-loop response (~33.9 s = τc2+θ2) as the effective delay and τc = 4× that,
-    // then verified by grid scan on the simulator: Kp=1.8, Ki=0.007 settles in ~315 s
-    // with ~0.8% overshoot. Kd is 0: with no dead time on the temperature plant,
-    // derivative action only stretches settling without trimming the overshoot.
-    public float OuterKp { get; set; } = 1.8f;
-    public float OuterKi { get; set; } = 0.007f;
+    // SIMC for Gp1 (K=10 °C per L/min above the flow floor, τ=267.3 s, θ=0), taking the
+    // inner loop's closed-loop response (~33.9 s = τc2+θ2) as the effective delay and
+    // τc = 4× that. The identified K=1.2 gains (Kp=1.8, Ki=0.007) were scaled by the same
+    // 1.2/10 gain ratio to keep the loop gain, so this is the starting point the
+    // recommender improves on by simulation, not a claimed optimum. Kd is 0: with no dead
+    // time on the temperature plant, derivative action only stretches settling without
+    // trimming the overshoot.
+    public float OuterKp { get; set; } = 0.216f;
+    public float OuterKi { get; set; } = 0.00084f;
     public float OuterKd { get; set; } = 0f;
 
     // ── Inner loop — Flow (PI, secondary) ────────────────────────────────────
@@ -30,8 +32,16 @@ public class CascadeInput
 
     /// <summary>Temperature setpoint (°C) the outer loop drives to.</summary>
     public float Setpoint { get; set; } = 60f;
-    // 60 °C needs ~4 L/min of flow (mid of the 1–7 operating range, see
-    // CascadeSimulator.TempBias), which is what sizes the disturbance below.
+    // With T_inlet = 30 °C, 60 °C needs ~4 L/min of flow (mid of the 1–7 operating range),
+    // which is what sizes the disturbance below.
+
+    /// <summary>
+    /// Inlet water temperature (°C) — the operating point the response is built on:
+    /// <c>T(t) = InletTemperature + ΔT(t)</c>. Default 30 °C (room-temperature water).
+    /// Changing it shifts the whole reachable window (T_inlet … T_inlet + 60 °C) without
+    /// changing the plant dynamics.
+    /// </summary>
+    public float InletTemperature { get; set; } = 30f;
 
     /// <summary>
     /// Step change in the flow path (e.g. a supply-pressure drop), in flow units, injected once
