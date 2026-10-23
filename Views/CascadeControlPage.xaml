@@ -83,9 +83,9 @@
                          as the Dashboard, drawn without a background. -->
                     <controls:CascadeBlockDiagram Grid.Row="1" MaxHeight="360" Margin="0,4"/>
                     <TextBlock Grid.Row="2"
-                               FontFamily="Consolas" FontSize="11" Opacity="0.7"
+                               FontFamily="Consolas" FontSize="11" Opacity="0.72"
                                TextWrapping="Wrap" TextAlignment="Center"
-                               Text="T = T_masuk + ΔT&#x00A0;&#x00A0;&#x00A0;·&#x00A0;&#x00A0;&#x00A0;Gp1 (suhu) = 10 / (267,3s + 1)&#x00A0;&#x00A0;&#x00A0;·&#x00A0;&#x00A0;&#x00A0;Gp2 (flow) = 0,06 / (1,34s + 1) · e^(−13,56s)&#x0a;F = 1 + Gp2·valve (1–7 L/min); T_maks = T_masuk + 10·6 = T_masuk + 60 °C (default 90 °C)"/>
+                               Text="Gp1 (suhu) = 10 / (267,3s + 1)&#x0A;Gp2 (flow) = 0,06 / (1,34s + 1) · e^(−13,56s)"/>
                 </Grid>
             </Border>
 
