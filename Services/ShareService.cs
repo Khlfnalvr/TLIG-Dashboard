@@ -1383,8 +1383,10 @@ public sealed class ShareServer
                     // tetap jalan — yang dilewati hanya pencatatannya.
                     if (pump is { } recordedPump)
                     {
+                        // Direkam sebagai Kc/Ti/Td yang benar-benar diterima VI (bentuk PID NI).
+                        var (kc, ti, td) = PythonBridgeService.ToNiPid(kp, ki, kd);
                         HeRunRecorder.Instance.Start(
-                            new Models.HeParameterInput { Sp = sp, Kc = kp, Ti = ki, Td = kd, Pump = recordedPump },
+                            new Models.HeParameterInput { Sp = sp, Kc = kc, Ti = ti, Td = td, Pump = recordedPump },
                             session.Username, session.DisplayName);
                     }
                     else

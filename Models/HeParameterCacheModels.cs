@@ -11,11 +11,11 @@ public sealed class HeParameterInput
 {
     /// <summary>Set point suhu (°C).</summary>
     public double Sp   { get; init; }
-    /// <summary>Gain proporsional (Kc / Kp).</summary>
+    /// <summary>Gain proporsional Kc, seperti yang diterima PID NI di VI (= Kp dashboard).</summary>
     public double Kc   { get; init; }
-    /// <summary>Waktu integral (Ti).</summary>
+    /// <summary>Waktu integral Ti (menit), seperti yang diterima VI — 0 = integral mati.</summary>
     public double Ti   { get; init; }
-    /// <summary>Waktu derivatif (Td).</summary>
+    /// <summary>Waktu derivatif Td (menit), seperti yang diterima VI.</summary>
     public double Td   { get; init; }
     /// <summary>Bukaan valve/pompa (%).</summary>
     public double Pump { get; init; }

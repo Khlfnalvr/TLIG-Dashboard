@@ -25,18 +25,20 @@ public static class RealHistoryService
     private const int DefaultLimit = 3;
 
     /// <summary>
-    /// Titik query default: gain outer + setpoint sesi cascade saat ini. Pump tidak
+    /// Titik query default: gain outer + setpoint sesi cascade saat ini, dikonversi ke
+    /// Kc/Ti/Td yang diterima VI (rekaman run menyimpan bentuk itu). Pump tidak
     /// diketahui di konteks chat AI → <see cref="double.NaN"/> (diabaikan dalam jarak).
     /// </summary>
     public static HeParameterInput CurrentPoint()
     {
         var cs = CascadeSessionService.Instance;
+        var (kc, ti, td) = PythonBridgeService.ToNiPid(cs.OuterKp, cs.OuterKi, cs.OuterKd);
         return new HeParameterInput
         {
             Sp   = cs.Setpoint,
-            Kc   = cs.OuterKp,
-            Ti   = cs.OuterKi,
-            Td   = cs.OuterKd,
+            Kc   = kc,
+            Ti   = ti,
+            Td   = td,
             Pump = double.NaN,
         };
     }
@@ -143,20 +145,28 @@ public static class RealHistoryService
 
     private static HeParameterInput? ParseGains(string text)
     {
-        float? kp = FindGain(text, "kp") ?? FindGain(text, "kc");
-        float? ki = FindGain(text, "ki") ?? FindGain(text, "ti");
-        float? kd = FindGain(text, "kd") ?? FindGain(text, "td");
+        // Kc/Ti/Td (bentuk VI) dipakai apa adanya; Kp/Ki/Kd (bentuk dashboard) dikonversi
+        // dulu, karena rekaman run menyimpan Kc/Ti/Td yang diterima VI.
+        float? kc = FindGain(text, "kc");
+        float? ti = FindGain(text, "ti");
+        float? td = FindGain(text, "td");
+        float? kp = FindGain(text, "kp");
+        float? ki = FindGain(text, "ki");
+        float? kd = FindGain(text, "kd");
         float? sp = FindGain(text, "sp") ?? FindGain(text, "setpoint") ?? FindGain(text, "set point");
         float? pump = FindGain(text, "pump") ?? FindGain(text, "valve");
-        if (kp is null && ki is null && kd is null && sp is null) return null;
+        if (kc is null && ti is null && td is null && kp is null && ki is null && kd is null && sp is null)
+            return null;
 
-        var cur = CurrentPoint();
+        var cs = CascadeSessionService.Instance;
+        var (ckc, cti, ctd) = PythonBridgeService.ToNiPid(
+            kp ?? cs.OuterKp, ki ?? cs.OuterKi, kd ?? cs.OuterKd);
         return new HeParameterInput
         {
-            Sp   = sp   ?? cur.Sp,
-            Kc   = kp   ?? cur.Kc,
-            Ti   = ki   ?? cur.Ti,
-            Td   = kd   ?? cur.Td,
+            Sp   = sp   ?? cs.Setpoint,
+            Kc   = kc   ?? ckc,
+            Ti   = ti   ?? cti,
+            Td   = td   ?? ctd,
             Pump = pump ?? double.NaN,
         };
     }

@@ -25,8 +25,12 @@ namespace TLIGDashboard.Services;
 ///     is what actually starts the Python client.
 ///
 /// The JSON file is the single contract with the script:
-///     { "sp": 60, "kp": 1.5, "ki": 0.015, "kd": 8, "pump": 40, "cmd": 1,
+///     { "sp": 60, "kp": 1.5, "ki": 1.67, "kd": 0.089, "pump": 40, "cmd": 1,
 ///       "run": true, "host": "127.0.0.1", "port": 6000 }
+/// The VI feeds KC/KI/KD into NI's PID as <b>Kc, Ti (min), Td (min)</b> — the standard
+/// (ISA) form — while the dashboard designs in the parallel form Kp/Ki/Kd. So the
+/// "kp"/"ki"/"kd" fields carry the CONVERTED values (see <see cref="ToNiPid"/>), under the
+/// old names so any copy of PIDtest.py, old or new, forwards them unchanged.
 /// "pump" is the valve opening (%) from the Control card; "cmd" is the latched button
 /// state (RUN 1, STOP 0, RESET 2, E-STOP 3). Both ride the same 6-double / 48-byte packet
 /// as the gains — SP, KC, KI, KD, PUMP, CMD — which is the one route to LabVIEW that is
@@ -346,12 +350,16 @@ public sealed class PythonBridgeService : IDisposable
         // Escape backslash/quote so an unusual host string can't break the JSON.
         static string Esc(string s) => s.Replace("\\", "\\\\").Replace("\"", "\\\"");
 
+        // Kp/Ki/Kd (parallel) → Kc/Ti/Td (NI PID, minutes): the packet's KC/KI/KD go
+        // straight into "PID parameters (TC)" in the VI.
+        var (kc, tiMin, tdMin) = ToNiPid(_kp, _ki, _kd);
+
         string json =
             "{\n" +
             $"  \"sp\": {Num(_sp)},\n" +
-            $"  \"kp\": {Num(_kp)},\n" +
-            $"  \"ki\": {Num(_ki)},\n" +
-            $"  \"kd\": {Num(_kd)},\n" +
+            $"  \"kp\": {Num(kc)},\n" +
+            $"  \"ki\": {Num(tiMin)},\n" +
+            $"  \"kd\": {Num(tdMin)},\n" +
             $"  \"pump\": {Num(_pump)},\n" +
             $"  \"cmd\": {_cmd.ToString(CultureInfo.InvariantCulture)},\n" +
             $"  \"run\": {(_run ? "true" : "false")},\n" +
@@ -386,6 +394,23 @@ public sealed class PythonBridgeService : IDisposable
             StatusChanged?.Invoke($"Gagal menulis parameter ke {ParamsFilePath}: {ex.Message}");
             return false;
         }
+    }
+
+    /// <summary>
+    /// Parallel-form gains (u = Kp·e + Ki·∫e + Kd·de/dt, seconds) → the standard form NI's
+    /// PID VI takes (u = Kc·(e + 1/Ti·∫e + Td·de/dt), Ti/Td in <b>minutes</b>):
+    /// Kc = Kp, Ti = Kp/Ki/60, Td = Kd/Kp/60. Same controller, just written differently.
+    /// <para>Ki = 0 is sent as Ti = 0, which NI's PID reads as "integral off" (the exact
+    /// mapping, Ti → ∞, cannot be sent). Kp ≤ 0 has no standard form at all — Ti and Td are
+    /// both relative to Kc — so it is sent as all zeros (controller output 0) rather than
+    /// as numbers that would mean something else to the VI.</para>
+    /// </summary>
+    public static (double kc, double tiMin, double tdMin) ToNiPid(double kp, double ki, double kd)
+    {
+        if (!double.IsFinite(kp) || kp <= 0) return (0, 0, 0);
+        double ti = double.IsFinite(ki) && ki > 0 ? kp / ki / 60.0 : 0.0;
+        double td = double.IsFinite(kd) && kd > 0 ? kd / kp / 60.0 : 0.0;
+        return (kp, ti, td);
     }
 
     // ── Process management ──────────────────────────────────────────────────────

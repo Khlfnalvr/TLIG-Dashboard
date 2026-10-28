@@ -494,19 +494,23 @@ public sealed partial class DashboardPage : Page
 
     /// <summary>
     /// Kombinasi parameter yang sedang diperintahkan, dalam bentuk yang direkam
-    /// bersama hasilnya. Kc/Ti/Td di sini adalah isi kotak Kp/Ki/Kd — angka yang sama persis
-    /// yang diterima VI sebagai KC/KI/KD lewat paket 48 byte, bukan hasil konversi
-    /// ke bentuk PID lain. Kotak yang sedang kosong (NaN) dibaca 0, sama seperti
-    /// yang dikirim bridge.
+    /// bersama hasilnya. Kc/Ti/Td di sini adalah angka yang benar-benar diterima VI
+    /// lewat paket 48 byte: isi kotak Kp/Ki/Kd setelah dikonversi ke bentuk PID NI
+    /// (<see cref="PythonBridgeService.ToNiPid"/>), persis seperti yang dikirim bridge.
+    /// Kotak yang sedang kosong (NaN) dibaca 0, sama seperti yang dikirim bridge.
     /// </summary>
-    private Models.HeParameterInput CurrentHeInput() => new()
+    private Models.HeParameterInput CurrentHeInput()
     {
-        Sp   = Safe(CtlSetpointBox.Value),
-        Kc   = Safe(KpBox.Value),
-        Ti   = Safe(KiBox.Value),
-        Td   = Safe(KdBox.Value),
-        Pump = Safe(CtlPump.Value),
-    };
+        var (kc, ti, td) = PythonBridgeService.ToNiPid(Safe(KpBox.Value), Safe(KiBox.Value), Safe(KdBox.Value));
+        return new()
+        {
+            Sp   = Safe(CtlSetpointBox.Value),
+            Kc   = kc,
+            Ti   = ti,
+            Td   = td,
+            Pump = Safe(CtlPump.Value),
+        };
+    }
 
     private static double Safe(double value) => double.IsNaN(value) ? 0 : value;
 

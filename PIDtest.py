@@ -20,6 +20,11 @@ Port 6000 -- KONTROL (Python = CLIENT, LabVIEW = SERVER)
 
         SP, KC, KI, KD, PUMP, CMD
 
+      KC, KI, KD = Kc, Ti (menit), Td (menit) -- bentuk PID NI yang dipakai
+                   "PID parameters (TC)" di VI. Dashboard SUDAH mengonversi
+                   Kp/Ki/Kd-nya ke bentuk ini sebelum menulis pid_bridge.json
+                   (Kc = Kp, Ti = Kp/Ki/60, Td = Kd/Kp/60), jadi script ini
+                   cukup meneruskan angkanya apa adanya.
       PUMP = bukaan valve (%) dari dashboard
       CMD  = kode tombol: 1 = RUN, 0 = STOP, 2 = RESET, 3 = E-STOP
 
@@ -67,7 +72,7 @@ SEND_INTERVAL = 1.0          # detik, jeda antar pengiriman parameter PID
 RECONNECT_DELAY = 2.0        # detik, jeda sebelum mencoba menyambung lagi
 
 # Urutan nilai yang DIKIRIM ke LabVIEW. Sudah terbukti benar lewat Front Panel.
-# Kp di dashboard = KC di LabVIEW.
+# Field "kp"/"ki"/"kd" di pid_bridge.json sudah berisi Kc / Ti (menit) / Td (menit).
 FIELD_ORDER = ("SP", "KC", "KI", "KD", "PUMP", "CMD")
 PACKET_FMT = ">dddddd"
 PACKET_LEN = 48
@@ -92,7 +97,8 @@ def get_values():
     """Baca SP/KC/KI/KD, bukaan valve, kode tombol, flag run, dan alamat LabVIEW.
 
     Mengembalikan (sp, kc, ki, kd, pump, cmd, run, host, port).
-      - Kp di dashboard  -> KC di LabVIEW
+      - kp/ki/kd di file -> KC / Ti (menit) / Td (menit) di LabVIEW
+                            (sudah dikonversi dashboard dari Kp/Ki/Kd)
       - pump             -> bukaan valve (%), 0-100
       - cmd              -> 1 RUN, 0 STOP, 2 RESET, 3 E-STOP (latch)
       - run == False     -> dashboard ditutup, script keluar dari loop.
@@ -107,7 +113,7 @@ def get_values():
             data = json.load(f)
 
         sp = float(data.get("sp", DEFAULT_SP))
-        kc = float(data.get("kp", DEFAULT_KC))    # Kp dashboard = KC LabVIEW
+        kc = float(data.get("kp", DEFAULT_KC))    # sudah Kc (bentuk PID NI)
         ki = float(data.get("ki", DEFAULT_KI))
         kd = float(data.get("kd", DEFAULT_KD))
         pump = float(data.get("pump", DEFAULT_PUMP))
