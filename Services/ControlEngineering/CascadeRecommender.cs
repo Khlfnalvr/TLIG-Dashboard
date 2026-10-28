@@ -98,21 +98,46 @@ public static class CascadeRecommender
             && PidDiagnosisCalculator.Evaluate(currentMetrics.PrimaryStepMetrics(), currentStable) == PidDiagnosisCode.Ideal)
             return null;
 
-        (CascadeRecommendation gains, CascadeMetrics metrics)? best = null;
-        double bestCost = double.PositiveInfinity;
+        (CascadeRecommendation gains, CascadeMetrics metrics)? best = null, bestSlow = null;
+        double bestCost = double.PositiveInfinity, bestSlowCost = double.PositiveInfinity;
         foreach (var c in EvaluateGrid(setpoint, inletTemperature, valveLimit))
         {
             // Constraint operasi dulu: yang meminta valve/flow di luar 0–100% /
             // 0–4,65 L/min langsung ditolak, walau saturasi membuatnya tampak lolos.
             if (c.violates) continue;
-            // Keep only tunings the diagnosis itself would call ideal — same thresholds, so the
+            // Prefer tunings the diagnosis itself would call ideal — same thresholds, so the
             // recommendation and the diagnosis can never disagree.
-            if (PidDiagnosisCalculator.Evaluate(c.metrics.PrimaryStepMetrics(), c.metrics.Stable) != PidDiagnosisCode.Ideal)
-                continue;
+            var verdict = PidDiagnosisCalculator.Evaluate(c.metrics.PrimaryStepMetrics(), c.metrics.Stable);
             double cost = Cost(c.metrics);
-            if (cost < bestCost) { bestCost = cost; best = (c.gains, c.metrics); }
+            if (verdict == PidDiagnosisCode.Ideal)
+            {
+                if (cost < bestCost) { bestCost = cost; best = (c.gains, c.metrics); }
+            }
+            // Stable, in-limits, no excess overshoot or offset — only slower than the 400 s bar.
+            else if (verdict == PidDiagnosisCode.SlowResponse && cost < bestSlowCost)
+            {
+                bestSlowCost = cost; bestSlow = (c.gains, c.metrics);
+            }
         }
-        return best;
+        if (best is not null) return best;
+
+        // No tuning in the grid meets the 400 s bar. That happens whenever the flow the rig can
+        // give (≤ 4.65 L/min) leaves little headroom above what the setpoint needs, so the
+        // temperature physically cannot rise faster. Rather than leave the student with nothing,
+        // offer the fastest compliant tuning — but only when it genuinely beats what they run now.
+        if (bestSlow is { } slow && IsImprovement(slow.metrics, currentMetrics, currentStable, currentViolates))
+            return slow;
+        return null;
+    }
+
+    // The fallback pick must be worth switching to: the current tuning breaks a limit, is
+    // unstable / overshoots / leaves an offset, or the pick settles at least 10% sooner.
+    private static bool IsImprovement(CascadeMetrics pick, CascadeMetrics current, bool currentStable, bool currentViolates)
+    {
+        if (currentViolates) return true;
+        var verdict = PidDiagnosisCalculator.Evaluate(current.PrimaryStepMetrics(), currentStable);
+        if (verdict is not PidDiagnosisCode.SlowResponse and not PidDiagnosisCode.Ideal) return true;
+        return pick.SettlingTime < 0.9 * current.SettlingTime;
     }
 
     /// <summary>

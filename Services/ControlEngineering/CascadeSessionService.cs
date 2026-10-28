@@ -28,8 +28,13 @@ public sealed class CascadeSessionService
     public double Setpoint    { get; set; } = 60;
     public double InletTemperature { get; set; } = 30;
     public double Disturbance { get; set; } = -1;
-    /// <summary>Batas bukaan valve (%) — kotak "Bukaan Valve" di Dashboard (lihat CascadeInput.ValveLimit).</summary>
+    /// <summary>Batas atas bukaan valve (%) untuk PID (lihat CascadeInput.ValveLimit). 100 = seluruh valve.</summary>
     public double ValveLimit  { get; set; } = 100;
+    /// <summary>
+    /// Mode Manual Dashboard: valve ditahan di bukaan ini tanpa PID (kotak "Bukaan Valve").
+    /// <c>null</c> = Auto, PID yang menggerakkan valve. Lihat CascadeInput.ManualValve.
+    /// </summary>
+    public double? ManualValve { get; set; }
 
     public CascadeDesignResult? LastResult { get; private set; }
     public CascadeRecommendation? PendingRecommendation { get; private set; }
@@ -171,6 +176,8 @@ public sealed class CascadeSessionService
         InletTemperature = (float)InletTemperature,
         Disturbance = (float)Disturbance,
         ValveLimit = (float)ValveLimit,
+        ManualValve = ManualValve is { } mv && double.IsFinite(mv)
+            ? (float)CascadeSimulator.NormalizeValveLimit(mv) : null,
     };
 
     private void NormalizeInputs()

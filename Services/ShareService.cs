@@ -1405,9 +1405,8 @@ public sealed class ShareServer
                     // Layar Server ikut menggambar simulasi yang sama. Dijalankan terpisah supaya
                     // balasan HTTP tidak menunggu simulasinya; hasilnya sampai ke layar lewat
                     // ResultChanged milik sesi cascade.
-                    // Bukaan valve Client juga membatasi valve simulasinya (lihat CascadeInput.ValveLimit).
                     _ = App.CascadeSession.RunMirroredAsync(
-                        kp, ki, kd, sp, innerKp, innerKi, disturbance, inletTemperature, pump);
+                        kp, ki, kd, sp, innerKp, innerKi, disturbance, inletTemperature);
                     break;
                 }
 

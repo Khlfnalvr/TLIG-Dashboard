@@ -80,6 +80,22 @@ public static class CascadeDesignService
         var simResult = await Task.Run(() => _sim.Simulate(input), ct);
         var metrics   = CascadeSimulator.ComputeMetrics(simResult, input);
 
+        // Manual mode: no controller acts, so there is nothing to diagnose, recommend or have
+        // the LLM review — the curve is simply what the plant does at that valve opening. The
+        // deterministic note (flow + steady temperature + valve needed for the setpoint) stands
+        // in for the review.
+        if (input.IsManual)
+        {
+            return new CascadeDesignResult
+            {
+                Input = input,
+                Simulation = simResult,
+                Metrics = metrics,
+                Diagnosis = "",
+                AdvisorExplanation = mirrored ? "" : SetpointReachability.ExplainManual(input),
+            };
+        }
+
         // Setpoint di luar jangkauan valve/plant: bukan masalah tuning, dan tidak ada
         // kandidat gain yang bisa mencapainya — pencarian dilewati (juga mahal: setiap
         // kandidat akan berjalan sampai batas 8000 s). Penjelasannya dikirim ke advisor
@@ -361,6 +377,7 @@ public static class CascadeJson
         ["InletTemperature"] = F(i.InletTemperature),
         ["Disturbance"]      = F(i.Disturbance),
         ["ValveLimit"]       = F(i.ValveLimit),
+        ["ManualValve"]      = i.ManualValve is { } mv ? F(mv) : null,
     };
 
     // Missing fields keep CascadeInput's own defaults rather than becoming 0 / NaN.
@@ -377,6 +394,7 @@ public static class CascadeJson
         i.InletTemperature = (float?)n["InletTemperature"] ?? i.InletTemperature;
         i.Disturbance      = (float?)n["Disturbance"]      ?? i.Disturbance;
         i.ValveLimit       = (float?)n["ValveLimit"]       ?? i.ValveLimit;
+        i.ManualValve      = (float?)n["ManualValve"];     // absent / null = Auto
         return i;
     }
 

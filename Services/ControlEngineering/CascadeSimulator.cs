@@ -210,6 +210,8 @@ public class CascadeSimulator
         // depend only on the flow above its floor.
         input.InletTemperature = (float)NormalizeInletTemperature(input.InletTemperature);
         input.ValveLimit       = (float)NormalizeValveLimit(input.ValveLimit);
+        if (input.ManualValve is { } mv) input.ManualValve = (float)NormalizeValveLimit(mv);
+        bool manual = input.IsManual;
 
         // State scalars: T, F, IT, IF (kept as locals, not an array, so the RK4
         // sub-steps allocate nothing per step). Valve 0% → flow FlowBias (0 L/min) → T = T_inlet.
@@ -236,9 +238,10 @@ public class CascadeSimulator
             fHist.Add(sF);   // flow measured now
 
             // Settle check (adaptive only): the temperature window is flat, dT/dt ≈ 0, and
-            // T has actually reached the setpoint band (see SettleBandFraction).
+            // T has actually reached the setpoint band (see SettleBandFraction). In manual mode
+            // nothing drives T to the setpoint — it settles wherever the fixed valve takes it.
             bool settled = adaptive && i >= window && i % checkEvery == 0
-                           && Math.Abs(temp[^1] - input.Setpoint) < settleBand
+                           && (manual || Math.Abs(temp[^1] - input.Setpoint) < settleBand)
                            && IsWindowFlat(temp, window, tol) && Math.Abs(a1T) < tol;
             if (phase == 0 && i >= minStep && settled)
             {
@@ -302,6 +305,19 @@ public class CascadeSimulator
         // Deviation form: ΔT = K1·(flow − FlowBias), absolute T = T_inlet + ΔT.
         double fIn = double.IsNaN(fDel) ? F : fDel;
         dTdt = (g.InletTemperature + K1 * (fIn - FlowBias) - T) / Tau1;
+
+        // Manual mode: the valve is held where the operator put it and no controller acts —
+        // the plant's own open-loop answer to that opening (the VI with "PID Control" off).
+        if (g.ManualValve is { } manual)
+        {
+            u = uRaw = manual;
+            fsp = fspRaw = FlowTarget(manual, 0.0);   // the flow that opening settles to
+            dIT = dIF = 0.0;
+            double uManIn = double.IsNaN(uDel) ? u : uDel;
+            dFdt = (FlowTarget(uManIn, dist) - F) / Tau2;
+            return;
+        }
+
         double eT = g.Setpoint - T;
         double outerRaw = g.OuterKp * eT + g.OuterKi * IT - g.OuterKd * dTdt;
         fspRaw = outerRaw;
@@ -372,9 +388,17 @@ public class CascadeSimulator
         double fIn = double.IsNaN(fDel) ? F : fDel;
         dTdt = (g.InletTemperature + K1 * (fIn - FlowBias) - T) / Tau1;
         double eT = g.Setpoint - T;
-        double uRaw = g.OuterKp * eT + g.OuterKi * IT - g.OuterKd * dTdt;
-        u = Clamp(uRaw, ValveMin, g.ValveLimit);
-        dIT = AntiWindup(eT, uRaw, ValveMin, g.ValveLimit);
+        if (g.ManualValve is { } manual)
+        {
+            u = manual;      // same fixed opening as the cascade run — no controller in manual
+            dIT = 0.0;
+        }
+        else
+        {
+            double uRaw = g.OuterKp * eT + g.OuterKi * IT - g.OuterKd * dTdt;
+            u = Clamp(uRaw, ValveMin, g.ValveLimit);
+            dIT = AntiWindup(eT, uRaw, ValveMin, g.ValveLimit);
+        }
         double uIn = double.IsNaN(uDel) ? u : uDel;
         dFdt = (FlowTarget(uIn, dist) - F) / Tau2;
     }

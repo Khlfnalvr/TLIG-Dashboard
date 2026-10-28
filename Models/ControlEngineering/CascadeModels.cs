@@ -56,12 +56,22 @@ public class CascadeInput
     public float Disturbance { get; set; } = -1f;
 
     /// <summary>
-    /// Upper limit on the valve opening (%), 0–100 — the Dashboard's "Bukaan Valve" box.
-    /// The inner PI still decides the valve, but never beyond this: a wider valve allows
-    /// more flow, so the temperature reaches the setpoint faster; too narrow a valve
-    /// cannot reach it at all (see <see cref="Services.ControlEngineering.CascadeSimulator.RequiredValve"/>).
+    /// Optional upper limit on the valve opening (%), 0–100. 100 = the controller may use the
+    /// whole valve, which is what the rig's PID does in automatic mode; the Dashboard does not
+    /// lower it (its "Bukaan Valve" box is the MANUAL opening, see <see cref="ManualValve"/>).
     /// </summary>
     public float ValveLimit { get; set; } = 100f;
+
+    /// <summary>
+    /// Manual mode: the valve is held at this opening (%) with no controller acting — the VI's
+    /// "PID Control" off, valve = the Dashboard's "Bukaan Valve" box. The response is then
+    /// the plant's own open-loop answer (100% → 4.65 L/min), and there are no gains to tune.
+    /// <c>null</c> = automatic: the PID drives the valve over 0–<see cref="ValveLimit"/>%.
+    /// </summary>
+    public float? ManualValve { get; set; }
+
+    /// <summary>True when the run is the manual (open-loop) valve, not the PID.</summary>
+    public bool IsManual => ManualValve.HasValue;
 }
 
 /// <summary>Time series produced by <see cref="Services.ControlEngineering.CascadeSimulator"/>.</summary>

@@ -89,9 +89,7 @@ public static class SetpointReachability
     public static string ExplainModel(Models.ControlEngineering.CascadeInput input)
     {
         double inlet = input.InletTemperature;
-        double cap = CascadeSimulator.NormalizeValveLimit(input.ValveLimit);
         double tMaxRig = CascadeSimulator.MaxReachableTemperature(inlet);
-        double tMaxCap = CascadeSimulator.MaxReachableTemperature(inlet, cap);
         double flowForSp = CascadeSimulator.FlowBias + (input.Setpoint - inlet) / CascadeSimulator.K1;
         double valveForSp = CascadeSimulator.RequiredValve(input.Setpoint, inlet);
         string k2 = CascadeSimulator.K2.ToString("0.####", System.Globalization.CultureInfo.CurrentCulture);
@@ -102,17 +100,51 @@ public static class SetpointReachability
             $"{inlet:F1} °C. Flow mengikuti F(t) = {k2}·valve (valve 0–100% → 0–{fMax} L/min, " +
             $"sama dengan flow maksimum di LabVIEW), dan suhu tunak T_ss = T_masuk + {k1}·F, jadi " +
             $"jangkauan tunak rig = {inlet:F1}–{tMaxRig:F1} °C. Untuk setpoint {input.Setpoint:F1} °C, " +
-            $"flow tunak yang diminta = {flowForSp:F2} L/min, yaitu bukaan valve minimal ≈ {valveForSp:F0}%. " +
-            $"Bukaan Valve saat ini dibatasi {cap:F0}% (suhu maksimum {tMaxCap:F1} °C): makin lebar " +
-            $"valve di atas batas minimal itu, makin besar flow yang boleh dipakai loop dalam, " +
-            $"sehingga suhu makin cepat mencapai setpoint.";
+            $"flow tunak yang diminta = {flowForSp:F2} L/min, yaitu bukaan valve ≈ {valveForSp:F0}%. " +
+            $"Di mode Auto PID yang mencari bukaan itu sendiri (bebas 0–100%, dan sementara " +
+            $"boleh membuka lebih lebar supaya suhu naik lebih cepat); di mode Manual valve " +
+            $"ditahan di nilai Bukaan Valve tanpa PID.";
+    }
+
+    /// <summary>
+    /// Mode Manual: valve ditahan di <see cref="Models.ControlEngineering.CascadeInput.ManualValve"/>
+    /// tanpa PID. Menjelaskan flow dan suhu tunak yang dihasilkan bukaan itu, dan bukaan yang
+    /// dibutuhkan setpoint — pengganti ulasan advisor, karena tidak ada gain yang bekerja.
+    /// </summary>
+    public static string ExplainManual(Models.ControlEngineering.CascadeInput input)
+    {
+        double valve = CascadeSimulator.NormalizeValveLimit(input.ManualValve ?? 0f);
+        double flow  = CascadeSimulator.MaxFlow(valve);
+        double tSs   = CascadeSimulator.MaxReachableTemperature(input.InletTemperature, valve);
+        double need  = CascadeSimulator.RequiredValve(input.Setpoint, input.InletTemperature);
+        return LocalizationManager.Instance.Format(nameof(LocalizationManager.Manual_Explain),
+            Num(valve), Num(flow), Num(tSs), Num(input.InletTemperature),
+            Num(input.Setpoint), need <= CascadeSimulator.ValveMax ? Num(Math.Ceiling(need)) : ">100");
+    }
+
+    /// <summary>Label singkat kartu diagnosis untuk run manual.</summary>
+    public static string DescribeManual(Models.ControlEngineering.CascadeInput input)
+    {
+        double valve = CascadeSimulator.NormalizeValveLimit(input.ManualValve ?? 0f);
+        return LocalizationManager.Instance.Format(nameof(LocalizationManager.Diag_Manual),
+            Num(valve), Num(CascadeSimulator.MaxReachableTemperature(input.InletTemperature, valve)));
     }
 
     public static string DescribeUnreachableCascade(double setpoint, double inletTemperature,
-                                                    double valveLimit = CascadeSimulator.ValveMax) =>
-        DescribeUnreachable(setpoint,
-            CascadeSimulator.MinReachableTemperature(inletTemperature),
-            CascadeSimulator.MaxReachableTemperature(inletTemperature, valveLimit));
+                                                    double valveLimit = CascadeSimulator.ValveMax)
+    {
+        double cap  = CascadeSimulator.NormalizeValveLimit(valveLimit);
+        double tMin = CascadeSimulator.MinReachableTemperature(inletTemperature);
+        double tMax = CascadeSimulator.MaxReachableTemperature(inletTemperature, cap);
+        double need = CascadeSimulator.RequiredValve(setpoint, inletTemperature);
+
+        // Yang membatasi kotak Bukaan Valve, bukan rig: sebutkan bukaan yang dibutuhkan.
+        if (setpoint > tMax && cap < CascadeSimulator.ValveMax && need <= CascadeSimulator.ValveMax)
+            return LocalizationManager.Instance.Format(nameof(LocalizationManager.Diag_UnreachableValve),
+                Num(setpoint), Num(tMin), Num(tMax), Num(cap), Num(Math.Ceiling(need)));
+
+        return DescribeUnreachable(setpoint, tMin, tMax);
+    }
 
     public static string DescribeUnreachableSingleLoop(double setpoint) =>
         DescribeUnreachable(setpoint,

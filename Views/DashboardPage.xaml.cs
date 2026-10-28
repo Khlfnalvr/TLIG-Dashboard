@@ -103,9 +103,9 @@ public sealed partial class DashboardPage : Page
         // From here on, user edits to the controls are forwarded to LabVIEW.
         _controlsReady = true;
 
-        // The valve box caps the simulated valve too, from the first RUN on — not only once
-        // the student has touched a box.
-        SyncValveLimit();
+        // The Manual/Auto radio picks how the simulation drives the valve, from the first RUN
+        // on — not only once the student has touched a control.
+        SyncValveMode();
 
 
         ApplyLearningPanelContent();
@@ -239,7 +239,13 @@ public sealed partial class DashboardPage : Page
         PushPidInputs();
     }
 
-    private void CtlMode_Checked(object sender, RoutedEventArgs e)                           => SendControlLine();
+    private void CtlMode_Checked(object sender, RoutedEventArgs e)
+    {
+        // XAML checks the default radio while the page is still being parsed.
+        if (!_controlsReady) return;
+        SyncValveMode();
+        SendControlLine();
+    }
 
     // STOP / RESET / E-STOP only latch a new CMD — they deliberately do NOT stop the Python
     // bridge. The link stays up, the packet keeps flowing every second, and the values the
@@ -372,18 +378,23 @@ public sealed partial class DashboardPage : Page
         s.OuterKi  = KiBox.Value;
         s.OuterKd  = KdBox.Value;
         s.Setpoint = CtlSetpointBox.Value;
-        SyncValveLimit();
+        SyncValveMode();
         SendControlLine();   // the same gains/setpoint drive LabVIEW
         SyncBridge();
     }
 
-    // "Bukaan Valve" is both the PUMP sent to LabVIEW and the valve cap of the simulation, so
-    // the simulated flow can never exceed what the rig is given (100% → 4.65 L/min). NaN = the
-    // box is cleared mid-edit; keep the last cap instead of treating it as fully closed.
-    private void SyncValveLimit()
+    // Mirrors the VI: in Auto the PID drives the valve over its whole 0–100% range and
+    // "Bukaan Valve" plays no part; in Manual there is no PID and the valve simply sits at
+    // "Bukaan Valve" (100% → 4.65 L/min). Cascade is the controllers acting too, so it runs
+    // like Auto. NaN = the box is cleared mid-edit; keep the last manual opening.
+    private void SyncValveMode()
     {
+        var s = App.CascadeSession;
+        s.ValveLimit = CascadeSimulator.ValveMax;
+        if (CtlModeManual.IsChecked != true) { s.ManualValve = null; return; }
         double pump = CtlPump.Value;
-        if (!double.IsNaN(pump)) App.CascadeSession.ValveLimit = pump;
+        if (!double.IsNaN(pump)) s.ManualValve = pump;
+        else s.ManualValve ??= 0;
     }
 
     // Mirrors the session's outer gains/setpoint + valve/command into PIDtest.py's contract
@@ -642,7 +653,9 @@ public sealed partial class DashboardPage : Page
         // result.Diagnosis is a code, not display text — localize it here so a Client shows its
         // own language. The outer loop is the identical Gp1 plant PidDiagnosisCalculator is
         // anchored to (see CascadeDesignService).
-        DiagnosisValue.Text = string.IsNullOrEmpty(result.Diagnosis)
+        DiagnosisValue.Text = result.Input.IsManual
+            ? SetpointReachability.DescribeManual(result.Input)
+            : string.IsNullOrEmpty(result.Diagnosis)
             ? "--"
             : !SetpointReachability.IsCascadeReachable(result.Input.Setpoint, result.Input.InletTemperature, result.Input.ValveLimit)
                 ? SetpointReachability.DescribeUnreachableCascade(result.Input.Setpoint, result.Input.InletTemperature, result.Input.ValveLimit)

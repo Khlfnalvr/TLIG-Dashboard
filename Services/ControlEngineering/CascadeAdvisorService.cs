@@ -145,6 +145,10 @@ public class CascadeAdvisorService
                   $"the plant tops out at {CascadeSimulator.MaxReachableTemperature(gains.InletTemperature, gains.ValveLimit):F1} °C. " +
                   $"Reaching {gains.Setpoint:F1} °C needs the valve opened to at least " +
                   $"{CascadeSimulator.RequiredValve(gains.Setpoint, gains.InletTemperature):F0}% (more than 100% means the rig itself cannot). " +
+                  (gains.ValveLimit < CascadeSimulator.ValveMax
+                      ? $"The valve is NOT fully open: the student's Valve Opening box caps it at {gains.ValveLimit:F0}%. " +
+                        "Do not say the valve is at 100%; tell them plainly to raise the Valve Opening box first. "
+                      : "") +
                   "Do not blame the gains or suggest retuning; the only remedies are opening the valve limit, moving the setpoint into " +
                   "the reachable range, changing the inlet temperature, or increasing plant/actuator capacity.\n"
                 : "") +

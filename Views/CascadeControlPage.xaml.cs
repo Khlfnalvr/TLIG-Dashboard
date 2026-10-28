@@ -86,6 +86,9 @@ public sealed partial class CascadeControlPage : Page
         s.Setpoint    = SetpointBox.Value;
         s.InletTemperature = InletTemperatureBox.Value;
         s.Disturbance = DisturbanceBox.Value;
+        // Mode (Manual/Auto) and the manual valve are not edited here: this page is the
+        // Dashboard's extended screen and runs in whatever mode the Dashboard set
+        // (CascadeSessionService.ManualValve), so both always show the same simulation.
     }
 
     private void PullInputs()
@@ -201,7 +204,9 @@ public sealed partial class CascadeControlPage : Page
         // (from the outer-loop step metrics) so a Client shows its own language, not the Server's.
         // Setpoint di luar jangkauan plant diberi label batas aktuator, bukan saran retuning
         // yang tidak mungkin berhasil.
-        DiagnosisValue.Text = string.IsNullOrEmpty(result.Diagnosis)
+        DiagnosisValue.Text = result.Input.IsManual
+            ? SetpointReachability.DescribeManual(result.Input)
+            : string.IsNullOrEmpty(result.Diagnosis)
             ? "--"
             : !SetpointReachability.IsCascadeReachable(result.Input.Setpoint, result.Input.InletTemperature, result.Input.ValveLimit)
                 ? SetpointReachability.DescribeUnreachableCascade(result.Input.Setpoint, result.Input.InletTemperature, result.Input.ValveLimit)
