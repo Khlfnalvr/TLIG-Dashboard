@@ -219,12 +219,12 @@ public class PidSimulator
     }
 
     /// <summary>
-    /// True bila tuning MEMINTA di luar batas operasi valve 0–100% / flow 1–7 L/min
+    /// True bila tuning MEMINTA di luar batas operasi valve 0–100% / flow 0–4,65 L/min
     /// (lihat <see cref="OperatingConstraints"/>). Permintaan mentah di luar batas
     /// dihitung sebagai pelanggaran walau sinyal jenuhnya tampak di dalam batas —
     /// inilah yang membuat recommender MENOLAK gain agresif yang hanya "lolos"
     /// karena saturasi. Flow di sini adalah pemetaan valve→flow
-    /// (valve 0% = 1 L/min, 100% = 7 L/min). Sentuhan batas setara noise numerik /
+    /// (valve 0% = 0 L/min, 100% = 4,65 L/min). Sentuhan batas setara noise numerik /
     /// respons normal (slack <see cref="OperatingConstraints.RawValveTolerance"/>,
     /// <see cref="OperatingConstraints.RawFlowTolerance"/>) bukan pelanggaran.
     /// </summary>

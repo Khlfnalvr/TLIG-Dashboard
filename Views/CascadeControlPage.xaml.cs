@@ -203,16 +203,16 @@ public sealed partial class CascadeControlPage : Page
         // yang tidak mungkin berhasil.
         DiagnosisValue.Text = string.IsNullOrEmpty(result.Diagnosis)
             ? "--"
-            : !SetpointReachability.IsCascadeReachable(result.Input.Setpoint, result.Input.InletTemperature)
-                ? SetpointReachability.DescribeUnreachableCascade(result.Input.Setpoint, result.Input.InletTemperature)
+            : !SetpointReachability.IsCascadeReachable(result.Input.Setpoint, result.Input.InletTemperature, result.Input.ValveLimit)
+                ? SetpointReachability.DescribeUnreachableCascade(result.Input.Setpoint, result.Input.InletTemperature, result.Input.ValveLimit)
                 : PidDiagnosisCalculator.Describe(result.Diagnosis, result.Metrics.PrimaryStepMetrics());
 
         // Penjelasan deterministik (persamaan + teori pengendalian) ikut ditampilkan
         // bersama ulasan advisor saat setpoint mustahil dicapai.
         string explanation = result.AdvisorExplanation;
-        if (!SetpointReachability.IsCascadeReachable(result.Input.Setpoint, result.Input.InletTemperature))
+        if (!SetpointReachability.IsCascadeReachable(result.Input.Setpoint, result.Input.InletTemperature, result.Input.ValveLimit))
         {
-            string note = SetpointReachability.ExplainCascade(result.Input.Setpoint, result.Input.InletTemperature);
+            string note = SetpointReachability.ExplainCascade(result.Input.Setpoint, result.Input.InletTemperature, result.Input.ValveLimit);
             explanation = string.IsNullOrWhiteSpace(explanation) ? note : note + "\n\n" + explanation;
         }
 
@@ -233,9 +233,9 @@ public sealed partial class CascadeControlPage : Page
         // Setpoint yang mustahil dicapai juga dikirim ke AI chat (riwayat bersama
         // Dashboard/AIPage) supaya alasannya terbaca di sana. Dedupe per teks: halaman
         // ini me-render ulang hasil terakhir saat navigasi.
-        if (!SetpointReachability.IsCascadeReachable(result.Input.Setpoint, result.Input.InletTemperature))
+        if (!SetpointReachability.IsCascadeReachable(result.Input.Setpoint, result.Input.InletTemperature, result.Input.ValveLimit))
         {
-            string note = SetpointReachability.ExplainCascade(result.Input.Setpoint, result.Input.InletTemperature);
+            string note = SetpointReachability.ExplainCascade(result.Input.Setpoint, result.Input.InletTemperature, result.Input.ValveLimit);
             if (!App.Ai.History.Any(m => m.Content == note))
             {
                 App.Ai.AddHistoryEntry("assistant", note);

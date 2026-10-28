@@ -85,7 +85,7 @@ public static class CascadeDesignService
         // kandidat akan berjalan sampai batas 8000 s). Penjelasannya dikirim ke advisor
         // agar ulasan menyebut batas otoritas aktuator, bukan menyalahkan gain.
         bool unreachable = !SetpointReachability.IsCascadeReachable(
-            input.Setpoint, input.InletTemperature);
+            input.Setpoint, input.InletTemperature, input.ValveLimit);
 
         // Diagnose the OUTER temperature loop by direct calculation on its step metrics
         // (PidDiagnosisCalculator), not the ML classifier the single-loop designer
@@ -104,7 +104,8 @@ public static class CascadeDesignService
         var recommendation = mirrored || unreachable
             ? default
             : await Task.Run(() => CascadeRecommender.Recommend(
-                metrics, metrics.Stable, input.Setpoint, input.InletTemperature, violates), ct);
+                metrics, metrics.Stable, input.Setpoint, input.InletTemperature, violates,
+                input.ValveLimit), ct);
 
         // The recommender scores candidates on a disturbance-free search run, but this run is
         // diagnosed WITH the flow disturbance — so the gains just accepted via "Ya (Terapkan)"
@@ -359,6 +360,7 @@ public static class CascadeJson
         ["Setpoint"]         = F(i.Setpoint),
         ["InletTemperature"] = F(i.InletTemperature),
         ["Disturbance"]      = F(i.Disturbance),
+        ["ValveLimit"]       = F(i.ValveLimit),
     };
 
     // Missing fields keep CascadeInput's own defaults rather than becoming 0 / NaN.
@@ -374,6 +376,7 @@ public static class CascadeJson
         i.Setpoint         = (float?)n["Setpoint"]         ?? i.Setpoint;
         i.InletTemperature = (float?)n["InletTemperature"] ?? i.InletTemperature;
         i.Disturbance      = (float?)n["Disturbance"]      ?? i.Disturbance;
+        i.ValveLimit       = (float?)n["ValveLimit"]       ?? i.ValveLimit;
         return i;
     }
 

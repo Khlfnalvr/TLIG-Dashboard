@@ -14,32 +14,46 @@ namespace TLIGDashboard.Services.ControlEngineering;
 /// </summary>
 public static class SetpointReachability
 {
-    public static bool IsCascadeReachable(double setpoint, double inletTemperature) =>
-        CascadeSimulator.IsSetpointReachable(setpoint, inletTemperature);
+    public static bool IsCascadeReachable(double setpoint, double inletTemperature,
+                                          double valveLimit = CascadeSimulator.ValveMax) =>
+        CascadeSimulator.IsSetpointReachable(setpoint, inletTemperature, valveLimit);
 
     public static bool IsSingleLoopReachable(double setpoint) =>
         PidSimulator.IsSetpointReachable(setpoint);
 
     /// <summary>Penjelasan lengkap (persamaan + teori) untuk plant cascade.</summary>
-    public static string ExplainCascade(double setpoint, double inletTemperature)
+    /// <param name="valveLimit">
+    /// Batas bukaan valve (kotak "Bukaan Valve"). Dipakai sebagai "valve penuh" di
+    /// penjelasan, karena di atas batas itu valve memang tidak dibuka.
+    /// </param>
+    public static string ExplainCascade(double setpoint, double inletTemperature,
+                                        double valveLimit = CascadeSimulator.ValveMax)
     {
-        double flowMax = CascadeSimulator.FlowBias + CascadeSimulator.K2 * CascadeSimulator.ValveMax;
+        double cap = CascadeSimulator.NormalizeValveLimit(valveLimit);
+        double flowMax = CascadeSimulator.MaxFlow(cap);
         double tMin = CascadeSimulator.MinReachableTemperature(inletTemperature);
-        double tMax = CascadeSimulator.MaxReachableTemperature(inletTemperature);
+        double tMax = CascadeSimulator.MaxReachableTemperature(inletTemperature, cap);
         double minError = setpoint > tMax ? setpoint - tMax : tMin - setpoint;
 
-        return LocalizationManager.Instance.Format(nameof(LocalizationManager.Reach_Cascade),
+        string text = LocalizationManager.Instance.Format(nameof(LocalizationManager.Reach_Cascade),
             Num(setpoint),
             Num(CascadeSimulator.FlowBias),
-            Num(CascadeSimulator.K2),
+            Num4(CascadeSimulator.K2),
             Num(CascadeSimulator.ValveMin),
-            Num(CascadeSimulator.ValveMax),
+            Num(cap),
             Num(inletTemperature),
             Num(CascadeSimulator.K1),
             Num(flowMax),
             Num(tMax),
             Num(tMin),
             Num(minError));
+
+        // Bila yang membatasi adalah kotak valve (bukan rig), sebutkan bukaan yang dibutuhkan.
+        double need = CascadeSimulator.RequiredValve(setpoint, inletTemperature);
+        if (setpoint > tMax && cap < CascadeSimulator.ValveMax && need <= CascadeSimulator.ValveMax)
+            text += "\n\n" + LocalizationManager.Instance.Format(nameof(LocalizationManager.Reach_OpenValve),
+                Num(cap), Num(setpoint), Num(Math.Ceiling(need)));
+        return text;
     }
 
     /// <summary>Penjelasan lengkap (persamaan + teori) untuk plant loop tunggal.</summary>
@@ -75,20 +89,30 @@ public static class SetpointReachability
     public static string ExplainModel(Models.ControlEngineering.CascadeInput input)
     {
         double inlet = input.InletTemperature;
-        double tMax = CascadeSimulator.MaxReachableTemperature(inlet);
-        double flowForSp = 1.0 + (input.Setpoint - inlet) / CascadeSimulator.K1;
+        double cap = CascadeSimulator.NormalizeValveLimit(input.ValveLimit);
+        double tMaxRig = CascadeSimulator.MaxReachableTemperature(inlet);
+        double tMaxCap = CascadeSimulator.MaxReachableTemperature(inlet, cap);
+        double flowForSp = CascadeSimulator.FlowBias + (input.Setpoint - inlet) / CascadeSimulator.K1;
+        double valveForSp = CascadeSimulator.RequiredValve(input.Setpoint, inlet);
+        string k2 = CascadeSimulator.K2.ToString("0.####", System.Globalization.CultureInfo.CurrentCulture);
+        string fMax = CascadeSimulator.FlowSpMax.ToString("0.##", System.Globalization.CultureInfo.CurrentCulture);
+        string k1 = CascadeSimulator.K1.ToString("0.##", System.Globalization.CultureInfo.CurrentCulture);
         return
             $"Penjelasan model cascade (Gp1/Gp2): T(t) = T_masuk + ΔT(t), dengan T_masuk = " +
-            $"{inlet:F1} °C. Flow mengikuti F(t) = 1 + 0,06·valve (valve 0–100% → 1–7 L/min), " +
-            $"dan suhu tunak T_ss = T_masuk + 10·(F − 1), jadi jangkauan tunak plant = " +
-            $"{inlet:F1}–{tMax:F1} °C. Untuk setpoint {input.Setpoint:F1} °C, flow tunak yang " +
-            $"diminta = {flowForSp:F2} L/min.";
+            $"{inlet:F1} °C. Flow mengikuti F(t) = {k2}·valve (valve 0–100% → 0–{fMax} L/min, " +
+            $"sama dengan flow maksimum di LabVIEW), dan suhu tunak T_ss = T_masuk + {k1}·F, jadi " +
+            $"jangkauan tunak rig = {inlet:F1}–{tMaxRig:F1} °C. Untuk setpoint {input.Setpoint:F1} °C, " +
+            $"flow tunak yang diminta = {flowForSp:F2} L/min, yaitu bukaan valve minimal ≈ {valveForSp:F0}%. " +
+            $"Bukaan Valve saat ini dibatasi {cap:F0}% (suhu maksimum {tMaxCap:F1} °C): makin lebar " +
+            $"valve di atas batas minimal itu, makin besar flow yang boleh dipakai loop dalam, " +
+            $"sehingga suhu makin cepat mencapai setpoint.";
     }
 
-    public static string DescribeUnreachableCascade(double setpoint, double inletTemperature) =>
+    public static string DescribeUnreachableCascade(double setpoint, double inletTemperature,
+                                                    double valveLimit = CascadeSimulator.ValveMax) =>
         DescribeUnreachable(setpoint,
             CascadeSimulator.MinReachableTemperature(inletTemperature),
-            CascadeSimulator.MaxReachableTemperature(inletTemperature));
+            CascadeSimulator.MaxReachableTemperature(inletTemperature, valveLimit));
 
     public static string DescribeUnreachableSingleLoop(double setpoint) =>
         DescribeUnreachable(setpoint,
@@ -96,4 +120,5 @@ public static class SetpointReachability
 
     // Dua desimal tanpa nol ekor; mengikuti budaya angka UI seperti kartu metrik lain.
     private static string Num(double v) => v.ToString("0.##", System.Globalization.CultureInfo.CurrentCulture);
+    private static string Num4(double v) => v.ToString("0.####", System.Globalization.CultureInfo.CurrentCulture);
 }

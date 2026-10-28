@@ -2,10 +2,11 @@ namespace TLIGDashboard.Services.ControlEngineering;
 
 /// <summary>
 /// Batasan operasi rig (sama untuk Smart PID Designer &amp; Cascade):
-/// bukaan valve 0–100% memetakan ke flow 1–7 L/min.
+/// bukaan valve 0–100% memetakan ke flow 0–4,65 L/min — flow maksimum yang terbaca
+/// di LabVIEW pada valve 100%.
 /// <code>
 ///   Flow(valve) = FlowMin + (FlowMax - FlowMin) * valve / 100
-///               = 1 + 0.06 * valve
+///               = 0.0465 * valve
 ///   Valve(flow) = (flow - FlowMin) / (FlowMax - FlowMin) * 100
 /// </code>
 /// Rekomendasi PID yang membuat valve / flow keluar batas DITOLAK
@@ -16,8 +17,8 @@ public static class OperatingConstraints
     public const double ValveMin = 0.0;
     public const double ValveMax = 100.0;
 
-    public const double FlowMin = 1.0;
-    public const double FlowMax = 7.0;
+    public const double FlowMin = 0.0;
+    public const double FlowMax = 4.65;
 
     /// <summary>Flow (L/min) yang dihasilkan bukaan valve (%) tertentu.</summary>
     public static double FlowFromValve(double valvePct) =>
@@ -35,7 +36,7 @@ public static class OperatingConstraints
 
     /// <summary>
     /// Slack rekayasa untuk PERMINTAAN MENTAH (sebelum saturasi): aktuator menutup
-    /// sentuhan batas (mis. meminta 100.0035% → keluar 100% → flow tepat 7 L/min),
+    /// sentuhan batas (mis. meminta 100.0035% → keluar 100% → flow tepat 4,65 L/min),
     /// jadi permintaan yang hanya menyentuh batas bukanlah pelanggaran. Yang ditolak
     /// adalah permintaan yang JELAS di luar batas (mis. 150% valve / 10.8 L/min).
     /// </summary>
@@ -72,5 +73,5 @@ public static class OperatingConstraints
     }
 
     public static string Describe =>
-        $"Valve {ValveMin:F0}–{ValveMax:F0}% ↔ Flow {FlowMin:F0}–{FlowMax:F0} L/min";
+        $"Valve {ValveMin:F0}–{ValveMax:F0}% ↔ Flow {FlowMin:0.##}–{FlowMax:0.##} L/min";
 }

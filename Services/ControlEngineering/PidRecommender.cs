@@ -12,7 +12,7 @@ namespace TLIGDashboard.Services.ControlEngineering;
 /// or an ML model to guess. It sweeps a grid of Kp/Ki/Kd, simulates each with the same
 /// <see cref="PidSimulator"/> the metric cards use, keeps only the tunings that pass the exact
 /// acceptance criteria <see cref="PidDiagnosisCalculator"/> uses AND respect the operating
-/// constraints (valve 0–100% ↔ flow 1–7 L/min, see <see cref="OperatingConstraints"/>),
+/// constraints (valve 0–100% ↔ flow 0–4.65 L/min, see <see cref="OperatingConstraints"/>),
 /// and returns one canonical pick. Because every candidate is verified against the same
 /// metrics the diagnosis reads, the recommendation can never contradict the diagnosis — the
 /// failure mode of the LLM advisor, whose numbers were never simulated before being shown
@@ -31,7 +31,7 @@ public static class PidRecommender
     // plant and stop well short of the gains that merely run to the grid edge; the
     // simulator saturates the valve at 0–100% with anti-windup (see PidSimulator), so
     // edge-riding tunings pay for their saturation in the metrics — and tunings that
-    // DEMAND beyond valve 0–100% / flow 1–7 L/min are rejected outright.
+    // DEMAND beyond valve 0–100% / flow 0–4.65 L/min are rejected outright.
     private static readonly double[] KpGrid = { 0.2, 0.3, 0.5, 0.8, 1, 1.5, 2, 3, 4, 5, 7, 10 };
     private static readonly double[] KiGrid = { 0.01, 0.02, 0.05, 0.1, 0.2, 0.4, 0.8, 1.5 };
     private static readonly double[] KdGrid = { 0, 0.1, 0.25, 0.5, 1, 2 };
@@ -114,7 +114,7 @@ public static class PidRecommender
             var (kp, ki, kd) = combos[i];
             var gains = new PidPrediction { Kp = (float)kp, Ki = (float)ki, Kd = (float)kd };
             var sim = _sim.SimulateStepResponse(gains, reference: sp, duration: 0, dt: SearchDt);
-            // Constraint valve 0–100% / flow 1–7 L/min: a gain that DEMANDS beyond the
+            // Constraint valve 0–100% / flow 0–4.65 L/min: a gain that DEMANDS beyond the
             // limits is rejected — even though saturation makes its curve look fine.
             if (PidSimulator.ViolatesOperatingConstraints(sim))
                 return;

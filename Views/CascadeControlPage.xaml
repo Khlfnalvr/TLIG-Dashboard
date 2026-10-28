@@ -182,9 +182,9 @@
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="Kp" FontSize="13" FontWeight="SemiBold" Opacity="0.65" VerticalAlignment="Center"/>
-                                <NumberBox x:Name="InnerKpBox" Grid.Column="1" Value="0.66" Minimum="0" SmallChange="0.05" Style="{StaticResource CasNumberBoxStyle}"/>
+                                <NumberBox x:Name="InnerKpBox" Grid.Column="1" Value="0.85" Minimum="0" SmallChange="0.05" Style="{StaticResource CasNumberBoxStyle}"/>
                                 <TextBlock Grid.Column="2" Text="Ki" FontSize="13" FontWeight="SemiBold" Opacity="0.65" VerticalAlignment="Center"/>
-                                <NumberBox x:Name="InnerKiBox" Grid.Column="3" Value="0.49" Minimum="0" SmallChange="0.05" Style="{StaticResource CasNumberBoxStyle}"/>
+                                <NumberBox x:Name="InnerKiBox" Grid.Column="3" Value="0.63" Minimum="0" SmallChange="0.05" Style="{StaticResource CasNumberBoxStyle}"/>
                             </Grid>
                         </StackPanel>
                     </Grid>
@@ -231,7 +231,7 @@
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
-                            <NumberBox x:Name="DisturbanceBox" Value="-2" SmallChange="0.5" Style="{StaticResource CasNumberBoxStyle}"/>
+                            <NumberBox x:Name="DisturbanceBox" Value="-1" SmallChange="0.5" Style="{StaticResource CasNumberBoxStyle}"/>
                             <TextBlock Grid.Column="1" Text="L/min" FontSize="12" Opacity="0.6" VerticalAlignment="Center"/>
                         </Grid>
 

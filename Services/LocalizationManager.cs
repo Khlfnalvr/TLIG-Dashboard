@@ -370,6 +370,7 @@ public sealed class LocalizationManager : INotifyPropertyChanged
     // ── Setpoint di luar jangkauan plant (SetpointReachability) ──────────
     public string Diag_Unreachable      => T(nameof(Diag_Unreachable));
     public string Reach_Cascade         => T(nameof(Reach_Cascade));
+    public string Reach_OpenValve       => T(nameof(Reach_OpenValve));
     public string Reach_SingleLoop      => T(nameof(Reach_SingleLoop));
 
     // ── Live view / HMI ──────────────────────────────────────────────────
@@ -1087,7 +1088,8 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             [nameof(Cas_InletTemperature)]     = "Inlet Water Temp",
             [nameof(Cas_Disturbance)]          = "Flow Disturbance",
             [nameof(Cas_Run)]                  = "RUN SIMULATION",
-            [nameof(Cas_RunHint)]              = "The inner (flow) loop is tuned first and must be several times faster than the outer (temperature) loop — that is what lets cascade reject flow disturbances before they move the temperature. Operating range: valve 0–100% ↔ flow 1–7 L/min; recommendations demanding beyond it are rejected.",
+            [nameof(Cas_RunHint)]              = "The inner (flow) loop is tuned first and must be several times faster than the outer (temperature) loop — that is what lets cascade reject flow disturbances before they move the temperature. Operating range: valve 0–100% ↔ flow 0–4.65 L/min; recommendations demanding beyond it are rejected.",
+            [nameof(Reach_OpenValve)]          = "Here the limit is the Valve Opening box ({0}%), not the rig: {1} °C needs the valve opened to at least {2}%. Raise the Valve Opening — the wider it is above that minimum, the more flow the inner loop may use and the faster the temperature reaches the setpoint.",
             [nameof(Cas_PrimaryMetrics)]       = "PRIMARY LOOP · TEMPERATURE RESPONSE",
             [nameof(Cas_DisturbanceRejection)] = "FLOW DISTURBANCE REJECTION",
             [nameof(Cas_Cascade)]              = "Cascade",
@@ -1773,7 +1775,8 @@ public sealed class LocalizationManager : INotifyPropertyChanged
             [nameof(Cas_InletTemperature)]     = "Suhu Air Masuk",
             [nameof(Cas_Disturbance)]          = "Gangguan Flow",
             [nameof(Cas_Run)]                  = "JALANKAN SIMULASI",
-            [nameof(Cas_RunHint)]              = "Loop dalam (flow) dituning lebih dulu dan harus beberapa kali lebih cepat dari loop luar (temperatur) — inilah yang membuat cascade mampu menolak gangguan flow sebelum sempat menggeser suhu. Batas operasi: valve 0–100% ↔ flow 1–7 L/min; rekomendasi yang meminta di luar batas ditolak.",
+            [nameof(Cas_RunHint)]              = "Loop dalam (flow) dituning lebih dulu dan harus beberapa kali lebih cepat dari loop luar (temperatur) — inilah yang membuat cascade mampu menolak gangguan flow sebelum sempat menggeser suhu. Batas operasi: valve 0–100% ↔ flow 0–4,65 L/min; rekomendasi yang meminta di luar batas ditolak.",
+            [nameof(Reach_OpenValve)]          = "Di sini yang membatasi adalah kotak Bukaan Valve ({0}%), bukan rig-nya: {1} °C membutuhkan bukaan valve minimal {2}%. Naikkan Bukaan Valve — makin lebar di atas batas minimal itu, makin besar flow yang boleh dipakai loop dalam dan makin cepat suhu mencapai setpoint.",
             [nameof(Cas_PrimaryMetrics)]       = "LOOP PRIMER · RESPONS TEMPERATUR",
             [nameof(Cas_DisturbanceRejection)] = "PENOLAKAN GANGGUAN FLOW",
             [nameof(Cas_Cascade)]              = "Cascade",

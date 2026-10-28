@@ -35,7 +35,9 @@ public static class TuningChat
         var target = ParseTarget(m);
         if (target is null || !target.Any) return null;
 
-        var res = CascadeRecommender.RecommendForTarget(setpoint, inletTemperature, target);
+        // Same valve cap the RUN uses (the Dashboard's "Bukaan Valve" box).
+        var res = CascadeRecommender.RecommendForTarget(setpoint, inletTemperature, target,
+                                                        (float)App.CascadeSession.ValveLimit);
         return ComposeAnswer(target, res, setpoint, inletTemperature);
     }
 
@@ -91,7 +93,7 @@ public static class TuningChat
             sb.AppendLine("Mengapa mustahil pada plant ini:");
             sb.AppendLine("1. Plant suhunya lambat (lag-dominan): Gp1 = 10 / (267,3s + 1). Bahkan tuning awal SIMC butuh settling ratusan detik pada step 30 °C.");
             sb.AppendLine("2. Inner loop mengunci kecepatan outer: flow Gp2 sangat dead-time-dominan (θ ≈ 13,6 s lawan τ ≈ 1,3 s) sehingga closed-loop tercepatnya ≈ 34 s, dan outer harus beberapa kali lebih lambat dari itu.");
-            sb.AppendLine("3. Syaratnya saling bertentangan: overshoot kecil menuntut tuning kalem (lambat), settling kecil menuntut tuning agresif (overshoot) — batas operasi valve 0–100% ↔ flow 1–7 L/min tidak memberi ruang untuk keduanya, dan gain yang meminta di luar batas langsung ditolak.");
+            sb.AppendLine("3. Syaratnya saling bertentangan: overshoot kecil menuntut tuning kalem (lambat), settling kecil menuntut tuning agresif (overshoot) — batas operasi valve 0–100% ↔ flow 0–4,65 L/min tidak memberi ruang untuk keduanya, dan gain yang meminta di luar batas langsung ditolak.");
             sb.Append("Coba longgarkan targetnya (mis. overshoot ≤ 5% tanpa batas settling yang ketat), lalu tanyakan lagi.");
         }
         return sb.ToString();
@@ -127,7 +129,8 @@ public static class TuningChat
             return sbInvalid.ToString();
         }
 
-        var m = CascadeRecommender.SimulateOuter(setpoint, inletTemperature, kp, ki, kd);
+        var m = CascadeRecommender.SimulateOuter(setpoint, inletTemperature, kp, ki, kd,
+                                                 (float)App.CascadeSession.ValveLimit);
 
         var sb = new StringBuilder();
         sb.AppendLine();

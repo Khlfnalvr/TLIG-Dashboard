@@ -103,6 +103,10 @@ public sealed partial class DashboardPage : Page
         // From here on, user edits to the controls are forwarded to LabVIEW.
         _controlsReady = true;
 
+        // The valve box caps the simulated valve too, from the first RUN on — not only once
+        // the student has touched a box.
+        SyncValveLimit();
+
 
         ApplyLearningPanelContent();
         App.Session.Changed += OnSessionChanged;
@@ -368,8 +372,18 @@ public sealed partial class DashboardPage : Page
         s.OuterKi  = KiBox.Value;
         s.OuterKd  = KdBox.Value;
         s.Setpoint = CtlSetpointBox.Value;
+        SyncValveLimit();
         SendControlLine();   // the same gains/setpoint drive LabVIEW
         SyncBridge();
+    }
+
+    // "Bukaan Valve" is both the PUMP sent to LabVIEW and the valve cap of the simulation, so
+    // the simulated flow can never exceed what the rig is given (100% → 4.65 L/min). NaN = the
+    // box is cleared mid-edit; keep the last cap instead of treating it as fully closed.
+    private void SyncValveLimit()
+    {
+        double pump = CtlPump.Value;
+        if (!double.IsNaN(pump)) App.CascadeSession.ValveLimit = pump;
     }
 
     // Mirrors the session's outer gains/setpoint + valve/command into PIDtest.py's contract
@@ -626,8 +640,8 @@ public sealed partial class DashboardPage : Page
         // anchored to (see CascadeDesignService).
         DiagnosisValue.Text = string.IsNullOrEmpty(result.Diagnosis)
             ? "--"
-            : !SetpointReachability.IsCascadeReachable(result.Input.Setpoint, result.Input.InletTemperature)
-                ? SetpointReachability.DescribeUnreachableCascade(result.Input.Setpoint, result.Input.InletTemperature)
+            : !SetpointReachability.IsCascadeReachable(result.Input.Setpoint, result.Input.InletTemperature, result.Input.ValveLimit)
+                ? SetpointReachability.DescribeUnreachableCascade(result.Input.Setpoint, result.Input.InletTemperature, result.Input.ValveLimit)
                 : PidDiagnosisCalculator.Describe(result.Diagnosis, m.PrimaryStepMetrics());
 
         // Read the pending gains from the session, not from result: a decline made on the
@@ -690,9 +704,9 @@ public sealed partial class DashboardPage : Page
         // LLM): persamaan plant + batas otoritas aktuator. Teks yang sama juga dikirim
         // sebagai konteks ke advisor (CascadeDesignService) supaya ulasannya tidak
         // menyalahkan gain untuk sesuatu yang mustahil dicapai.
-        if (!SetpointReachability.IsCascadeReachable(result.Input.Setpoint, result.Input.InletTemperature))
+        if (!SetpointReachability.IsCascadeReachable(result.Input.Setpoint, result.Input.InletTemperature, result.Input.ValveLimit))
         {
-            string note = SetpointReachability.ExplainCascade(result.Input.Setpoint, result.Input.InletTemperature);
+            string note = SetpointReachability.ExplainCascade(result.Input.Setpoint, result.Input.InletTemperature, result.Input.ValveLimit);
             if (!App.Ai.History.Any(m => m.Content == note))
             {
                 AddChatBubble("ai", note);

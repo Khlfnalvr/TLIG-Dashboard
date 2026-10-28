@@ -66,7 +66,7 @@ public class CascadeAdvisorService
             "buys nothing and only stretches settling; overshoot is driven by Kp/Ki. INNER loop — flow, " +
             "whose input is the valve: " + gp2 + $" (lag-dominated, theta/tau ~{CascadeSimulator.Theta2 / CascadeSimulator.Tau2:F1}), " +
             "so the inner PI can be reasonably tight. The outer PID's output is the inner PI's setpoint " +
-            $"(saturated at {CascadeSimulator.FlowSpMin:F0}–{CascadeSimulator.FlowSpMax:F0} L/min) and the valve at " +
+            $"(saturated at {CascadeSimulator.FlowSpMin:0.##}–{CascadeSimulator.FlowSpMax:0.##} L/min) and the valve at " +
             $"{CascadeSimulator.ValveMin:F0}–{CascadeSimulator.ValveMax:F0}%, both with conditional-integration anti-windup. " +
             "Cascade's golden rule: the inner loop must be several times faster than the outer and is " +
             "tuned first; the inner loop's speed is what lets cascade reject a flow disturbance long " +
@@ -136,14 +136,16 @@ public class CascadeAdvisorService
             (setpointUnreachable
                 ? $"CRITICAL — UNREACHABLE SETPOINT: {gains.Setpoint:F1} °C lies outside this plant's " +
                   $"reachable range [{CascadeSimulator.MinReachableTemperature(gains.InletTemperature):F1}, " +
-                  $"{CascadeSimulator.MaxReachableTemperature(gains.InletTemperature):F1}] °C for inlet " +
-                  $"water at {gains.InletTemperature:F1} °C. Explain from the equations " +
-                  $"(F = {CascadeSimulator.FlowBias:F1} + {CascadeSimulator.K2:F2}·valve, " +
+                  $"{CascadeSimulator.MaxReachableTemperature(gains.InletTemperature, gains.ValveLimit):F1}] °C for inlet " +
+                  $"water at {gains.InletTemperature:F1} °C with the valve limited to {gains.ValveLimit:F0}%. Explain from the equations " +
+                  $"(F = {CascadeSimulator.FlowBias:F1} + {CascadeSimulator.K2:F4}·valve, " +
                   $"T_ss = inlet + {CascadeSimulator.K1:F1}·(F − {CascadeSimulator.FlowBias:F1})) and from " +
                   "control theory (actuator authority/rangeability, saturation, integral windup, fixed plant gain) " +
                   "that NO Kp/Ki/Kd can reach this setpoint — the valve is already at the nearest limit and " +
-                  $"the plant tops out at {CascadeSimulator.MaxReachableTemperature(gains.InletTemperature):F1} °C. " +
-                  "Do not blame the gains or suggest retuning; the only remedies are moving the setpoint into " +
+                  $"the plant tops out at {CascadeSimulator.MaxReachableTemperature(gains.InletTemperature, gains.ValveLimit):F1} °C. " +
+                  $"Reaching {gains.Setpoint:F1} °C needs the valve opened to at least " +
+                  $"{CascadeSimulator.RequiredValve(gains.Setpoint, gains.InletTemperature):F0}% (more than 100% means the rig itself cannot). " +
+                  "Do not blame the gains or suggest retuning; the only remedies are opening the valve limit, moving the setpoint into " +
                   "the reachable range, changing the inlet temperature, or increasing plant/actuator capacity.\n"
                 : "") +
             $"Error performance indices over the step (integrals of the tracking error, lower is better): " +

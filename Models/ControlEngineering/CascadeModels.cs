@@ -23,17 +23,18 @@ public class CascadeInput
     public float OuterKd { get; set; } = 0f;
 
     // ── Inner loop — Flow (PI, secondary) ────────────────────────────────────
-    // SIMC for the identified Gp2 (K=0.06 L/min per % valve for the 1–7 L/min
-    // operating range, τ=1.34 s, θ=13.56 s) at τc = 1.5θ. The flow plant is strongly
-    // dead-time-dominant (θ/τ ≈ 10.1), so the inner PI must stay gentle — its
-    // closed-loop speed is the effective delay the outer loop feels.
-    public float InnerKp { get; set; } = 0.66f;
-    public float InnerKi { get; set; } = 0.49f;
+    // SIMC for the identified Gp2 (K=0.0465 L/min per % valve for the 0–4.65 L/min
+    // operating range, τ=1.34 s, θ=13.56 s) at τc = 1.5θ: Kp = τ/(K·(τc+θ)) ≈ 0.85,
+    // Ki = Kp/τ ≈ 0.63. The flow plant is strongly dead-time-dominant (θ/τ ≈ 10.1), so
+    // the inner PI must stay gentle — its closed-loop speed is the effective delay the
+    // outer loop feels.
+    public float InnerKp { get; set; } = 0.85f;
+    public float InnerKi { get; set; } = 0.63f;
 
     /// <summary>Temperature setpoint (°C) the outer loop drives to.</summary>
     public float Setpoint { get; set; } = 60f;
-    // With T_inlet = 30 °C, 60 °C needs ~4 L/min of flow (mid of the 1–7 operating range),
-    // which is what sizes the disturbance below.
+    // With T_inlet = 30 °C, 60 °C needs 3 L/min of flow (valve ≈ 65%), which is what
+    // sizes the disturbance below.
 
     /// <summary>
     /// Inlet water temperature (°C) — the operating point the response is built on:
@@ -49,9 +50,18 @@ public class CascadeInput
     /// setpoint. The inner loop sees and corrects it fast; a single-loop temperature controller
     /// does not — this is what makes cascade shine. Zero disables the disturbance entirely (no
     /// injection, and the disturbance-rejection cards read "--") for a pure setpoint-tracking view.
-    /// Sized ~33% of the 1–7 L/min operating span.
+    /// Sized so that at the default 60 °C the inner loop can still recover it below full
+    /// valve ((3 + 1) / 0.0465 ≈ 86%), the same headroom the old −2 L/min had on 1–7 L/min.
     /// </summary>
-    public float Disturbance { get; set; } = -2f;
+    public float Disturbance { get; set; } = -1f;
+
+    /// <summary>
+    /// Upper limit on the valve opening (%), 0–100 — the Dashboard's "Bukaan Valve" box.
+    /// The inner PI still decides the valve, but never beyond this: a wider valve allows
+    /// more flow, so the temperature reaches the setpoint faster; too narrow a valve
+    /// cannot reach it at all (see <see cref="Services.ControlEngineering.CascadeSimulator.RequiredValve"/>).
+    /// </summary>
+    public float ValveLimit { get; set; } = 100f;
 }
 
 /// <summary>Time series produced by <see cref="Services.ControlEngineering.CascadeSimulator"/>.</summary>
@@ -62,12 +72,12 @@ public class CascadeSimulationResult
     public double[] Temperature      { get; set; } = Array.Empty<double>();
     /// <summary>Secondary process variable — flow (L/min).</summary>
     public double[] Flow             { get; set; } = Array.Empty<double>();
-    /// <summary>Inner-loop setpoint = outer PID output (L/min, 1–7).</summary>
+    /// <summary>Inner-loop setpoint = outer PID output (L/min, 0–4.65).</summary>
     public double[] FlowSetpoint     { get; set; } = Array.Empty<double>();
     /// <summary>Actuator command — valve opening (%, 0–100).</summary>
     public double[] Valve            { get; set; } = Array.Empty<double>();
     /// <summary>
-    /// Permintaan MENTAH outer (L/min) sebelum saturasi 1–7 — dipakai filter
+    /// Permintaan MENTAH outer (L/min) sebelum saturasi 0–4,65 — dipakai filter
     /// constraint recommender (meminta di luar batas = ditolak).
     /// </summary>
     public double[] RawFlowSetpoint  { get; set; } = Array.Empty<double>();

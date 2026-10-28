@@ -19,15 +19,17 @@ public sealed class CascadeSessionService
     // SIMC defaults for the FOPDT plants at Gp1 gain K=10, scaled from the identified-K
     // tuning and kept identical to CascadeInput's defaults — see the derivation there.
     // The recommender verifies faster alternatives against the simulator. The disturbance
-    // is sized at ~33% of the 1–7 L/min flow operating span (see OperatingConstraints).
+    // is sized in CascadeInput (see there) for the 0–4.65 L/min flow range.
     public double OuterKp     { get; set; } = 0.216;
     public double OuterKi     { get; set; } = 0.00084;
     public double OuterKd     { get; set; } = 0;
-    public double InnerKp     { get; set; } = 0.66;
-    public double InnerKi     { get; set; } = 0.49;
+    public double InnerKp     { get; set; } = 0.85;
+    public double InnerKi     { get; set; } = 0.63;
     public double Setpoint    { get; set; } = 60;
     public double InletTemperature { get; set; } = 30;
-    public double Disturbance { get; set; } = -2;
+    public double Disturbance { get; set; } = -1;
+    /// <summary>Batas bukaan valve (%) — kotak "Bukaan Valve" di Dashboard (lihat CascadeInput.ValveLimit).</summary>
+    public double ValveLimit  { get; set; } = 100;
 
     public CascadeDesignResult? LastResult { get; private set; }
     public CascadeRecommendation? PendingRecommendation { get; private set; }
@@ -62,7 +64,8 @@ public sealed class CascadeSessionService
     /// </summary>
     public async Task<CascadeDesignResult?> RunMirroredAsync(
         double outerKp, double outerKi, double outerKd, double setpoint,
-        double? innerKp, double? innerKi, double? disturbance, double? inletTemperature = null)
+        double? innerKp, double? innerKi, double? disturbance, double? inletTemperature = null,
+        double? valveLimit = null)
     {
         // Run Server sendiri yang sedang berjalan tidak boleh ditimpa kiriman Client.
         if (IsRunning) return null;
@@ -75,6 +78,7 @@ public sealed class CascadeSessionService
         if (innerKi is { } iki)      InnerKi          = iki;
         if (disturbance is { } dst)  Disturbance      = dst;
         if (inletTemperature is { } tin) InletTemperature = tin;
+        if (valveLimit is { } vl)    ValveLimit       = vl;
 
         try { RemoteInputsApplied?.Invoke(this, EventArgs.Empty); } catch { }
         return await RunAsync(default, mirrored: true);
@@ -166,6 +170,7 @@ public sealed class CascadeSessionService
         Setpoint = (float)Setpoint,
         InletTemperature = (float)InletTemperature,
         Disturbance = (float)Disturbance,
+        ValveLimit = (float)ValveLimit,
     };
 
     private void NormalizeInputs()
@@ -178,6 +183,7 @@ public sealed class CascadeSessionService
         InnerKp = GainValidator.Sanitize(InnerKp);
         InnerKi = GainValidator.Sanitize(InnerKi);
         if (!double.IsFinite(Disturbance)) Disturbance = 0;
+        ValveLimit = CascadeSimulator.NormalizeValveLimit(ValveLimit);
     }
 
     private void SetRunning(bool running)
