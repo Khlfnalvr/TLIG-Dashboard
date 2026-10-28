@@ -106,6 +106,13 @@ public static class CascadeDesignService
             : await Task.Run(() => CascadeRecommender.Recommend(
                 metrics, metrics.Stable, input.Setpoint, input.InletTemperature, violates), ct);
 
+        // The recommender scores candidates on a disturbance-free search run, but this run is
+        // diagnosed WITH the flow disturbance — so the gains just accepted via "Ya (Terapkan)"
+        // can come straight back as the pick. Offering the gains already in the boxes is a no-op
+        // that keeps the advisor panel open forever; treat it as nothing left to recommend.
+        if (recommendation is { } picked && SameGains(picked.gains, input))
+            recommendation = null;
+
         // The LLM now only explains the recommended gains; it no longer picks numbers.
         var advisor = mirrored
             ? new CascadeAdvisorResult()
@@ -122,6 +129,13 @@ public static class CascadeDesignService
             AdvisorExplanation = advisor.Explanation,
             AdvisorRecommendation = advisor.Recommendation,
         };
+    }
+
+    private static bool SameGains(CascadeRecommendation rec, CascadeInput input)
+    {
+        static bool Eq(float a, float b) => Math.Abs(a - b) <= 1e-6f * Math.Max(1f, Math.Abs(b));
+        return Eq(rec.OuterKp, input.OuterKp) && Eq(rec.OuterKi, input.OuterKi) && Eq(rec.OuterKd, input.OuterKd)
+            && Eq(rec.InnerKp, input.InnerKp) && Eq(rec.InnerKi, input.InnerKi);
     }
 }
 

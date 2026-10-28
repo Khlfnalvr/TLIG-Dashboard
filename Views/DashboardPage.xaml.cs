@@ -369,9 +369,15 @@ public sealed partial class DashboardPage : Page
         s.OuterKd  = KdBox.Value;
         s.Setpoint = CtlSetpointBox.Value;
         SendControlLine();   // the same gains/setpoint drive LabVIEW
-        // …and the same gains/setpoint/valve/command mirror into PIDtest.py's contract
-        // file, which becomes the 48-byte packet (the Control card drives the cascade's
-        // outer temperature PID).
+        SyncBridge();
+    }
+
+    // Mirrors the session's outer gains/setpoint + valve/command into PIDtest.py's contract
+    // file, which becomes the 48-byte packet on port 6000 (the Control card drives the
+    // cascade's outer temperature PID).
+    private void SyncBridge()
+    {
+        var s = App.CascadeSession;
         // NaN = the box is cleared mid-edit; pass null so the bridge keeps the last good
         // opening instead of coercing it to 0 and slamming the valve shut — the same guard
         // SendControlLine() applies before it will emit a line.
@@ -728,6 +734,10 @@ public sealed partial class DashboardPage : Page
     {
         var result = await App.CascadeSession.AcceptRecommendationAsync();
         PullPidInputs();
+        // PullPidInputs() writes the boxes with the echo guard up, so PushPidInputs() never
+        // fires — without this the accepted gains reach only the 6001 CSV line, and the VI
+        // keeps running the old gains on 6000 until the next edit or RUN.
+        SyncBridge();
         if (result is not null) FoldAdvisorIntoChat(result);
     }
 
