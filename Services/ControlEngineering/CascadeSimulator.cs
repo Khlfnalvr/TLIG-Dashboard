@@ -319,8 +319,17 @@ public class CascadeSimulator
         // Flow plant sees the DELAYED valve command, plus any disturbance.
         // Absolute form: F → FlowBias + K2·valve (0.0465·valve → 0…4.65 L/min).
         double uIn = double.IsNaN(uDel) ? u : uDel;
-        dFdt = (FlowBias + K2 * uIn + dist - F) / Tau2;
+        dFdt = (FlowTarget(uIn, dist) - F) / Tau2;
     }
+
+    /// <summary>
+    /// Flow the plant settles toward for a valve opening plus disturbance. Floored at 0: a pipe
+    /// cannot run backwards, so a supply drop on an already-closed valve leaves the flow at 0
+    /// instead of driving it negative — which would also cool the water below its own inlet
+    /// temperature, something the rig can never do.
+    /// </summary>
+    private static double FlowTarget(double valve, double dist) =>
+        Math.Max(OperatingConstraints.FlowMin, FlowBias + K2 * valve + dist);
 
     // Single-loop baseline: one temperature PID drives the valve directly (no inner
     // flow loop). Same plants, same dead times, same outer gains — run over the SAME time
@@ -367,7 +376,7 @@ public class CascadeSimulator
         u = Clamp(uRaw, ValveMin, g.ValveLimit);
         dIT = AntiWindup(eT, uRaw, ValveMin, g.ValveLimit);
         double uIn = double.IsNaN(uDel) ? u : uDel;
-        dFdt = (FlowBias + K2 * uIn + dist - F) / Tau2;
+        dFdt = (FlowTarget(uIn, dist) - F) / Tau2;
     }
 
     // Conditional-integration anti-windup: stop integrating when the output is
