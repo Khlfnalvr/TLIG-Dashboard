@@ -190,7 +190,6 @@ public class CascadeSimulator
         double scale = Math.Max(1.0, Math.Abs(input.Setpoint));
         double tol = SettleTolFraction * scale;
         double settleBand = SettleBandFraction * scale;
-        bool wantDisturbance = withComparison && input.Disturbance != 0f;
 
         int cap = Math.Min(maxSteps, 16384);
         var time   = new List<double>(cap);
@@ -213,6 +212,12 @@ public class CascadeSimulator
         if (input.ManualValve is { } mv) input.ManualValve = (float)NormalizeValveLimit(mv);
         bool manual = input.IsManual;
 
+        // Manual mode has no controller to reject a disturbance, so injecting one only shows the
+        // flow being knocked down with nothing answering it. In Auto the step is scaled to what
+        // the valve can still make up (see EffectiveDisturbance).
+        double distEff = manual ? 0.0 : EffectiveDisturbance(input);
+        bool wantDisturbance = withComparison && distEff != 0.0;
+
         // State scalars: T, F, IT, IF (kept as locals, not an array, so the RK4
         // sub-steps allocate nothing per step). Valve 0% → flow FlowBias (0 L/min) → T = T_inlet.
         double sT = input.InletTemperature, sF = FlowBias, sIT = 0, sIF = 0;
@@ -226,7 +231,7 @@ public class CascadeSimulator
         for (int i = 0; ; i++)
         {
             double t = i * dt;
-            double d = (distStep >= 0 && i >= distStep) ? (double)input.Disturbance : 0.0;
+            double d = (distStep >= 0 && i >= distStep) ? distEff : 0.0;
             double uDel = Delayed(uHist, i, d2);
             double fDel = Delayed(fHist, i, d1);
 
@@ -271,7 +276,7 @@ public class CascadeSimulator
 
         double distTime = distStep >= 0 ? distStep * dt : -1;
         double[] single = withComparison
-            ? SimulateSingleLoop(input, temp.Count, dt, d1, d2, distStep)
+            ? SimulateSingleLoop(input, temp.Count, dt, d1, d2, distStep, distEff)
             : Array.Empty<double>();
 
         return new CascadeSimulationResult
@@ -348,12 +353,12 @@ public class CascadeSimulator
         Math.Max(OperatingConstraints.FlowMin, FlowBias + K2 * valve + dist);
 
     // Single-loop baseline: one temperature PID drives the valve directly (no inner
-    // flow loop). Same plants, same dead times, same outer gains — run over the SAME time
-    // grid (<paramref name="steps"/>) and with the SAME disturbance step as the cascade run,
+    // flow loop). Same plants, same dead times, the SAME outer control law — run over the SAME
+    // time grid (<paramref name="steps"/>) and with the SAME disturbance step as the cascade run,
     // so the two temperature traces overlay and their post-disturbance deviations compare.
     // State: [T, F, IT].
     private static double[] SimulateSingleLoop(
-        CascadeInput g, int steps, double dt, int d1, int d2, int distStep)
+        CascadeInput g, int steps, double dt, int d1, int d2, int distStep, double dist)
     {
         double[] temp = new double[steps];
         double[] uHist = new double[steps];
@@ -362,7 +367,7 @@ public class CascadeSimulator
 
         for (int i = 0; i < steps; i++)
         {
-            double d = (distStep >= 0 && i >= distStep) ? (double)g.Disturbance : 0.0;
+            double d = (distStep >= 0 && i >= distStep) ? dist : 0.0;
             double uDel = Delayed(uHist, i, d2);
             double fDel = Delayed(fHist, i, d1);
 
@@ -395,12 +400,39 @@ public class CascadeSimulator
         }
         else
         {
-            double uRaw = g.OuterKp * eT + g.OuterKi * IT - g.OuterKd * dTdt;
+            // The outer gains are in L/min of flow per °C (their output is the inner loop's flow
+            // setpoint); this PID's output is valve %. Dividing by K2 (L/min per % valve) gives
+            // the same control law in valve units — "ask for that much flow" becomes "open the
+            // valve that much" — so the comparison isolates what the inner loop adds instead of
+            // pitting cascade against a controller ~21× too weak.
+            double uRaw = (g.OuterKp * eT + g.OuterKi * IT - g.OuterKd * dTdt) / K2;
             u = Clamp(uRaw, ValveMin, g.ValveLimit);
             dIT = AntiWindup(eT, uRaw, ValveMin, g.ValveLimit);
         }
         double uIn = double.IsNaN(uDel) ? u : uDel;
         dFdt = (FlowTarget(uIn, dist) - F) / Tau2;
+    }
+
+    /// <summary>
+    /// The disturbance step actually injected: the requested <see cref="CascadeInput.Disturbance"/>,
+    /// scaled down to 80% of what the valve can still make up at this setpoint. A supply drop
+    /// larger than the valve's headroom (e.g. −1 L/min at 70 °C, which already needs 4 of the
+    /// 4.65 L/min) cannot be rejected by ANY controller — the temperature would just fall to a
+    /// new, lower plateau and the run would never settle — which tests the rig's capacity, not
+    /// the loop. 0 when there is no headroom left at all (setpoint at or beyond the limit).
+    /// </summary>
+    public static double EffectiveDisturbance(CascadeInput g)
+    {
+        double d = g.Disturbance;
+        if (!double.IsFinite(d) || d == 0.0) return 0.0;
+
+        double fNeed = FlowBias + Math.Max(0.0, (g.Setpoint - g.InletTemperature) / K1);
+        double room  = d < 0
+            ? MaxFlow(g.ValveLimit) - fNeed   // valve must open further to make up a drop
+            : fNeed - FlowBias;               // valve must close to absorb a surge
+        double limit = 0.8 * room;
+        if (limit < 0.05) return 0.0;         // no meaningful headroom: skip the disturbance
+        return Math.Sign(d) * Math.Min(Math.Abs(d), limit);
     }
 
     // Conditional-integration anti-windup: stop integrating when the output is

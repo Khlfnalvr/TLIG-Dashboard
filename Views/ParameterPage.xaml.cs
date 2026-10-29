@@ -338,7 +338,8 @@ public sealed partial class ParameterPage : Page
         RiseTimeValue.Text  = result.Metrics.RiseTime.ToString("0.00");
         OvershootValue.Text = result.Metrics.Overshoot.ToString("0.0");
         SettlingValue.Text  = result.Metrics.SettlingTime.ToString("0.00");
-        SteadyErrValue.Text = result.Metrics.SteadyStateError.ToString("0.000");
+        // Carried as a fraction (see PidDesignService); the card's unit is %.
+        SteadyErrValue.Text = (result.Metrics.SteadyStateError * 100.0).ToString("0.00");
 
         // result.Diagnosis is a code, not display text — localize it here so a Client
         // shows its own language rather than whatever the Server is set to.
@@ -361,7 +362,7 @@ public sealed partial class ParameterPage : Page
         if (pending is { } rec)
         {
             PidAdvisorText.Text = Lang.Pid_AdvisorPrompt;
-            PidAdvisorRecommendationText.Text = $"Kp={rec.Kp:F3}  Ki={rec.Ki:F3}  Kd={rec.Kd:F3}";
+            PidAdvisorRecommendationText.Text = $"Kp={rec.Kp:0.####}  Ki={rec.Ki:0.#####}  Kd={rec.Kd:0.####}";
             PidAdvisorActions.Visibility = Visibility.Visible;
         }
         else

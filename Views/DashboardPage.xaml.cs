@@ -641,14 +641,18 @@ public sealed partial class DashboardPage : Page
         // result.Metrics is read off the exact RK4 curve above — always consistent with what's
         // plotted (the temperature step metrics of the outer loop).
         var m = result.Metrics;
-        RiseTimeValue.Text  = m.RiseTime.ToString("0.00");
-        OvershootValue.Text = m.Overshoot.ToString("0.0");
-        SettlingValue.Text  = m.SettlingTime.ToString("0.00");
-        SteadyErrValue.Text = m.SteadyStateError.ToString("0.000");
+        // Manual mode: nothing chases the setpoint, so step metrics against it mean nothing —
+        // the diagnosis card states where the fixed valve settles instead.
+        bool manual = result.Input.IsManual;
+        RiseTimeValue.Text  = manual ? "--" : m.RiseTime.ToString("0.00");
+        OvershootValue.Text = manual ? "--" : m.Overshoot.ToString("0.0");
+        SettlingValue.Text  = manual ? "--" : m.SettlingTime.ToString("0.00");
+        // Carried as a fraction (see CascadeMetrics); the card's unit is %.
+        SteadyErrValue.Text = manual ? "--" : (m.SteadyStateError * 100.0).ToString("0.00");
 
-        IaeValue.Text  = FormatIndex(m.IAE);
-        IseValue.Text  = FormatIndex(m.ISE);
-        ItaeValue.Text = FormatIndex(m.ITAE);
+        IaeValue.Text  = manual ? "--" : FormatIndex(m.IAE);
+        IseValue.Text  = manual ? "--" : FormatIndex(m.ISE);
+        ItaeValue.Text = manual ? "--" : FormatIndex(m.ITAE);
 
         // result.Diagnosis is a code, not display text — localize it here so a Client shows its
         // own language. The outer loop is the identical Gp1 plant PidDiagnosisCalculator is
@@ -667,7 +671,8 @@ public sealed partial class DashboardPage : Page
         if (App.CascadeSession.PendingRecommendation is { } rec)
         {
             PidAdvisorText.Text = Lang.Pid_AdvisorPrompt;
-            PidAdvisorRecommendationText.Text = $"Kp={rec.OuterKp:F3}  Ki={rec.OuterKi:F3}  Kd={rec.OuterKd:F3}";
+            // 0.#### not F3: grid gains such as Ki = 0.0007 would otherwise read as 0.001.
+            PidAdvisorRecommendationText.Text = $"Kp={rec.OuterKp:0.####}  Ki={rec.OuterKi:0.#####}  Kd={rec.OuterKd:0.####}";
             PidAdvisorPanel.Visibility = Visibility.Visible;
         }
         else

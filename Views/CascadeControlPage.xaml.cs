@@ -187,14 +187,18 @@ public sealed partial class CascadeControlPage : Page
         RespChartInner.Update(time, temp, single, flow, flowSp, result.Input.Setpoint, sim.DisturbanceTime);
 
         var m = result.Metrics;
-        RiseTimeValue.Text  = m.RiseTime.ToString("0.00");
-        OvershootValue.Text = m.Overshoot.ToString("0.0");
-        SettlingValue.Text  = m.SettlingTime.ToString("0.0");
-        SteadyErrValue.Text = m.SteadyStateError.ToString("0.000");
+        // Manual mode (set on the Dashboard): nothing chases the setpoint, so step metrics
+        // against it mean nothing — the diagnosis card says where the fixed valve settles.
+        bool manual = result.Input.IsManual;
+        RiseTimeValue.Text  = manual ? "--" : m.RiseTime.ToString("0.00");
+        OvershootValue.Text = manual ? "--" : m.Overshoot.ToString("0.0");
+        SettlingValue.Text  = manual ? "--" : m.SettlingTime.ToString("0.0");
+        // Carried as a fraction (see CascadeMetrics); shown in %.
+        SteadyErrValue.Text = manual ? "--" : (m.SteadyStateError * 100.0).ToString("0.00");
 
-        IaeValue.Text  = FormatIndex(m.IAE);
-        IseValue.Text  = FormatIndex(m.ISE);
-        ItaeValue.Text = FormatIndex(m.ITAE);
+        IaeValue.Text  = manual ? "--" : FormatIndex(m.IAE);
+        IseValue.Text  = manual ? "--" : FormatIndex(m.ISE);
+        ItaeValue.Text = manual ? "--" : FormatIndex(m.ITAE);
 
         CascadeDevValue.Text  = m.CascadeMaxDeviation.ToString("0.00");
         SingleDevValue.Text   = m.SingleLoopMaxDeviation.ToString("0.00");
@@ -252,8 +256,8 @@ public sealed partial class CascadeControlPage : Page
         if (pending is { } rec)
         {
             AdvisorRecommendationText.Text =
-                $"OUTER  Kp={rec.OuterKp:F3}  Ki={rec.OuterKi:F3}  Kd={rec.OuterKd:F3}\n" +
-                $"INNER  Kp={rec.InnerKp:F3}  Ki={rec.InnerKi:F3}";
+                $"OUTER  Kp={rec.OuterKp:0.####}  Ki={rec.OuterKi:0.#####}  Kd={rec.OuterKd:0.####}\n" +
+                $"INNER  Kp={rec.InnerKp:0.####}  Ki={rec.InnerKi:0.####}";
             AdvisorActions.Visibility = Visibility.Visible;
         }
         else
