@@ -1,8 +1,7 @@
 ﻿{
   "profiles": {
     "TLIGDashboard": {
-      "commandName": "Executable",
-      "executablePath": "$(TargetDir)TLIGDashboard.Server.exe"
+      "commandName": "Project"
     }
   }
 }

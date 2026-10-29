@@ -52,6 +52,25 @@
     <Description>TLIG Dashboard Client — receives camera + HMI and chats via the server AI proxy</Description>
   </PropertyGroup>
 
+  <!--
+    Debug: jalankan lewat dotnet.exe (bertanda tangan Microsoft), bukan apphost
+    TLIGDashboard.*.exe. Apphost dibuat ulang setiap build dan tidak bertanda
+    tangan, sehingga Smart App Control Windows memblokirnya ("An Application
+    Control policy has blocked this file"). Tanpa apphost tidak ada exe yang
+    perlu diblokir; DLL aplikasi dimuat oleh runtime .NET yang sudah terpasang.
+    Windows App SDK juga harus framework-dependent: mode self-contained
+    mendaftarkan kelas WinUI lewat manifest yang tertanam di exe, sehingga tanpa
+    apphost XAML gagal dengan REGDB_E_CLASSNOTREG (0x80040154). Versi
+    framework-dependent memakai paket Windows App Runtime 1.8 yang terpasang
+    (bertanda tangan Microsoft) melalui bootstrapper.
+    Release/publish tetap self-contained dengan exe seperti biasa.
+  -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Debug'">
+    <SelfContained>false</SelfContained>
+    <UseAppHost>false</UseAppHost>
+    <WindowsAppSDKSelfContained>false</WindowsAppSDKSelfContained>
+  </PropertyGroup>
+
   <!-- Publish / release optimizations -->
   <PropertyGroup Condition="'$(Configuration)' == 'Release'">
     <!--
