@@ -187,18 +187,17 @@ public sealed partial class CascadeControlPage : Page
         RespChartInner.Update(time, temp, single, flow, flowSp, result.Input.Setpoint, sim.DisturbanceTime);
 
         var m = result.Metrics;
-        // Manual mode (set on the Dashboard): nothing chases the setpoint, so step metrics
-        // against it mean nothing — the diagnosis card says where the fixed valve settles.
-        bool manual = result.Input.IsManual;
-        RiseTimeValue.Text  = manual ? "--" : m.RiseTime.ToString("0.00");
-        OvershootValue.Text = manual ? "--" : m.Overshoot.ToString("0.0");
-        SettlingValue.Text  = manual ? "--" : m.SettlingTime.ToString("0.0");
+        // In Manual mode (set on the Dashboard) rise/overshoot/settling describe the plant's own
+        // response at that valve opening (see CascadeSimulator.ComputeMetrics).
+        RiseTimeValue.Text  = m.RiseTime.ToString("0.00");
+        OvershootValue.Text = m.Overshoot.ToString("0.0");
+        SettlingValue.Text  = m.SettlingTime.ToString("0.0");
         // Carried as a fraction (see CascadeMetrics); shown in %.
-        SteadyErrValue.Text = manual ? "--" : (m.SteadyStateError * 100.0).ToString("0.00");
+        SteadyErrValue.Text = (m.SteadyStateError * 100.0).ToString("0.00");
 
-        IaeValue.Text  = manual ? "--" : FormatIndex(m.IAE);
-        IseValue.Text  = manual ? "--" : FormatIndex(m.ISE);
-        ItaeValue.Text = manual ? "--" : FormatIndex(m.ITAE);
+        IaeValue.Text  = FormatIndex(m.IAE);
+        IseValue.Text  = FormatIndex(m.ISE);
+        ItaeValue.Text = FormatIndex(m.ITAE);
 
         CascadeDevValue.Text  = m.CascadeMaxDeviation.ToString("0.00");
         SingleDevValue.Text   = m.SingleLoopMaxDeviation.ToString("0.00");

@@ -641,18 +641,17 @@ public sealed partial class DashboardPage : Page
         // result.Metrics is read off the exact RK4 curve above — always consistent with what's
         // plotted (the temperature step metrics of the outer loop).
         var m = result.Metrics;
-        // Manual mode: nothing chases the setpoint, so step metrics against it mean nothing —
-        // the diagnosis card states where the fixed valve settles instead.
-        bool manual = result.Input.IsManual;
-        RiseTimeValue.Text  = manual ? "--" : m.RiseTime.ToString("0.00");
-        OvershootValue.Text = manual ? "--" : m.Overshoot.ToString("0.0");
-        SettlingValue.Text  = manual ? "--" : m.SettlingTime.ToString("0.00");
+        // In Manual mode rise/overshoot/settling describe the plant's own response at that valve
+        // opening (see CascadeSimulator.ComputeMetrics); steady error stays against the setpoint.
+        RiseTimeValue.Text  = m.RiseTime.ToString("0.00");
+        OvershootValue.Text = m.Overshoot.ToString("0.0");
+        SettlingValue.Text  = m.SettlingTime.ToString("0.00");
         // Carried as a fraction (see CascadeMetrics); the card's unit is %.
-        SteadyErrValue.Text = manual ? "--" : (m.SteadyStateError * 100.0).ToString("0.00");
+        SteadyErrValue.Text = (m.SteadyStateError * 100.0).ToString("0.00");
 
-        IaeValue.Text  = manual ? "--" : FormatIndex(m.IAE);
-        IseValue.Text  = manual ? "--" : FormatIndex(m.ISE);
-        ItaeValue.Text = manual ? "--" : FormatIndex(m.ITAE);
+        IaeValue.Text  = FormatIndex(m.IAE);
+        IseValue.Text  = FormatIndex(m.ISE);
+        ItaeValue.Text = FormatIndex(m.ITAE);
 
         // result.Diagnosis is a code, not display text — localize it here so a Client shows its
         // own language. The outer loop is the identical Gp1 plant PidDiagnosisCalculator is

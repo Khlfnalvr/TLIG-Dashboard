@@ -531,6 +531,19 @@ public class CascadeSimulator
         var (rise, over, settle, sse) = PidSimulator.ComputeStepMetrics(tPre, yPre, spDev);
         var (iae, ise, itae) = PidSimulator.ComputePerformanceIndices(tPre, yPre, spDev);
 
+        // Manual mode: nothing drives T to the setpoint, so the shape of the response is read
+        // against where it actually settles (the open-loop step test: rise/settling of the plant
+        // itself at that valve opening). The steady-state error and IAE/ISE/ITAE stay against
+        // the setpoint — they say how far that fixed opening leaves the student from the target.
+        if (input.IsManual && yPre.Length > 0)
+        {
+            double finalDev = yPre[^1];
+            if (Math.Abs(finalDev) > 1e-6)
+                (rise, over, settle, _) = PidSimulator.ComputeStepMetrics(tPre, yPre, finalDev);
+            else
+                (rise, over, settle) = (0.0, 0.0, 0.0);   // valve shut: nothing moves
+        }
+
         // Stable ⇔ the temperature step actually settled at the setpoint within the run
         // budget. The valve/flow limits keep every response bounded, so a "did it blow up?"
         // test can never fail here; "did it reach and hold the setpoint?" is the signal that
