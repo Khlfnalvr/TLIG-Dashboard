@@ -11,6 +11,16 @@ class Program
         CultureInfo.DefaultThreadCurrentCulture   = CultureInfo.InvariantCulture;
         CultureInfo.DefaultThreadCurrentUICulture = CultureInfo.InvariantCulture;
 
+#if DEBUG
+        // Build Debug dijalankan lewat dotnet.exe (lihat TLIGDashboard.csproj), jadi
+        // folder exe proses adalah C:\Program Files\dotnet. Tanpa ini MRT Core mencari
+        // resources.pri di sana dan InitializeComponent gagal dengan XamlParseException
+        // ("Cannot locate resource from 'ms-appx:///MainWindow.xaml'"). MRM.dll hanya
+        // memakai BASE_DIRECTORY bila _PID sama dengan PID proses ini.
+        Environment.SetEnvironmentVariable("MICROSOFT_WINDOWSAPPRUNTIME_BASE_DIRECTORY", AppContext.BaseDirectory);
+        Environment.SetEnvironmentVariable("MICROSOFT_WINDOWSAPPRUNTIME_BASE_DIRECTORY_PID", Environment.ProcessId.ToString());
+#endif
+
         try
         {
             WinRT.ComWrappersSupport.InitializeComWrappers();

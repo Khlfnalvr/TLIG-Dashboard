@@ -69,6 +69,8 @@
     <SelfContained>false</SelfContained>
     <UseAppHost>false</UseAppHost>
     <WindowsAppSDKSelfContained>false</WindowsAppSDKSelfContained>
+    <!-- Dicari MRT Core di MICROSOFT_WINDOWSAPPRUNTIME_BASE_DIRECTORY (diset di Program.cs). -->
+    <ProjectPriFileName>resources.pri</ProjectPriFileName>
   </PropertyGroup>
 
   <!-- Publish / release optimizations -->
