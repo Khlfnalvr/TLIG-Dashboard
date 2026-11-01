@@ -822,7 +822,20 @@ public sealed partial class MainWindow : Window
         s.ServerToken    = result.Token;
         AppSettingsService.Save(s);
 
-        OnLoginSucceeded(user, result.DisplayName, result.Role);
+        // Kelas + NRP come from the server; fall back to the copy saved at onboarding
+        // (server unreachable earlier, or an older server that doesn't return them)
+        // and push that copy back so the server catches up.
+        string nrp = result.Nrp, kelas = result.Kelas;
+        if ((string.IsNullOrWhiteSpace(nrp) || string.IsNullOrWhiteSpace(kelas)) &&
+            s.ClientProfiles.TryGetValue(user.ToLowerInvariant(), out var cached) &&
+            !string.IsNullOrWhiteSpace(cached.Nrp) && !string.IsNullOrWhiteSpace(cached.Kelas))
+        {
+            nrp   = cached.Nrp;
+            kelas = cached.Kelas;
+            _ = AuthClient.UpdateProfileAsync(s.ServerHost, result.Token, nrp, kelas);
+        }
+
+        OnLoginSucceeded(user, result.DisplayName, result.Role, nrp, kelas);
 
         // Open the live stream and point the AI assistant at the server proxy.
         _ = ConnectClientStreamAsync(s.ServerHost, result.Token);
@@ -890,6 +903,13 @@ public sealed partial class MainWindow : Window
             DefaultButton     = ContentDialogButton.Primary,
             XamlRoot          = Content.XamlRoot,
         };
+        // Both fields are required so a saved profile is complete and the prompt
+        // never has a reason to come back.
+        void UpdateSaveEnabled() => dlg.IsPrimaryButtonEnabled =
+            kelasBox.SelectedItem is not null && !string.IsNullOrWhiteSpace(nrpBox.Text);
+        kelasBox.SelectionChanged += (_, _) => UpdateSaveEnabled();
+        nrpBox.TextChanged        += (_, _) => UpdateSaveEnabled();
+        UpdateSaveEnabled();
 
         ContentDialogResult res;
         try { res = await dlg.ShowAsync(); }
@@ -899,13 +919,25 @@ public sealed partial class MainWindow : Window
 
         var kelas = kelasBox.SelectedItem?.ToString()?.Trim() ?? "";
         var nrp   = nrpBox.Text.Trim();
-        if (string.IsNullOrEmpty(kelas) && string.IsNullOrEmpty(nrp)) return;
+        if (string.IsNullOrEmpty(kelas) || string.IsNullOrEmpty(nrp)) return;
 
-        UserStore.Instance.UpdateUser(username,
-            App.Session.DisplayName,
-            App.Session.Role,
-            nrp: nrp,
-            kelas: kelas);
+        if (Services.BuildInfo.IsClient)
+        {
+            // The account lives on the server: save it there, and keep a local copy
+            // so the prompt stays answered even if that request fails.
+            var s = AppSettingsService.Load();
+            s.ClientProfiles[username.ToLowerInvariant()] = new ClientStudentProfile { Nrp = nrp, Kelas = kelas };
+            AppSettingsService.Save(s);
+            _ = AuthClient.UpdateProfileAsync(s.ServerHost, s.ServerToken, nrp, kelas);
+        }
+        else
+        {
+            UserStore.Instance.UpdateUser(username,
+                App.Session.DisplayName,
+                App.Session.Role,
+                nrp: nrp,
+                kelas: kelas);
+        }
 
         // Reflect in session without re-login.
         App.Session.SignIn(username, App.Session.DisplayName, App.Session.Role, nrp, kelas);

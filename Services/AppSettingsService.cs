@@ -18,6 +18,13 @@ public sealed class AiProviderSettings
     public List<string> Models  { get; set; } = new(); // model ids surfaced in the pickers
 }
 
+/// <summary>Client-side copy of a student's Kelas + NRP (see <see cref="AppSettings.ClientProfiles"/>).</summary>
+public sealed class ClientStudentProfile
+{
+    public string Nrp   { get; set; } = "";
+    public string Kelas { get; set; } = "";
+}
+
 public class AppSettings
 {
     // ── PLC via LabVIEW HMI (direct TCP — replaces the former OPC UA/DA path) ──
@@ -78,6 +85,10 @@ public class AppSettings
     public string ServerHost     { get; set; } = "";   // e.g. "192.168.1.10:8088"
     public string ServerUsername { get; set; } = "";   // last username, used to prefill the login popup
     public string ServerToken    { get; set; } = "";   // session token issued by the server on login (transient)
+    // Kelas + NRP the student entered at first login, keyed by lower-case username.
+    // The server is the source of truth; this copy keeps the onboarding prompt from
+    // reappearing when the server is unreachable or predates /auth/profile.
+    public Dictionary<string, ClientStudentProfile> ClientProfiles { get; set; } = new();
 
     // ── AI service settings ───────────────────────────────────────────────
     // Legacy single-provider fields. Kept so older settings.json files migrate

@@ -45,6 +45,7 @@ public static class ShareProtocol
     public const string AuthLoginPath     = "/auth/login";
     public const string AuthLogoutPath    = "/auth/logout";
     public const string AuthSignupPath    = "/auth/signup";
+    public const string AuthProfilePath   = "/auth/profile";      // POST {nrp, kelas} — the caller's own student info
     public const string TasksPath              = "/tasks";               // GET = list, POST = create/update
     public const string TasksDeletePath        = "/tasks/delete";        // POST {id}
     public const string TasksCompletePath      = "/tasks/complete";      // POST {id, completed}
@@ -244,6 +245,10 @@ public sealed class ShareServer
             else if (method == "POST" && path == ShareProtocol.AuthSignupPath)
             {
                 await HandleAuthSignupAsync(stream, headers, ct);
+            }
+            else if (method == "POST" && path == ShareProtocol.AuthProfilePath)
+            {
+                await HandleAuthProfileAsync(stream, headers, ct);
             }
             else if (method == "POST" && path == ShareProtocol.AiPath)
             {
@@ -453,8 +458,49 @@ public sealed class ShareServer
             ["username"]    = user.Username,
             ["displayName"] = user.DisplayName,
             ["role"]        = user.Role,
+            ["nrp"]         = user.Nrp,
+            ["kelas"]       = user.Kelas,
         }.ToJsonString();
         await WriteJsonAsync(stream, json, ct);
+    }
+
+    // ── Auth: the signed-in student saves their own Kelas + NRP (onboarding) ────
+
+    private async Task HandleAuthProfileAsync(
+        NetworkStream stream, Dictionary<string, string> headers, CancellationToken ct)
+    {
+        var session = GetSession(BearerToken(headers));
+        if (session is null)
+        {
+            await WriteSimpleAsync(stream, "401 Unauthorized", "text/plain", "Invalid or expired session", ct);
+            return;
+        }
+
+        var body = await ReadBodyAsync(stream, headers, ct);
+        string nrp = "", kelas = "";
+        try
+        {
+            var node = JsonNode.Parse(body);
+            nrp   = (string?)node?["nrp"]   ?? "";
+            kelas = (string?)node?["kelas"] ?? "";
+        }
+        catch { /* malformed body → empty fields → rejected below */ }
+
+        if (string.IsNullOrWhiteSpace(nrp) || string.IsNullOrWhiteSpace(kelas))
+        {
+            await WriteSimpleAsync(stream, "400 Bad Request", "application/json", "{\"error\":\"missing_fields\"}", ct);
+            return;
+        }
+
+        var (ok, error) = UserStore.Instance.UpdateStudentInfo(session.Username, nrp, kelas);
+        if (!ok)
+        {
+            var json = new JsonObject { ["error"] = error ?? "unknown" }.ToJsonString();
+            await WriteSimpleAsync(stream, "404 Not Found", "application/json", json, ct);
+            return;
+        }
+
+        await WriteJsonAsync(stream, "{\"ok\":true}", ct);
     }
 
     private async Task HandleAuthLogoutAsync(
@@ -2434,6 +2480,8 @@ public sealed class AuthResult
     public string  Token       { get; init; } = "";
     public string  DisplayName { get; init; } = "";
     public string  Role        { get; init; } = "";
+    public string  Nrp         { get; init; } = "";
+    public string  Kelas       { get; init; } = "";
     /// <summary>Localization key describing the failure (null on success).</summary>
     public string? ErrorKey    { get; init; }
     /// <summary>Optional technical detail (exception text, status code) for logs.</summary>
@@ -2531,12 +2579,40 @@ public static class AuthClient
                 Token       = (string?)node?["token"]       ?? "",
                 DisplayName = (string?)node?["displayName"] ?? username,
                 Role        = (string?)node?["role"]        ?? "",
+                Nrp         = (string?)node?["nrp"]         ?? "",
+                Kelas       = (string?)node?["kelas"]       ?? "",
             };
         }
         catch (Exception ex)
         {
             return new AuthResult { ErrorKey = "Login_ErrorUnreachable", Detail = ex.Message };
         }
+    }
+
+    /// <summary>
+    /// Saves the signed-in student's Kelas + NRP on the server (<c>/auth/profile</c>)
+    /// so the next login returns them and the onboarding prompt is not shown again.
+    /// Returns false when the server is unreachable or rejects the request.
+    /// </summary>
+    public static async Task<bool> UpdateProfileAsync(string host, string token, string nrp, string kelas)
+    {
+        if (string.IsNullOrWhiteSpace(NormalizeHost(host)) ||
+            string.IsNullOrWhiteSpace(token)) return false;
+        try
+        {
+            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+            using var req  = new HttpRequestMessage(
+                HttpMethod.Post, $"{BaseUrl(host)}{ShareProtocol.AuthProfilePath}")
+            {
+                Content = new StringContent(
+                    new JsonObject { ["nrp"] = nrp, ["kelas"] = kelas }.ToJsonString(),
+                    Encoding.UTF8, "application/json"),
+            };
+            req.Headers.TryAddWithoutValidation("Authorization", $"Bearer {token}");
+            using var resp = await http.SendAsync(req);
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
     }
 
     /// <summary>

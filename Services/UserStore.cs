@@ -284,6 +284,24 @@ public sealed class UserStore
         return (true, null);
     }
 
+    /// <summary>
+    /// Sets a student's own Kelas + NRP (the first-login onboarding prompt).
+    /// Role and display name are left untouched.
+    /// </summary>
+    public (bool ok, string? error) UpdateStudentInfo(string username, string nrp, string kelas)
+    {
+        lock (_lock)
+        {
+            var u = FindLocked(username);
+            if (u is null) return (false, "Um_ErrUserNotFound");
+            u.Nrp   = (nrp   ?? "").Trim();
+            u.Kelas = (kelas ?? "").Trim();
+            SaveLocked();
+        }
+        Changed?.Invoke();
+        return (true, null);
+    }
+
     public (bool ok, string? error) SetEnabled(string username, bool enabled)
     {
         lock (_lock)
