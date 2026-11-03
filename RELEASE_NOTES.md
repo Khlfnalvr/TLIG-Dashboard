@@ -1,26 +1,17 @@
-## v{VERSION} — Kelas dan NRP mahasiswa cukup diisi sekali
+## v{VERSION} — Student Class and NRP Entered Once
 
-### Perbaikan
+### Fixes
 
-- **Dialog "Complete Your Profile" tidak muncul lagi di setiap login.** Kelas dan NRP
-  yang diisi mahasiswa di Client kini disimpan ke akun di Server dan dikirim balik saat
-  login, jadi dialog cukup dijawab sekali.
-  - Client juga menyimpan salinannya sendiri, sehingga dialog tetap tidak muncul lagi
-    walaupun Server sedang tidak terjangkau saat itu; salinan tersebut dikirim ulang ke
-    Server pada login berikutnya.
-  - Tombol **Save & Continue** baru aktif setelah Kelas dipilih dan NRP diisi, supaya
-    profil tidak tersimpan setengah.
+- **"Complete Your Profile" dialog no longer appears at every login.** Class and NRP are saved to the account on the Server and returned at login.
+- **Offline fallback.** The Client keeps a local copy if the Server is unreachable and syncs it at the next login.
+- **Complete input required.** **Save & Continue** is enabled only after Class and NRP are both filled in.
 
-### Kompatibilitas
+### Compatibility
 
-- **Perbarui Server dulu, lalu Client.** Penyimpanan Kelas/NRP di akun memerlukan
-  Server v{VERSION}. Client v{VERSION} di Server lama tetap jalan: dialog hanya muncul
-  sekali per laptop, tetapi Kelas/NRP belum tercatat di sisi dosen sampai Server
-  diperbarui.
+- **Update the Server before the Client.** Saving Class and NRP to the account requires Server v{VERSION}.
+- **Older Server.** Client v{VERSION} still works, but the dialog appears once per laptop and Class and NRP are not visible to the lecturer.
 
-### Cara memasang
+### Installation
 
-- Pemasangan baru: unduh `TLIGDashboard-Server-v{VERSION}-Setup.exe` untuk PC lab dan
-  `TLIGDashboard-Client-v{VERSION}-Setup.exe` untuk laptop.
-- Sudah terpasang: buka aplikasi, notifikasi pembaruan muncul sendiri; pembaruan baru
-  dipasang setelah diklik.
+- **New installation.** Install `TLIGDashboard-Server-v{VERSION}-Setup.exe` on the lab PC and `TLIGDashboard-Client-v{VERSION}-Setup.exe` on each laptop.
+- **Existing installation.** Open the application and select the update notification to install.
