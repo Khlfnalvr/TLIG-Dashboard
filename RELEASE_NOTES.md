@@ -13,5 +13,5 @@
 
 ### Installation
 
-- **New installation.** Install `TLIGDashboard-Server-v{VERSION}-Setup.exe` on the lab PC and `TLIGDashboard-Client-v{VERSION}-Setup.exe` on each laptop.
+- **New installation.** Install the Server setup on the lab PC and the Client setup on each laptop.
 - **Existing installation.** Open the application and select the update notification to install.
