@@ -1,0 +1,29 @@
+v2.2.8	v2.2.8 — Student Class and NRP Entered Once
+v2.2.7	v2.2.7 — Cascade Manual/Auto Mode, PID Gain Conversion, Flow 0–4.65 L/min
+v2.2.6	v2.2.6 — Native Charts, Fixed Server Address, Adaptive Camera
+v2.2.5	v2.2.5 — Native Charts, Fixed Server Address, Adaptive Camera
+v2.2.4	v2.2.4 — Native Charts, Fixed Server Address, Adaptive Camera
+v2.2.3	v2.2.3 — Native Charts, Fixed Server Address, Adaptive Camera
+v2.2.2	v2.2.2 — Native Charts, Fixed Server Address, Adaptive Camera
+v2.2.1	v2.2.1 — Plant vs. Simulation Charts, Client Routed Through Server
+V2.2	V2.2 — General Fixes
+v1.0.9	v1.0.9 — LabVIEW Values on the Client Dashboard
+v1.0.8	v1.0.8 — Single-User Plant Queue and Experiment History
+v1.0.7	v1.0.7 — Single-User Plant Queue and Experiment History
+v1.0.6	v1.0.6 — Client Valve Opening Reaches LabVIEW
+v1.0.5	v1.0.5 — Valve Opening and STOP/RESET/E-STOP Sent to LabVIEW
+v1.0.4	v1.0.4 — Response Charts, Simulator Fixes, AI Gain Validation
+v1.0.3	v1.0.3 — LabVIEW Port 6001 and Client PID Control
+v1.0.1	v1.0.1 — Unused ML PID Subsystem Removed
+v1.0.0-Lima	v1.0.0-Lima — Cascade PID, PID Advisor, LabVIEW TCP Bridge
+v1.0.0-Kilo	v1.0.0-Kilo — Theme Update, Gemini Provider, LabVIEW TCP Connection
+v1.0.0-Juliet	v1.0.0-Juliet — Multi-Provider AI and AI Chat Fix
+v1.0.0-India	v1.0.0-India — Learning Tasks and Lecturer/Assistant/Student Roles
+v1.0.0-Hotel	v1.0.0-Hotel — Fix OPC DA Stuck at "Connecting..."
+v1.0.0-Golf	v1.0.0-Golf — OPC DA Connection Feedback
+v1.0.0-Foxtrot	v1.0.0-Foxtrot — Fix OPC DA NotSupported_COM Crash
+v1.0.0-Echo	v1.0.0-Echo — OPC DA (Classic) Support
+v1.0.0-Delta	v1.0.0-Delta — OPC Certificate Folder Shortcut
+v1.0.0-Charlie	v1.0.0-Charlie — Fix OPC UA Certificate Creation
+v1.0.0-beta	v1.0.0-beta — Client Sign-Up, Learning Analytics Page, Auto-Update Fixes
+v1.0.0-alpha	v1.0.0-alpha — Custom Tunnel Domain, User Management, Credential Login
