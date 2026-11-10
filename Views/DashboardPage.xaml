@@ -510,10 +510,6 @@
                                                      Content="{x:Bind Lang.Ctl_Auto, Mode=OneWay}"
                                                      GroupName="DashboardMode" IsChecked="True"
                                                      Style="{StaticResource CompactRadioButtonStyle}"/>
-                                        <RadioButton x:Name="CtlModeCascade" Checked="CtlMode_Checked"
-                                                     Content="{x:Bind Lang.Ctl_Cascade, Mode=OneWay}"
-                                                     GroupName="DashboardMode"
-                                                     Style="{StaticResource CompactRadioButtonStyle}"/>
                                     </StackPanel>
                                 </Border>
 
